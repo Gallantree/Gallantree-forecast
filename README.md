@@ -1,36 +1,65 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Gallantree Forecast
 
-## Getting Started
+Driver-based 5-year financial model — Next.js + TypeScript + MongoDB Atlas.
 
-First, run the development server:
+Replaces the Excel forecast with a web app for building scenarios, comparing
+versions, and (phase 2) reconciling against Xero actuals. Full design in
+[`docs/Gallantree_Forecast_Model_Options.md`](docs/Gallantree_Forecast_Model_Options.md).
+
+## Stack
+
+- Next.js 16 (App Router) + React 19 + TypeScript
+- Tailwind v4
+- MongoDB Atlas (Sydney, `ap-southeast-2`) via Mongoose — `Decimal128` for all money/percentage fields
+- Zod for runtime validation
+- `decimal.js` for in-process money math (never raw `Number`)
+- Vitest for unit/golden-file tests
+- Vercel for hosting (functions pinned to `syd1`)
+
+## Getting started
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env.local
+# fill in MONGODB_URI
+
+npm install
+npm run dev          # http://localhost:3000
+npm test             # vitest run
+npm run typecheck    # tsc --noEmit
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Layout
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+src/
+  app/             Next.js routes (App Router)
+  lib/             db connection, shared infra
+  models/          Mongoose models (Decimal128 for money/percentage)
+  schemas/         Zod schemas — single source of truth for API I/O
+  validators/      reusable Zod validator helpers
+  utils/           money math, helpers
+  constants/       periods, enums, magic-value-free constants
+  components/      React components
+tests/             vitest specs (incl. golden-file vs Excel baseline)
+docs/              spec + design notes
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Non-negotiables
 
-## Learn More
+1. **Never use `Number` for money or percentages.** Storage = `Schema.Types.Decimal128`,
+   math = `decimal.js` via `src/utils/money.ts`. Convert at the API boundary only.
+2. **Don't store calculated totals.** Recompute on read; aggregation pipelines for
+   multi-collection queries.
+3. **Tests are non-optional.** A financial model without tests is the bug. Golden-file
+   the current Excel baseline before decommissioning it.
+4. **Pin regions.** Atlas in Sydney, Vercel functions in `syd1`.
 
-To learn more about Next.js, take a look at the following resources:
+## Phases
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Phase | Scope |
+|-------|-------|
+| Week 1 | Foundations: schemas, COA seed, periods, one driver → P&L vertical slice |
+| Week 2 | Revenue + OPEX + headcount engine, scenario branching |
+| Week 3 | Balance sheet, cashflow, xlsx + PDF exports |
+| Week 4 | Auth (magic links), scenario compare, audit log, golden-file tests |
+| Phase 2 | Xero actuals via `xero-node`, variance reports |
