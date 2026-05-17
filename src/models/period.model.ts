@@ -1,4 +1,5 @@
-import mongoose, { Schema } from "mongoose";
+import { Schema } from "mongoose";
+import { defineModel } from "./_define";
 
 export interface IPeriod {
   key: string;
@@ -25,7 +26,6 @@ const periodSchema = new Schema<IPeriod>(
 
 periodSchema.index({ year: 1, month: 1 }, { unique: true });
 
-const Period =
-  mongoose.models.Period || mongoose.model<IPeriod>("Period", periodSchema);
+const Period = defineModel<IPeriod>("Period", periodSchema);
 
 export default Period;
