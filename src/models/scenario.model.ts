@@ -1,4 +1,5 @@
-import mongoose, { Schema, type Types } from "mongoose";
+import { Schema, type Types } from "mongoose";
+import { defineModel } from "./_define";
 
 export interface IScenario {
   name: string;
@@ -24,7 +25,6 @@ const scenarioSchema = new Schema<IScenario>(
 scenarioSchema.index({ parentId: 1 });
 scenarioSchema.index({ status: 1, updatedAt: -1 });
 
-const Scenario =
-  mongoose.models.Scenario || mongoose.model<IScenario>("Scenario", scenarioSchema);
+const Scenario = defineModel<IScenario>("Scenario", scenarioSchema);
 
 export default Scenario;

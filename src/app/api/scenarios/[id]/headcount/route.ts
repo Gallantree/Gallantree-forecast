@@ -1,9 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { connectToDatabase } from "@/lib/db";
-import { Driver } from "@/models";
-import { driverCreateSchema } from "@/schemas/driverSchemas";
-import { toDecimal128 } from "@/utils/money";
 import { Types } from "mongoose";
+import { connectToDatabase } from "@/lib/db";
+import { Headcount } from "@/models";
+import { headcountCreateSchema } from "@/schemas/headcountSchemas";
+import { toDecimal128 } from "@/utils/money";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,8 +16,8 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     return NextResponse.json({ error: "invalid scenario id" }, { status: 400 });
   }
   await connectToDatabase();
-  const drivers = await Driver.find({ scenarioId: id }).sort({ createdAt: 1 }).lean();
-  return NextResponse.json({ drivers });
+  const headcount = await Headcount.find({ scenarioId: id }).sort({ createdAt: 1 }).lean();
+  return NextResponse.json({ headcount });
 }
 
 export async function POST(request: NextRequest, { params }: Ctx) {
@@ -26,26 +26,20 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     return NextResponse.json({ error: "invalid scenario id" }, { status: 400 });
   }
   const body = await request.json();
-  const parsed = driverCreateSchema.safeParse(body);
+  const parsed = headcountCreateSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.format() }, { status: 400 });
   }
   await connectToDatabase();
-  const data = parsed.data;
-  const doc: Record<string, unknown> = {
+  const hc = await Headcount.create({
     scenarioId: new Types.ObjectId(id),
-    name: data.name,
-    accountCode: data.accountCode,
-    type: data.type,
-    startPeriodKey: data.startPeriodKey,
-    endPeriodKey: data.endPeriodKey,
-  };
-  if (data.type === "recurring_revenue" || data.type === "opex_fixed") {
-    doc.baseMonthly = toDecimal128(data.baseMonthly);
-    doc.monthlyGrowthPct = toDecimal128(data.monthlyGrowthPct);
-  } else if (data.type === "opex_pct_revenue") {
-    doc.pctOfRevenue = toDecimal128(data.pctOfRevenue);
-  }
-  const driver = await Driver.create(doc);
-  return NextResponse.json({ driver }, { status: 201 });
+    role: parsed.data.role,
+    accountCode: parsed.data.accountCode,
+    startPeriodKey: parsed.data.startPeriodKey,
+    endPeriodKey: parsed.data.endPeriodKey,
+    salaryAnnual: toDecimal128(parsed.data.salaryAnnual),
+    onCostPct: toDecimal128(parsed.data.onCostPct),
+    salaryGrowthPctAnnual: toDecimal128(parsed.data.salaryGrowthPctAnnual),
+  });
+  return NextResponse.json({ headcount: hc }, { status: 201 });
 }

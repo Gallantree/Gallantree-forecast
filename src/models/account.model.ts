@@ -1,4 +1,5 @@
-import mongoose, { Schema } from "mongoose";
+import { Schema } from "mongoose";
+import { defineModel } from "./_define";
 
 export type AccountType = "revenue" | "expense" | "asset" | "liability" | "equity";
 
@@ -25,7 +26,6 @@ const accountSchema = new Schema<IAccount>(
   { timestamps: true },
 );
 
-const Account =
-  mongoose.models.Account || mongoose.model<IAccount>("Account", accountSchema);
+const Account = defineModel<IAccount>("Account", accountSchema);
 
 export default Account;

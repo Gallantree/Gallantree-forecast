@@ -1,4 +1,5 @@
-import mongoose, { Schema, type Types } from "mongoose";
+import { Schema, type Types } from "mongoose";
+import { defineModel } from "./_define";
 
 export interface IAssumption {
   scenarioId: Types.ObjectId;
@@ -21,8 +22,6 @@ const assumptionSchema = new Schema<IAssumption>(
 
 assumptionSchema.index({ scenarioId: 1, driverId: 1, periodKey: 1 }, { unique: true });
 
-const Assumption =
-  mongoose.models.Assumption ||
-  mongoose.model<IAssumption>("Assumption", assumptionSchema);
+const Assumption = defineModel<IAssumption>("Assumption", assumptionSchema);
 
 export default Assumption;
