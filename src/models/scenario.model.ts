@@ -5,7 +5,7 @@ export interface IScenario {
   parentId?: Types.ObjectId;
   status: "draft" | "active" | "archived";
   lockedAt?: Date;
-  createdBy: Types.ObjectId;
+  createdBy?: Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -16,7 +16,7 @@ const scenarioSchema = new Schema<IScenario>(
     parentId: { type: Schema.Types.ObjectId, ref: "Scenario" },
     status: { type: String, enum: ["draft", "active", "archived"], default: "draft" },
     lockedAt: { type: Date },
-    createdBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    createdBy: { type: Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true },
 );
