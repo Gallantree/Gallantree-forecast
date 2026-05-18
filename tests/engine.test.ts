@@ -306,6 +306,94 @@ describe("computePnL", () => {
     expect(cre!.monthly[0].value.toFixed(2)).toBe("5000.00");
   });
 
+  it("flat +10% p.a. (5 years) compounds smoothly month-on-month", async () => {
+    const pnl = computePnL(
+      [],
+      [],
+      HORIZON,
+      [
+        {
+          id: "L1",
+          loanId: "GTL-0001",
+          channel: "CRE_CLO",
+          balance: "10000000", // $10m
+          originationPeriodKey: "2026-07",
+          maturityPeriodKey: "2031-06",
+          nimDefaultBps: 60, // base $5,000/mo at t=0
+        },
+      ],
+      "default",
+      [],
+      [10, 10, 10, 10, 10], // +10% every FY
+    );
+    const cre = pnl.revenue.lines.find((l) => l.accountCode === "4100")!;
+    // month 0: base 5,000.00
+    expect(cre.monthly[0].value.toFixed(2)).toBe("5000.00");
+    // month 12 (start of year 2): 5,000 × 1.10 = 5,500
+    expect(cre.monthly[12].value.toFixed(2)).toBe("5500.00");
+    // month 24 (start of year 3): 5,000 × 1.10² = 6,050
+    expect(cre.monthly[24].value.toFixed(2)).toBe("6050.00");
+  });
+
+  it("per-year schedule [12, 8, 5, 3, 2] compounds correctly across years", async () => {
+    const pnl = computePnL(
+      [],
+      [],
+      HORIZON,
+      [
+        {
+          id: "L1",
+          loanId: "GTL-0001",
+          channel: "CRE_CLO",
+          balance: "10000000",
+          originationPeriodKey: "2026-07",
+          maturityPeriodKey: "2031-06",
+          nimDefaultBps: 60,
+        },
+      ],
+      "default",
+      [],
+      [12, 8, 5, 3, 2],
+    );
+    const cre = pnl.revenue.lines.find((l) => l.accountCode === "4100")!;
+    // month 0: 5,000 (base)
+    expect(cre.monthly[0].value.toFixed(2)).toBe("5000.00");
+    // month 12 (end of Y1): 5,000 × 1.12 = 5,600
+    expect(cre.monthly[12].value.toFixed(2)).toBe("5600.00");
+    // month 24 (end of Y2): 5,000 × 1.12 × 1.08 = 6,048
+    expect(cre.monthly[24].value.toFixed(2)).toBe("6048.00");
+    // month 36 (end of Y3): × 1.05 = 6,350.40
+    expect(cre.monthly[36].value.toFixed(2)).toBe("6350.40");
+    // month 48 (end of Y4): × 1.03 = 6,540.91 (approx)
+    expect(Number(cre.monthly[48].value.toFixed(2))).toBeCloseTo(6540.912, 1);
+  });
+
+  it("loan book decline reduces NIM over the horizon", async () => {
+    const pnl = computePnL(
+      [],
+      [],
+      HORIZON,
+      [
+        {
+          id: "L1",
+          loanId: "GTL-0001",
+          channel: "CRE_CLO",
+          balance: "10000000",
+          originationPeriodKey: "2026-07",
+          maturityPeriodKey: "2031-06",
+          nimDefaultBps: 60,
+        },
+      ],
+      "default",
+      [],
+      [-5, -5, -5, -5, -5], // -5% runoff every FY
+    );
+    const cre = pnl.revenue.lines.find((l) => l.accountCode === "4100")!;
+    expect(cre.monthly[0].value.toFixed(2)).toBe("5000.00");
+    // month 12: 5,000 × 0.95
+    expect(cre.monthly[12].value.toFixed(2)).toBe("4750.00");
+  });
+
   it("loans on neg_floor tier use the lower NIM", async () => {
     const pnl = computePnL(
       [],
@@ -358,6 +446,130 @@ describe("computePnL", () => {
     expect(line!.monthly[0].value.toFixed(2)).toBe("104166.67");
     // 60 months × 104166.67 ≈ 6,250,000 (5y total)
     expect(line!.total.toFixed(0)).toBe("6250000");
+  });
+
+  it("compliance licence: monthlyFeePerSeat × seats × annual discount", () => {
+    const pnl = computePnL(
+      [],
+      [],
+      HORIZON,
+      [],
+      "default",
+      [],
+      [],
+      [
+        {
+          id: "L1",
+          name: "Compliance Standard",
+          type: "compliance",
+          startPeriodKey: "2026-07",
+          monthlyFeePerSeat: "319",
+          seatCount: 5,
+          billingFrequency: "annual",
+          annualDiscountPct: "20",
+        },
+      ],
+    );
+    // 319 × 5 × 0.80 = 1,276/mo
+    const line = pnl.revenue.lines.find((l) => l.accountCode === "4600")!;
+    expect(line.monthly[0].value.toFixed(2)).toBe("1276.00");
+  });
+
+  it("trustee licence: monthly fee + config (Y1 only) + AUM × fee%/12", () => {
+    const pnl = computePnL(
+      [],
+      [],
+      HORIZON,
+      [],
+      "default",
+      [],
+      [],
+      [
+        {
+          id: "L2",
+          name: "Trustee platform",
+          type: "trustee",
+          startPeriodKey: "2026-07",
+          monthlyFee: "5000",
+          configFee: "50000",
+          aumByYear: ["100000000", "200000000", "300000000", "300000000", "300000000"],
+          feePctOfAumByYear: ["0.05", "0.05", "0.05", "0.05", "0.05"],
+        },
+      ],
+    );
+    // Month 0 (Jul 2026): 5,000 + 50,000 + (100m × 0.0005 / 12) = 5,000 + 50,000 + 4,166.67
+    const line = pnl.revenue.lines.find((l) => l.accountCode === "4610")!;
+    expect(line.monthly[0].value.toFixed(2)).toBe("59166.67");
+    // Month 1: 5,000 + 4,166.67 (no config)
+    expect(line.monthly[1].value.toFixed(2)).toBe("9166.67");
+    // Month 12 (FY28 start): AUM 200m × 0.0005 / 12 = 8,333.33; + 5,000 monthly = 13,333.33
+    expect(line.monthly[12].value.toFixed(2)).toBe("13333.33");
+  });
+
+  it("program liabilities post interest expense to OPEX at all-in rate", async () => {
+    // Variable tranche: 700,000 notes × $1,000 face = $700m principal,
+    // 170 bps spread + 420 bps BBSW = 590 bps all-in = $41.3m/yr ≈ $3,441,667/mo
+    const pnl = computePnL(
+      [],
+      [],
+      HORIZON,
+      [],
+      "default",
+      [],
+      [],
+      [],
+      [
+        {
+          id: "L1",
+          programId: "P1",
+          programName: "CRE CLO 2026 FL-1",
+          trancheName: "AAA",
+          principal: "700000000",
+          returnProfileBps: 170,
+          rateType: "variable",
+          calculationMethod: "monthly",
+          accountCode: "6800",
+          startPeriodKey: "2026-07",
+        },
+      ],
+      420,
+    );
+    const opexLine = pnl.opex.lines.find((l) => l.accountCode === "6800")!;
+    expect(opexLine).toBeTruthy();
+    // monthly = 700,000,000 × 590 / 10000 / 12 = 3,441,666.666...
+    expect(opexLine.monthly[0].value.toFixed(2)).toBe("3441666.67");
+  });
+
+  it("fixed tranches ignore base rate", async () => {
+    // Fixed AA tranche: 145,000 × $1,000 = $145m, 225 bps all-in (ignores base)
+    const pnl = computePnL(
+      [],
+      [],
+      HORIZON,
+      [],
+      "default",
+      [],
+      [],
+      [],
+      [
+        {
+          id: "L2",
+          programId: "P1",
+          programName: "CRE CLO 2026 FL-1",
+          trancheName: "AA",
+          principal: "145000000",
+          returnProfileBps: 225,
+          rateType: "fixed",
+          calculationMethod: "monthly",
+          accountCode: "6800",
+          startPeriodKey: "2026-07",
+        },
+      ],
+      420, // base rate ignored for fixed
+    );
+    const opexLine = pnl.opex.lines.find((l) => l.accountCode === "6800")!;
+    // monthly = 145,000,000 × 225 / 10000 / 12 = 271,875
+    expect(opexLine.monthly[0].value.toFixed(2)).toBe("271875.00");
   });
 
   it("0.1 + 0.2 stays 0.3", () => {

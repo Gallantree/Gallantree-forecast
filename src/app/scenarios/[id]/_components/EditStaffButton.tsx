@@ -91,7 +91,7 @@ export function EditStaffButton({
       <dialog
         ref={dialogRef}
         onClose={() => setOpen(false)}
-        className="rounded-lg p-0 backdrop:bg-black/30"
+        className="fixed inset-0 m-auto h-fit max-h-[90vh] w-fit max-w-[95vw] rounded-lg p-0 shadow-xl backdrop:bg-black/40"
       >
         {open && (
           <form action={onSubmit} className="flex w-[640px] flex-col gap-4 p-6 text-sm">

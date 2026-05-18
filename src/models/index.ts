@@ -10,5 +10,15 @@ export {
   default as CapitalProgram,
   type ICapitalProgram,
   type IProgramFee,
+  type IProgramLiability,
   type CapitalProgramType,
+  type LiabilityCalculationMethod,
+  type LiabilityRateType,
 } from "./capitalProgram.model";
+export {
+  default as PlatformLicense,
+  type IPlatformLicense,
+  type PlatformLicenseType,
+  type ComplianceTier,
+  type BillingFrequency,
+} from "./platformLicense.model";

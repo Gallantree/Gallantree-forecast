@@ -95,6 +95,47 @@ describe("computeStatements — Balance Sheet", () => {
   });
 });
 
+describe("computeStatements — interest expense cascade", () => {
+  it("interest expense (program_liability) sits below EBIT, not in EBITDA", () => {
+    // Set-up: $10k/mo revenue, $4k/mo opex, plus a $200/mo liability that
+    // routes to 6800. EBITDA must equal revenue − cash opex (no interest):
+    //   EBITDA = 10,000 − 4,000 = 6,000
+    //   EBIT   = 6,000 (no depreciation)
+    //   Pre-tax = 6,000 − 200 = 5,800
+    //   Tax (30%) = 1,740
+    //   NI = 4,060
+    const s = computeStatements(
+      [rev(), opex()],
+      [],
+      HORIZON,
+      { taxRatePct: "30" },
+      [],
+      [],
+      [],
+      [
+        {
+          id: "L1",
+          programId: "P1",
+          programName: "Test program",
+          trancheName: "AAA",
+          principal: "1000000", // $1m
+          returnProfileBps: 24, // 1m × 24/10000 = 2,400/yr = 200/mo
+          rateType: "fixed",
+          calculationMethod: "monthly",
+          accountCode: "6800",
+          startPeriodKey: "2026-07",
+        },
+      ],
+    );
+    expect(s.pnl.ebitda[0].value.toFixed(2)).toBe("6000.00");
+    expect(s.pnl.ebit[0].value.toFixed(2)).toBe("6000.00");
+    expect(s.pnl.interestExpense[0].value.toFixed(2)).toBe("200.00");
+    expect(s.pnl.pretaxIncome[0].value.toFixed(2)).toBe("5800.00");
+    expect(s.pnl.taxExpense[0].value.toFixed(2)).toBe("1740.00");
+    expect(s.pnl.netIncome[0].value.toFixed(2)).toBe("4060.00");
+  });
+});
+
 describe("computeStatements — Cashflow & BS balance", () => {
   it("indirect CF reconciles to ending cash", () => {
     const s = computeStatements([rev(), opex(), capex()], [], HORIZON, {

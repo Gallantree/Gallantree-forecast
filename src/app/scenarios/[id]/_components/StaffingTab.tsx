@@ -96,23 +96,68 @@ export function StaffingTab({
     caseByCase: p.caseByCase,
   }));
 
+  // Headline stats
+  const headCount = staff.length;
+  const totalFteRounded = totalFte.toString();
+  const monthlyCost = totalAnnualCost.div(12);
+
   return (
     <div className="flex h-full flex-col bg-white">
-      <AddStaffForm
-        expenseAccounts={expenseAccounts}
-        paybands={plainPaybands}
-        defaultStartPeriod={defaultStartPeriod}
-        defaultCpiPct={defaultCpiPct}
-        defaultSuperPct={defaultSuperPct}
-        addAction={addAction}
-      />
-
+      {/* Header strip — mirror Capital Programs */}
+      <div className="flex items-end justify-between gap-6 border-b border-zinc-200 bg-zinc-50 px-4 py-3 text-xs">
+        <div className="flex gap-6">
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+              Head count
+            </div>
+            <div className="text-base font-semibold text-zinc-900">
+              {fmtNum0(headCount)}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+              FTEs
+            </div>
+            <div className="text-base font-semibold text-zinc-900 tabular-nums">
+              {totalFteRounded}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+              Cost / month
+            </div>
+            <div className="text-base font-semibold text-zinc-900 tabular-nums">
+              {fmtMoney2(monthlyCost.toFixed(2))}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+              Cost / year
+            </div>
+            <div className="text-base font-semibold text-emerald-700 tabular-nums">
+              {fmtMoney2(totalAnnualCost.toFixed(2))}
+            </div>
+          </div>
+        </div>
+        <AddStaffForm
+          expenseAccounts={expenseAccounts}
+          paybands={plainPaybands}
+          defaultStartPeriod={defaultStartPeriod}
+          defaultCpiPct={defaultCpiPct}
+          defaultSuperPct={defaultSuperPct}
+          addAction={addAction}
+        />
+      </div>
 
       {/* Staff list */}
       <div className="flex-1 overflow-auto">
         {staff.length === 0 ? (
-          <div className="flex h-full items-center justify-center text-sm text-zinc-500">
-            No staff yet. Add a person above.
+          <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-zinc-500">
+            <div>No staff yet.</div>
+            <div className="text-xs">
+              Click <span className="font-medium text-zinc-700">Add staff</span> in
+              the header to create one.
+            </div>
           </div>
         ) : (
           <table className="w-full border-collapse text-xs">

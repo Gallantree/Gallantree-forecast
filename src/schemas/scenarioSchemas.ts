@@ -11,6 +11,12 @@ export const scenarioCreateSchema = z.object({
   openingEquity: decimalStringSchema.optional(),
   defaultCpiPct: decimalStringSchema.optional(),
   defaultSuperPct: decimalStringSchema.optional(),
+  waccPct: decimalStringSchema.optional(),
+  terminalGrowthPct: decimalStringSchema.optional(),
+  evEbitdaMultiple: decimalStringSchema.optional(),
+  evRevenueMultiple: decimalStringSchema.optional(),
+  peMultiple: decimalStringSchema.optional(),
+  netDebt: decimalStringSchema.optional(),
 });
 export type ScenarioCreate = z.infer<typeof scenarioCreateSchema>;
 

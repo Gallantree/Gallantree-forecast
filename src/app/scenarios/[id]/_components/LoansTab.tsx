@@ -1,16 +1,28 @@
 import Decimal from "decimal.js";
-import { fmtMoney2, fmtNum0 } from "@/utils/format";
-import { clearLoanTape, importLoanTape } from "../_actions";
+import { cleanDecimal, fmtMoney2, fmtNum0 } from "@/utils/format";
+import {
+  clearLoanTape,
+  deleteLoan,
+  importLoanTape,
+  setLoanProgram,
+  toggleLoanIncluded,
+  updateLoan,
+  updateLoanBookGrowth,
+} from "../_actions";
+import { LoanRowActions, type LoanEditInitial } from "./LoanRowActions";
+import { LoanProgramSelect } from "./LoanProgramSelect";
 
 export interface LoanRow {
   _id: string;
   loanId: string;
   borrower?: string;
+  lenderOfRecord?: string;
   state?: string;
   assetClass?: string;
   propertyStatus?: string;
   location?: string;
   channel: "CRE_CLO" | "CMBS" | "Warehouse" | "Non-Conforming";
+  capitalProgramId?: string;
   originationDate: Date | string;
   maturityDate: Date | string;
   termMonths: number;
@@ -24,6 +36,13 @@ export interface LoanRow {
   nimNegFloorBps?: number;
   nimHardFloorBps?: number;
   allInPct?: { toString: () => string };
+  includeInRevenue?: boolean;
+}
+
+export interface ProgramOption {
+  _id: string;
+  name: string;
+  type: string;
 }
 
 const CHANNEL_LABEL: Record<LoanRow["channel"], string> = {
@@ -46,6 +65,35 @@ function fmtDate(d: Date | string): string {
     : `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
+function toIsoDate(d: Date | string): string {
+  const date = typeof d === "string" ? new Date(d) : d;
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+}
+
+function toLoanEditInitial(l: LoanRow): LoanEditInitial {
+  return {
+    _id: l._id,
+    loanId: l.loanId,
+    borrower: l.borrower,
+    lenderOfRecord: l.lenderOfRecord,
+    channel: l.channel,
+    capitalProgramId: l.capitalProgramId,
+    balance: l.balance.toString(),
+    originationDate: toIsoDate(l.originationDate),
+    maturityDate: toIsoDate(l.maturityDate),
+    termMonths: l.termMonths,
+    nimDefaultBps: l.nimDefaultBps,
+    nimNegFloorBps: l.nimNegFloorBps,
+    nimHardFloorBps: l.nimHardFloorBps,
+    creditSpreadBps: l.creditSpreadBps,
+    internalScore: l.internalScore,
+    internalGrade: l.internalGrade,
+    lvr: l.lvr ? cleanDecimal(l.lvr.toString()) : undefined,
+    dscr: l.dscr ? cleanDecimal(l.dscr.toString()) : undefined,
+  };
+}
+
 function activeNimBps(
   l: LoanRow,
   tier: "default" | "neg_floor" | "hard_floor",
@@ -64,21 +112,43 @@ export function LoansTab({
   scenarioId,
   loans,
   nimTier,
+  fys,
+  bookGrowthPctByYear,
+  programs,
 }: {
   scenarioId: string;
   loans: LoanRow[];
   nimTier: "default" | "neg_floor" | "hard_floor";
+  fys: number[];
+  bookGrowthPctByYear: string[];
+  programs: ProgramOption[];
 }) {
   const importAction = importLoanTape.bind(null, scenarioId);
+  const growthAction = updateLoanBookGrowth.bind(null, scenarioId);
+
+  // Compute the cumulative book size at end of year N as % of today, for the
+  // tiny preview shown next to the inputs.
+  const growthRates = fys.map((_, i) =>
+    Number(cleanDecimal(bookGrowthPctByYear[i]) || "0"),
+  );
+  const cumulativeMultiplier = growthRates.reduce(
+    (acc, r) => acc * (1 + r / 100),
+    1,
+  );
+  const anyNonZero = growthRates.some((r) => r !== 0);
   const clearAction = clearLoanTape.bind(null, scenarioId);
 
-  // Aggregates
+  const isIncluded = (l: LoanRow) => l.includeInRevenue !== false;
+  const includedCount = loans.filter(isIncluded).length;
+  const excludedCount = loans.length - includedCount;
+
+  // Aggregates — only included loans contribute to balance + NIM totals.
   const totalBalance = loans.reduce(
-    (acc, l) => acc.plus(new Decimal(l.balance.toString())),
+    (acc, l) => (isIncluded(l) ? acc.plus(new Decimal(l.balance.toString())) : acc),
     new Decimal(0),
   );
   const totalAnnualNim = loans.reduce(
-    (acc, l) => acc.plus(annualisedNim(l, nimTier)),
+    (acc, l) => (isIncluded(l) ? acc.plus(annualisedNim(l, nimTier)) : acc),
     new Decimal(0),
   );
 
@@ -87,6 +157,7 @@ export function LoansTab({
     { count: number; balance: Decimal; nim: Decimal }
   >();
   for (const l of loans) {
+    if (!isIncluded(l)) continue;
     const bucket = byChannel.get(l.channel) ?? {
       count: 0,
       balance: new Decimal(0),
@@ -106,7 +177,15 @@ export function LoansTab({
           <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
             Loans
           </div>
-          <div className="text-base font-semibold text-zinc-900">{loans.length}</div>
+          <div className="text-base font-semibold text-zinc-900">
+            {loans.length}
+            {excludedCount > 0 ? (
+              <span className="ml-2 text-xs font-normal text-zinc-500">
+                <span className="font-semibold text-emerald-700">{includedCount}</span> included
+                · <span className="font-semibold text-rose-600">{excludedCount}</span> excluded
+              </span>
+            ) : null}
+          </div>
         </div>
         <div>
           <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
@@ -122,9 +201,59 @@ export function LoansTab({
           </div>
           <div className="text-base font-semibold text-zinc-900">
             {fmtMoney2(totalAnnualNim.toFixed(2))}
-            <span className="ml-2 text-xs font-normal text-zinc-500">/ yr (annualised)</span>
+            <span className="ml-2 text-xs font-normal text-zinc-500">/ yr at t=0</span>
           </div>
         </div>
+
+        <form action={growthAction} className="flex items-end gap-2">
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+              Book growth % per FY
+              <span className="ml-1 font-normal lowercase text-zinc-400">
+                · compounded forward
+              </span>
+            </span>
+            <div className="flex items-center gap-2">
+              {fys.map((fy, i) => (
+                <label key={fy} className="flex flex-col items-center gap-0.5">
+                  <span className="text-[9px] font-mono text-zinc-500">
+                    FY{String(fy).slice(-2)}
+                  </span>
+                  <input
+                    name={`loanBookGrowthPctY${i}`}
+                    defaultValue={cleanDecimal(bookGrowthPctByYear[i]) || ""}
+                    inputMode="decimal"
+                    placeholder="0"
+                    className="w-16 rounded-md border border-zinc-300 px-2 py-1 text-right text-xs tabular-nums"
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
+          <button
+            type="submit"
+            className="rounded-md border border-zinc-300 bg-white px-3 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
+          >
+            Save
+          </button>
+          {anyNonZero ? (
+            <span
+              className={`self-center text-[11px] ${
+                cumulativeMultiplier > 1
+                  ? "text-emerald-700"
+                  : cumulativeMultiplier < 1
+                    ? "text-rose-700"
+                    : "text-zinc-500"
+              }`}
+            >
+              End-of-FY{String(fys[fys.length - 1] ?? 0).slice(-2)} book ≈{" "}
+              <span className="font-semibold">
+                {(cumulativeMultiplier * 100).toFixed(0)}%
+              </span>{" "}
+              of today
+            </span>
+          ) : null}
+        </form>
 
         <form action={importAction} className="ml-auto flex items-end gap-2">
           <label className="flex flex-col gap-1">
@@ -211,9 +340,11 @@ export function LoansTab({
           <table className="w-full border-collapse text-xs">
             <thead className="sticky top-0 bg-zinc-100 text-zinc-600">
               <tr>
+                <Th className="text-center">Include</Th>
                 <Th>Loan ID</Th>
                 <Th>Borrower</Th>
-                <Th>Channel</Th>
+                <Th>Lender of Record</Th>
+                <Th>Capital program</Th>
                 <Th>Asset</Th>
                 <Th>State</Th>
                 <Th>Status</Th>
@@ -228,17 +359,59 @@ export function LoansTab({
                 <Th className="text-right">Spread (bps)</Th>
                 <Th className="text-right">NIM ({TIER_LABEL[nimTier]}) bps</Th>
                 <Th className="text-right">NIM $/yr</Th>
+                <Th className="text-center">Actions</Th>
               </tr>
             </thead>
             <tbody>
               {loans.map((l) => {
+                const included = isIncluded(l);
                 const nimBps = activeNimBps(l, nimTier);
                 const nimDollars = annualisedNim(l, nimTier);
                 return (
-                  <tr key={l._id} className="border-b border-zinc-100 hover:bg-yellow-50/40">
+                  <tr
+                    key={l._id}
+                    className={`border-b border-zinc-100 hover:bg-yellow-50/40 ${
+                      included ? "" : "bg-zinc-50/60 text-zinc-400"
+                    }`}
+                  >
+                    <Td className="text-center">
+                      <form
+                        action={toggleLoanIncluded.bind(null, scenarioId, l._id, !included)}
+                      >
+                        <button
+                          type="submit"
+                          aria-pressed={included}
+                          aria-label={
+                            included ? "Exclude loan from NIM revenue" : "Include loan in NIM revenue"
+                          }
+                          title={
+                            included
+                              ? "Click to exclude this loan's NIM from revenue"
+                              : "Click to include this loan's NIM in revenue"
+                          }
+                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition ${
+                            included ? "bg-emerald-500" : "bg-zinc-300"
+                          }`}
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${
+                              included ? "translate-x-4" : "translate-x-0.5"
+                            }`}
+                          />
+                        </button>
+                      </form>
+                    </Td>
                     <Td className="font-mono">{l.loanId}</Td>
                     <Td>{l.borrower ?? "—"}</Td>
-                    <Td>{CHANNEL_LABEL[l.channel]}</Td>
+                    <Td>{l.lenderOfRecord ?? <span className="text-zinc-300">—</span>}</Td>
+                    <Td>
+                      <LoanProgramSelect
+                        currentProgramId={l.capitalProgramId}
+                        channelLabel={CHANNEL_LABEL[l.channel]}
+                        programs={programs}
+                        saveAction={setLoanProgram.bind(null, scenarioId, l._id)}
+                      />
+                    </Td>
                     <Td>{l.assetClass ?? "—"}</Td>
                     <Td>{l.state ?? "—"}</Td>
                     <Td>{l.propertyStatus ?? "—"}</Td>
@@ -261,18 +434,30 @@ export function LoansTab({
                     <Td className="text-right font-semibold tabular-nums text-emerald-700">
                       {fmtMoney2(nimDollars.toFixed(2))}
                     </Td>
+                    <Td className="text-center">
+                      <LoanRowActions
+                        initial={toLoanEditInitial(l)}
+                        programs={programs}
+                        updateAction={updateLoan.bind(null, scenarioId, l._id)}
+                        deleteAction={deleteLoan.bind(null, scenarioId, l._id)}
+                      />
+                    </Td>
                   </tr>
                 );
               })}
             </tbody>
             <tfoot className="sticky bottom-0 border-t-2 border-zinc-400 bg-zinc-100 font-semibold">
               <tr>
-                <Td colSpan={9}>Totals ({loans.length} loans)</Td>
+                <Td colSpan={11}>
+                  Totals ({loans.length} loans
+                  {excludedCount > 0 ? `, ${includedCount} included` : ""})
+                </Td>
                 <Td className="text-right tabular-nums">{fmtMoney2(totalBalance.toFixed(2))}</Td>
                 <Td colSpan={6}></Td>
                 <Td className="text-right tabular-nums text-emerald-700">
                   {fmtMoney2(totalAnnualNim.toFixed(2))}
                 </Td>
+                <Td />
               </tr>
             </tfoot>
           </table>

@@ -11,6 +11,7 @@ import {
   Payband,
   Loan,
   CapitalProgram,
+  PlatformLicense,
 } from "@/models";
 import { fmtMoney2 } from "@/utils/format";
 import { computePnL, type MonthlyValue } from "@/engine/pnl";
@@ -19,8 +20,12 @@ import { loadEngineInputs } from "@/engine/inputs";
 import { PnlTable, buildFYGroups } from "./_components/PnlTable";
 import { TabBar, isTabKey, type TabKey } from "./_components/TabBar";
 import { StaffingTab, type StaffRow, type PaybandRow } from "./_components/StaffingTab";
-import { LoansTab, type LoanRow } from "./_components/LoansTab";
-import { ProgramsTab, type ProgramRow } from "./_components/ProgramsTab";
+import { LoansTab, type LoanRow, type ProgramOption } from "./_components/LoansTab";
+import {
+  ProgramsTab,
+  type ProgramRow,
+  type ProgramAggregate,
+} from "./_components/ProgramsTab";
 import {
   BalanceSheetTab,
   type BalanceSheetData,
@@ -32,12 +37,29 @@ import {
   buildOverviewData,
   type OverviewData,
 } from "./_components/OverviewTab";
+import { ValuationTab, type ValuationData } from "./_components/ValuationTab";
+import {
+  PlatformRevenuesTab,
+  type PlatformLicenseRow,
+} from "./_components/PlatformRevenuesTab";
+import {
+  OpexGeneralTab,
+  type OpexDriverRow,
+} from "./_components/OpexGeneralTab";
+import { ControlPanelTab } from "./_components/ControlPanelTab";
+import { computeValuation } from "@/engine/valuation";
 import { addDriver } from "./_actions";
 
 function serializeSeries(series: MonthlyValue[]): SerializedSeries {
   const monthly: Record<string, string> = {};
   for (const m of series) monthly[m.periodKey] = m.value.toFixed(2);
   return { monthly };
+}
+
+function monthlyMap(series: MonthlyValue[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const m of series) out[m.periodKey] = m.value.toFixed(2);
+  return out;
 }
 
 export const dynamic = "force-dynamic";
@@ -90,11 +112,21 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
     defaultCpiPct?: { toString: () => string };
     defaultSuperPct?: { toString: () => string };
     nimTier?: "default" | "neg_floor" | "hard_floor";
+    loanBookGrowthPctByYear?: Array<{ toString: () => string }>;
     dsoDays?: { toString: () => string };
     dpoDays?: { toString: () => string };
     taxRatePct?: { toString: () => string };
     openingCash?: { toString: () => string };
     openingEquity?: { toString: () => string };
+    baseRateType?: "BBSW" | "BBSY" | "SOFR";
+    baseRateBps?: number;
+    firstYearLabel?: number;
+    waccPct?: { toString: () => string };
+    terminalGrowthPct?: { toString: () => string };
+    evEbitdaMultiple?: { toString: () => string };
+    evRevenueMultiple?: { toString: () => string };
+    peMultiple?: { toString: () => string };
+    netDebt?: { toString: () => string };
   }>();
   if (!scenario) notFound();
 
@@ -106,6 +138,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
     paybands,
     loanDocs,
     programDocs,
+    licenseDocs,
     inputs,
   ] = await Promise.all([
     Period.find({}).sort({ index: 1 }).lean(),
@@ -113,12 +146,210 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
     Driver.find({ scenarioId: id }).sort({ createdAt: 1 }).lean(),
     Headcount.find({ scenarioId: id }).sort({ createdAt: 1 }).lean<StaffRow[]>(),
     Payband.find({}).sort({ band: 1, tier: 1 }).lean<PaybandRow[]>(),
-    Loan.find({ scenarioId: id }).sort({ loanId: 1 }).lean<LoanRow[]>(),
+    Loan.find({ scenarioId: id }).sort({ loanId: 1 }).lean(),
     CapitalProgram.find({ scenarioId: id })
       .sort({ startPeriodKey: 1, name: 1 })
       .lean(),
+    PlatformLicense.find({ scenarioId: id })
+      .sort({ type: 1, startPeriodKey: 1, name: 1 })
+      .lean(),
     loadEngineInputs(id),
   ]);
+
+  // Pre-serialize loan _ids so the toggle button can bind them into a server
+  // action without React 19 choking on ObjectId.toJSON returning {buffer:...}.
+  type LeanLoan = {
+    _id: { toString: () => string };
+    loanId: string;
+    borrower?: string;
+    lenderOfRecord?: string;
+    state?: string;
+    assetClass?: string;
+    propertyStatus?: string;
+    location?: string;
+    channel: LoanRow["channel"];
+    capitalProgramId?: { toString: () => string };
+    originationDate: Date | string;
+    maturityDate: Date | string;
+    termMonths: number;
+    balance: { toString: () => string };
+    lvr?: { toString: () => string };
+    dscr?: { toString: () => string };
+    internalScore?: number;
+    internalGrade?: string;
+    creditSpreadBps?: number;
+    nimDefaultBps?: number;
+    nimNegFloorBps?: number;
+    nimHardFloorBps?: number;
+    allInPct?: { toString: () => string };
+    includeInRevenue?: boolean;
+  };
+  const loanRows: LoanRow[] = (loanDocs as unknown as LeanLoan[]).map((l) => ({
+    _id: l._id.toString(),
+    loanId: l.loanId,
+    borrower: l.borrower,
+    lenderOfRecord: l.lenderOfRecord,
+    state: l.state,
+    assetClass: l.assetClass,
+    propertyStatus: l.propertyStatus,
+    location: l.location,
+    channel: l.channel,
+    capitalProgramId: l.capitalProgramId ? l.capitalProgramId.toString() : undefined,
+    originationDate: l.originationDate,
+    maturityDate: l.maturityDate,
+    termMonths: l.termMonths,
+    balance: { toString: () => l.balance.toString() },
+    lvr: l.lvr ? { toString: () => l.lvr!.toString() } : undefined,
+    dscr: l.dscr ? { toString: () => l.dscr!.toString() } : undefined,
+    internalScore: l.internalScore,
+    internalGrade: l.internalGrade,
+    creditSpreadBps: l.creditSpreadBps,
+    nimDefaultBps: l.nimDefaultBps,
+    nimNegFloorBps: l.nimNegFloorBps,
+    nimHardFloorBps: l.nimHardFloorBps,
+    allInPct: l.allInPct ? { toString: () => l.allInPct!.toString() } : undefined,
+    includeInRevenue: l.includeInRevenue,
+  }));
+
+  // Platform licences — serialize Decimal128/array fields to plain shapes.
+  type LeanLicense = {
+    _id: { toString: () => string };
+    name: string;
+    type: "compliance" | "trustee";
+    startPeriodKey: string;
+    endPeriodKey?: string;
+    notes?: string;
+    tier?: PlatformLicenseRow["tier"];
+    monthlyFeePerSeat?: { toString: () => string };
+    seatCount?: number;
+    seatGrowthPctAnnual?: { toString: () => string };
+    billingFrequency?: "monthly" | "annual";
+    annualDiscountPct?: { toString: () => string };
+    monthlyFee?: { toString: () => string };
+    configFee?: { toString: () => string };
+    aumByYear?: Array<{ toString: () => string }>;
+    feePctOfAumByYear?: Array<{ toString: () => string }>;
+  };
+  const licenseRows: PlatformLicenseRow[] = (licenseDocs as unknown as LeanLicense[]).map(
+    (l) => ({
+      _id: l._id.toString(),
+      name: l.name,
+      type: l.type,
+      startPeriodKey: l.startPeriodKey,
+      endPeriodKey: l.endPeriodKey,
+      notes: l.notes,
+      tier: l.tier,
+      monthlyFeePerSeat: l.monthlyFeePerSeat
+        ? { toString: () => l.monthlyFeePerSeat!.toString() }
+        : undefined,
+      seatCount: l.seatCount,
+      seatGrowthPctAnnual: l.seatGrowthPctAnnual
+        ? { toString: () => l.seatGrowthPctAnnual!.toString() }
+        : undefined,
+      billingFrequency: l.billingFrequency,
+      annualDiscountPct: l.annualDiscountPct
+        ? { toString: () => l.annualDiscountPct!.toString() }
+        : undefined,
+      monthlyFee: l.monthlyFee
+        ? { toString: () => l.monthlyFee!.toString() }
+        : undefined,
+      configFee: l.configFee ? { toString: () => l.configFee!.toString() } : undefined,
+      aumByYear: l.aumByYear
+        ? l.aumByYear.map((v) => ({ toString: () => v.toString() }))
+        : undefined,
+      feePctOfAumByYear: l.feePctOfAumByYear
+        ? l.feePctOfAumByYear.map((v) => ({ toString: () => v.toString() }))
+        : undefined,
+    }),
+  );
+
+  // Serialise OPEX drivers (excluding revenue + capex types) for the OPEX-General tab.
+  type LeanDriver = {
+    _id: { toString: () => string };
+    name: string;
+    type: string;
+    accountCode: string;
+    startPeriodKey: string;
+    endPeriodKey?: string;
+    baseMonthly?: { toString: () => string };
+    monthlyGrowthPct?: { toString: () => string };
+    pctOfRevenue?: { toString: () => string };
+    costPerFteMonthly?: { toString: () => string };
+  };
+  const opexDriverRows: OpexDriverRow[] = (drivers as unknown as LeanDriver[])
+    .filter(
+      (d) =>
+        d.type === "opex_fixed" ||
+        d.type === "opex_pct_revenue" ||
+        d.type === "opex_per_fte",
+    )
+    .map((d) => ({
+      _id: d._id.toString(),
+      type: d.type as OpexDriverRow["type"],
+      name: d.name,
+      accountCode: d.accountCode,
+      startPeriodKey: d.startPeriodKey,
+      endPeriodKey: d.endPeriodKey,
+      baseMonthly: d.baseMonthly
+        ? { toString: () => d.baseMonthly!.toString() }
+        : undefined,
+      monthlyGrowthPct: d.monthlyGrowthPct
+        ? { toString: () => d.monthlyGrowthPct!.toString() }
+        : undefined,
+      pctOfRevenue: d.pctOfRevenue
+        ? { toString: () => d.pctOfRevenue!.toString() }
+        : undefined,
+      costPerFteMonthly: d.costPerFteMonthly
+        ? { toString: () => d.costPerFteMonthly!.toString() }
+        : undefined,
+    }));
+
+  // Compact options list for the loan-book program selector (no fee detail).
+  const programOptions: ProgramOption[] = (
+    programDocs as unknown as Array<{
+      _id: { toString: () => string };
+      name: string;
+      type: string;
+    }>
+  ).map((p) => ({ _id: p._id.toString(), name: p.name, type: p.type }));
+
+  // Aggregates: count, balance, weighted averages — keyed by capitalProgramId.
+  const programAggregates: Record<string, ProgramAggregate> = {};
+  for (const l of loanRows) {
+    const pid = l.capitalProgramId;
+    if (!pid) continue;
+    const bucket = (programAggregates[pid] ??= {
+      loanCount: 0,
+      totalBalance: 0,
+      weightSumScore: 0,
+      weightSumLvr: 0,
+      weightSumDscr: 0,
+      weightSumSpreadBps: 0,
+      weightBalanceForScore: 0,
+      weightBalanceForLvr: 0,
+      weightBalanceForDscr: 0,
+      weightBalanceForSpread: 0,
+    });
+    const bal = Number(l.balance.toString());
+    bucket.loanCount += 1;
+    bucket.totalBalance += bal;
+    if (l.internalScore !== undefined) {
+      bucket.weightSumScore += bal * l.internalScore;
+      bucket.weightBalanceForScore += bal;
+    }
+    if (l.lvr) {
+      bucket.weightSumLvr += bal * Number(l.lvr.toString());
+      bucket.weightBalanceForLvr += bal;
+    }
+    if (l.dscr) {
+      bucket.weightSumDscr += bal * Number(l.dscr.toString());
+      bucket.weightBalanceForDscr += bal;
+    }
+    if (l.creditSpreadBps !== undefined) {
+      bucket.weightSumSpreadBps += bal * l.creditSpreadBps;
+      bucket.weightBalanceForSpread += bal;
+    }
+  }
 
   // Pre-serialize programs (and their embedded fee _ids) into plain shapes
   // so any bound server-action args downstream stay plain — React 19 / Next 16
@@ -128,6 +359,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
     name: string;
     type: ProgramRow["type"];
     dealSize?: { toString: () => string };
+    faceValuePerNote?: { toString: () => string };
     startPeriodKey: string;
     endPeriodKey?: string;
     notes?: string;
@@ -139,11 +371,23 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
       feeBps: number;
       accountCode: string;
     }>;
+    liabilities?: Array<{
+      _id: { toString: () => string };
+      name: string;
+      numNotes?: number;
+      returnProfileBps: number;
+      calculationMethod: "monthly" | "quarterly" | "annually";
+      rateType: "fixed" | "variable";
+      accountCode?: string;
+    }>;
   }>).map((p) => ({
     _id: p._id.toString(),
     name: p.name,
     type: p.type,
     dealSize: p.dealSize ? { toString: () => p.dealSize!.toString() } : undefined,
+    faceValuePerNote: p.faceValuePerNote
+      ? { toString: () => p.faceValuePerNote!.toString() }
+      : undefined,
     startPeriodKey: p.startPeriodKey,
     endPeriodKey: p.endPeriodKey,
     notes: p.notes,
@@ -155,11 +399,23 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
       feeBps: f.feeBps,
       accountCode: f.accountCode,
     })),
+    liabilities: (p.liabilities ?? []).map((l) => ({
+      _id: l._id.toString(),
+      name: l.name,
+      numNotes: l.numNotes,
+      returnProfileBps: l.returnProfileBps,
+      calculationMethod: l.calculationMethod,
+      rateType: l.rateType,
+      accountCode: l.accountCode,
+    })),
   }));
 
   const horizon = periods.map((p) => p.key);
   const accountByCode = new Map(accounts.map((a) => [a.code, a.name]));
   const nimTier = scenario.nimTier ?? "default";
+  const loanBookGrowthPctByYear: string[] = (scenario.loanBookGrowthPctByYear ?? []).map(
+    (d) => d.toString(),
+  );
   const pnl =
     horizon.length > 0
       ? computePnL(
@@ -169,12 +425,20 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
           inputs.loans,
           nimTier,
           inputs.programFees,
+          loanBookGrowthPctByYear,
+          inputs.platformLicenses,
+          inputs.programLiabilities,
+          scenario.baseRateBps ?? 0,
         )
       : null;
 
   // Compute full statements only when a tab needs them.
   const needsStatements =
-    tab === "balance-sheet" || tab === "cashflow" || tab === "overview";
+    tab === "balance-sheet" ||
+    tab === "cashflow" ||
+    tab === "overview" ||
+    tab === "valuation" ||
+    tab === "pnl";
   const statements =
     needsStatements && horizon.length > 0
       ? computeStatements(
@@ -188,9 +452,13 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
             openingCash: scenario.openingCash?.toString(),
             openingEquity: scenario.openingEquity?.toString(),
             nimTier,
+            loanBookGrowthPctByYear,
+            baseRateBps: scenario.baseRateBps,
           },
           inputs.loans,
           inputs.programFees,
+          inputs.platformLicenses,
+          inputs.programLiabilities,
         )
       : null;
 
@@ -202,6 +470,79 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
         statements.pnl,
         accountByCode,
       )
+    : null;
+
+  const valuationData: ValuationData | null = statements
+    ? (() => {
+        const v = computeValuation(
+          buildFYGroups(periods),
+          {
+            revenueTotals: statements.pnl.revenue.totals,
+            ebitda: statements.pnl.ebitda,
+            ebit: statements.pnl.ebit,
+            netIncome: statements.pnl.netIncome,
+            netCashMovement: statements.cf.netCashMovement,
+          },
+          {
+            waccPct: scenario.waccPct?.toString(),
+            terminalGrowthPct: scenario.terminalGrowthPct?.toString(),
+            evEbitdaMultiple: scenario.evEbitdaMultiple?.toString(),
+            evRevenueMultiple: scenario.evRevenueMultiple?.toString(),
+            peMultiple: scenario.peMultiple?.toString(),
+            netDebt: scenario.netDebt?.toString(),
+          },
+        );
+        return {
+          fys: v.fys,
+          aggregates: v.aggregates.map((a) => ({
+            fy: a.fy,
+            revenue: a.revenue.toFixed(2),
+            ebitda: a.ebitda.toFixed(2),
+            ebit: a.ebit.toFixed(2),
+            netIncome: a.netIncome.toFixed(2),
+            fcf: a.fcf.toFixed(2),
+          })),
+          dcf: v.dcf.map((d) => ({
+            horizonYears: d.horizonYears,
+            presentValueFcfs: d.presentValueFcfs.toFixed(2),
+            terminalValue: d.terminalValue.toFixed(2),
+            presentValueTerminal: d.presentValueTerminal.toFixed(2),
+            enterpriseValue: d.enterpriseValue.toFixed(2),
+            equityValue: d.equityValue.toFixed(2),
+            impliedExitMultipleOnEbitda: d.impliedExitMultipleOnEbitda.toFixed(2),
+            invalidReason: d.invalidReason,
+          })),
+          evEbitda: v.evEbitda.map((m) => ({
+            fy: m.fy,
+            metric: m.metric.toFixed(2),
+            multiple: m.multiple.toFixed(2),
+            enterpriseValue: m.enterpriseValue.toFixed(2),
+            equityValue: m.equityValue.toFixed(2),
+          })),
+          evRevenue: v.evRevenue.map((m) => ({
+            fy: m.fy,
+            metric: m.metric.toFixed(2),
+            multiple: m.multiple.toFixed(2),
+            enterpriseValue: m.enterpriseValue.toFixed(2),
+            equityValue: m.equityValue.toFixed(2),
+          })),
+          pe: v.pe.map((m) => ({
+            fy: m.fy,
+            metric: m.metric.toFixed(2),
+            multiple: m.multiple.toFixed(2),
+            enterpriseValue: m.enterpriseValue.toFixed(2),
+            equityValue: m.equityValue.toFixed(2),
+          })),
+          assumptions: {
+            waccPct: v.assumptions.waccPct.toFixed(2),
+            terminalGrowthPct: v.assumptions.terminalGrowthPct.toFixed(2),
+            evEbitdaMultiple: v.assumptions.evEbitdaMultiple.toFixed(2),
+            evRevenueMultiple: v.assumptions.evRevenueMultiple.toFixed(2),
+            peMultiple: v.assumptions.peMultiple.toFixed(2),
+            netDebt: v.assumptions.netDebt.toFixed(2),
+          },
+        };
+      })()
     : null;
 
   const cashflowData: CashflowData | null = statements
@@ -357,13 +698,31 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
           ))}
 
         {tab === "loan-book" && (
-          <LoansTab scenarioId={id} loans={loanDocs} nimTier={nimTier} />
+          <LoansTab
+            scenarioId={id}
+            loans={loanRows}
+            nimTier={nimTier}
+            fys={buildFYGroups(periods).map((g) => g.fy)}
+            bookGrowthPctByYear={loanBookGrowthPctByYear}
+            programs={programOptions}
+          />
+        )}
+
+        {tab === "platform-revenues" && (
+          <PlatformRevenuesTab
+            scenarioId={id}
+            licenses={licenseRows}
+            defaultStartPeriod={firstPeriod}
+            fys={buildFYGroups(periods).map((g) => g.fy)}
+          />
         )}
 
         {tab === "capital-programs" && (
           <ProgramsTab
             scenarioId={id}
             programs={programRows}
+            aggregates={programAggregates}
+            baseRateBps={scenario.baseRateBps ?? 420}
             expenseAccounts={accounts
               .filter((a) => a.type === "revenue")
               .map((a) => ({ code: a.code, name: a.name }))}
@@ -394,7 +753,24 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
                 Add a driver or staff to see the P&amp;L.
               </div>
             ) : (
-              <PnlTable pnl={pnl} groups={groups} accountByCode={accountByCode} />
+              <PnlTable
+                pnl={pnl}
+                groups={groups}
+                accountByCode={accountByCode}
+                cascade={
+                  statements
+                    ? {
+                        ebitda: monthlyMap(statements.pnl.ebitda),
+                        depreciation: monthlyMap(statements.pnl.depreciation),
+                        ebit: monthlyMap(statements.pnl.ebit),
+                        interestExpense: monthlyMap(statements.pnl.interestExpense),
+                        pretaxIncome: monthlyMap(statements.pnl.pretaxIncome),
+                        taxExpense: monthlyMap(statements.pnl.taxExpense),
+                        netIncome: monthlyMap(statements.pnl.netIncome),
+                      }
+                    : undefined
+                }
+              />
             )}
           </div>
         )}
@@ -481,101 +857,15 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
         )}
 
         {tab === "opex-general" && (
-          <div className="flex h-full flex-col bg-white">
-            <form
-              action={addDriverAction}
-              className="flex flex-wrap items-end gap-2 border-b border-zinc-200 bg-zinc-50 px-4 py-3 text-xs"
-            >
-              <FormField label="Driver type">
-                <select
-                  name="type"
-                  defaultValue="opex_fixed"
-                  className="w-36 rounded-md border border-zinc-300 px-2 py-1"
-                >
-                  <option value="opex_fixed">Fixed $/mo</option>
-                  <option value="opex_pct_revenue">% of revenue</option>
-                </select>
-              </FormField>
-              <FormField label="Driver name">
-                <input
-                  name="name"
-                  required
-                  className="w-48 rounded-md border border-zinc-300 px-2 py-1"
-                />
-              </FormField>
-              <FormField label="OPEX account">
-                <select
-                  name="accountCode"
-                  required
-                  defaultValue=""
-                  className="w-56 rounded-md border border-zinc-300 px-2 py-1"
-                >
-                  <option value="" disabled>
-                    Select account…
-                  </option>
-                  {expenseAccounts.map((a) => (
-                    <option key={a.code} value={a.code}>
-                      {a.code} — {a.name}
-                    </option>
-                  ))}
-                </select>
-              </FormField>
-              <FormField label="Start" hint="YYYY-MM">
-                <input
-                  name="startPeriodKey"
-                  required
-                  defaultValue={firstPeriod}
-                  pattern="\d{4}-(0[1-9]|1[0-2])"
-                  className="w-24 rounded-md border border-zinc-300 px-2 py-1 text-center font-mono"
-                />
-              </FormField>
-              <FormField label="Base $ / month" hint="for fixed type">
-                <input
-                  name="baseMonthly"
-                  defaultValue="0"
-                  inputMode="decimal"
-                  className="w-28 rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
-                />
-              </FormField>
-              <FormField label="Growth % / month" hint="for fixed type">
-                <input
-                  name="monthlyGrowthPct"
-                  defaultValue="0"
-                  inputMode="decimal"
-                  className="w-24 rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
-                />
-              </FormField>
-              <FormField label="% of revenue" hint="for % type">
-                <input
-                  name="pctOfRevenue"
-                  defaultValue="0"
-                  inputMode="decimal"
-                  className="w-24 rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
-                />
-              </FormField>
-              <button
-                type="submit"
-                className="ml-auto rounded-md bg-zinc-900 px-4 py-1.5 font-medium text-white hover:bg-zinc-700"
-              >
-                Add OPEX driver
-              </button>
-            </form>
-            <div className="flex-1 overflow-auto">
-              {pnl && pnl.opex.lines.length > 0 ? (
-                <PnlTable
-                  pnl={pnl}
-                  groups={groups}
-                  accountByCode={accountByCode}
-                  showSection="opex"
-                />
-              ) : (
-                <Stub
-                  title="No OPEX drivers yet"
-                  message="Add a fixed or %-of-revenue OPEX driver above."
-                />
-              )}
-            </div>
-          </div>
+          <OpexGeneralTab
+            scenarioId={id}
+            drivers={opexDriverRows}
+            expenseAccounts={expenseAccounts.map((a) => ({ code: a.code, name: a.name }))}
+            defaultStartPeriod={firstPeriod}
+            pnl={pnl}
+            groups={groups}
+            accountByCode={accountByCode}
+          />
         )}
 
         {tab === "balance-sheet" &&
@@ -597,6 +887,30 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
               message="Seed periods first — run `npm run seed`."
             />
           ))}
+
+        {tab === "valuation" &&
+          (valuationData ? (
+            <ValuationTab scenarioId={id} data={valuationData} />
+          ) : (
+            <Stub
+              title="Valuation"
+              message="Seed periods first — run `npm run seed`."
+            />
+          ))}
+
+        {tab === "control-panel" && (
+          <ControlPanelTab
+            scenarioId={id}
+            initial={{
+              name: scenario.name,
+              status: scenario.status as "draft" | "active" | "archived",
+              baseRateType: scenario.baseRateType,
+              baseRateBps: scenario.baseRateBps,
+              firstYearLabel: scenario.firstYearLabel,
+            }}
+            horizonYears={buildFYGroups(periods).length}
+          />
+        )}
       </div>
 
       {/* Bottom tab bar — spreadsheet-style */}

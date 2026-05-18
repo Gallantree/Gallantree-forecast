@@ -1,7 +1,13 @@
-import { CapitalProgram, Driver, Headcount, Loan } from "@/models";
+import { CapitalProgram, Driver, Headcount, Loan, PlatformLicense } from "@/models";
 import type { DriverInput, HeadcountInput } from "./pnl";
 import { dateToPeriodKey, type LoanInput } from "./loans";
 import type { ProgramFeeInput, FeeCategory } from "./programs";
+import type { PlatformLicenseInput } from "./platformLicenses";
+import type {
+  LiabilityCalculationMethod,
+  LiabilityRateType,
+  ProgramLiabilityInput,
+} from "./programLiabilities";
 
 type D128 = { toString: () => string };
 
@@ -141,6 +147,7 @@ interface LoanDoc {
   nimDefaultBps?: number;
   nimNegFloorBps?: number;
   nimHardFloorBps?: number;
+  includeInRevenue?: boolean;
 }
 
 function toLoanInput(l: LoanDoc): LoanInput {
@@ -166,13 +173,25 @@ interface ProgramFeeDoc {
   accountCode: string;
 }
 
+interface ProgramLiabilityDoc {
+  _id: unknown;
+  name: string;
+  numNotes?: number;
+  returnProfileBps: number;
+  calculationMethod: LiabilityCalculationMethod;
+  rateType: LiabilityRateType;
+  accountCode?: string;
+}
+
 interface ProgramDoc {
   _id: unknown;
   name: string;
   type: string;
+  faceValuePerNote?: D128;
   startPeriodKey: string;
   endPeriodKey?: string;
   fees: ProgramFeeDoc[];
+  liabilities?: ProgramLiabilityDoc[];
 }
 
 function flattenProgramFees(programs: ProgramDoc[]): ProgramFeeInput[] {
@@ -197,22 +216,104 @@ function flattenProgramFees(programs: ProgramDoc[]): ProgramFeeInput[] {
   return out;
 }
 
+function flattenProgramLiabilities(programs: ProgramDoc[]): ProgramLiabilityInput[] {
+  const out: ProgramLiabilityInput[] = [];
+  for (const p of programs) {
+    const fvStr = p.faceValuePerNote?.toString();
+    const faceValue = fvStr ? Number(fvStr) : 0;
+    for (const l of p.liabilities ?? []) {
+      const principal = (l.numNotes ?? 0) * faceValue;
+      out.push({
+        id: String(l._id),
+        programId: String(p._id),
+        programName: p.name,
+        trancheName: l.name,
+        principal,
+        returnProfileBps: l.returnProfileBps,
+        rateType: l.rateType,
+        calculationMethod: l.calculationMethod,
+        accountCode: l.accountCode ?? "6800",
+        startPeriodKey: p.startPeriodKey,
+        endPeriodKey: p.endPeriodKey,
+      });
+    }
+  }
+  return out;
+}
+
+interface LicenseDoc {
+  _id: unknown;
+  name: string;
+  type: "compliance" | "trustee";
+  startPeriodKey: string;
+  endPeriodKey?: string;
+  accountCode?: string;
+  // compliance
+  monthlyFeePerSeat?: D128;
+  seatCount?: number;
+  seatGrowthPctAnnual?: D128;
+  billingFrequency?: "monthly" | "annual";
+  annualDiscountPct?: D128;
+  // trustee
+  monthlyFee?: D128;
+  configFee?: D128;
+  aumByYear?: D128[];
+  feePctOfAumByYear?: D128[];
+}
+
+function toLicenseInput(l: LicenseDoc): PlatformLicenseInput {
+  const base = {
+    id: String(l._id),
+    name: l.name,
+    startPeriodKey: l.startPeriodKey,
+    endPeriodKey: l.endPeriodKey,
+    accountCode: l.accountCode,
+  };
+  if (l.type === "compliance") {
+    return {
+      ...base,
+      type: "compliance",
+      monthlyFeePerSeat: l.monthlyFeePerSeat?.toString() ?? "0",
+      seatCount: l.seatCount ?? 0,
+      seatGrowthPctAnnual: l.seatGrowthPctAnnual?.toString() ?? "0",
+      billingFrequency: l.billingFrequency,
+      annualDiscountPct: l.annualDiscountPct?.toString() ?? "0",
+    };
+  }
+  return {
+    ...base,
+    type: "trustee",
+    monthlyFee: l.monthlyFee?.toString() ?? "0",
+    configFee: l.configFee?.toString() ?? "0",
+    aumByYear: (l.aumByYear ?? []).map((v) => v.toString()),
+    feePctOfAumByYear: (l.feePctOfAumByYear ?? []).map((v) => v.toString()),
+  };
+}
+
 export async function loadEngineInputs(scenarioId: string): Promise<{
   drivers: DriverInput[];
   headcount: HeadcountInput[];
   loans: LoanInput[];
   programFees: ProgramFeeInput[];
+  programLiabilities: ProgramLiabilityInput[];
+  platformLicenses: PlatformLicenseInput[];
 }> {
-  const [driverDocs, headcountDocs, loanDocs, programDocs] = await Promise.all([
-    Driver.find({ scenarioId }).lean<DriverDoc[]>(),
-    Headcount.find({ scenarioId }).lean<HeadcountDoc[]>(),
-    Loan.find({ scenarioId }).lean<LoanDoc[]>(),
-    CapitalProgram.find({ scenarioId }).lean<ProgramDoc[]>(),
-  ]);
+  const [driverDocs, headcountDocs, loanDocs, programDocs, licenseDocs] =
+    await Promise.all([
+      Driver.find({ scenarioId }).lean<DriverDoc[]>(),
+      Headcount.find({ scenarioId }).lean<HeadcountDoc[]>(),
+      Loan.find({ scenarioId }).lean<LoanDoc[]>(),
+      CapitalProgram.find({ scenarioId }).lean<ProgramDoc[]>(),
+      PlatformLicense.find({ scenarioId }).lean<LicenseDoc[]>(),
+    ]);
   return {
     drivers: driverDocs.map(toDriverInput),
     headcount: headcountDocs.map(toHeadcountInput),
-    loans: loanDocs.map(toLoanInput),
+    // Treat missing flag (legacy rows) as included. Only rows explicitly set to
+    // false are excluded from revenue projection.
+    loans: loanDocs.filter((l) => l.includeInRevenue !== false).map(toLoanInput),
     programFees: flattenProgramFees(programDocs),
+    programLiabilities: flattenProgramLiabilities(programDocs),
+    platformLicenses: licenseDocs.map(toLicenseInput),
   };
 }

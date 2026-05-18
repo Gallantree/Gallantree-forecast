@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { fmtMoneyInput } from "@/utils/format";
 
 export interface PlainPayband {
@@ -25,11 +25,26 @@ export function AddStaffForm({
   defaultSuperPct?: string;
   addAction: (formData: FormData) => Promise<void>;
 }) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [open, setOpen] = useState(false);
   const [band, setBand] = useState("");
   const [tier, setTier] = useState("");
   const [salary, setSalary] = useState("");
   const [salaryDirty, setSalaryDirty] = useState(false);
   const [pending, startTransition] = useTransition();
+
+  function show() {
+    setBand("");
+    setTier("");
+    setSalary("");
+    setSalaryDirty(false);
+    setOpen(true);
+    dialogRef.current?.showModal();
+  }
+  function hide() {
+    dialogRef.current?.close();
+    setOpen(false);
+  }
 
   const paybandLookup = useMemo(() => {
     const m = new Map<string, PlainPayband>();
@@ -59,37 +74,55 @@ export function AddStaffForm({
   function onSubmit(formData: FormData) {
     startTransition(async () => {
       await addAction(formData);
-      // Reset form on success
       setBand("");
       setTier("");
       setSalary("");
       setSalaryDirty(false);
+      hide();
     });
   }
 
   return (
-    <form
-      action={onSubmit}
-      className="flex flex-wrap items-end gap-2 border-b border-zinc-200 bg-zinc-50 px-4 py-3 text-xs"
-    >
-      <Field label="Name" hint="optional">
+    <div className="inline-flex">
+      <button
+        type="button"
+        onClick={show}
+        className="whitespace-nowrap rounded-md bg-zinc-900 px-4 py-1.5 text-xs font-medium text-white hover:bg-zinc-700"
+      >
+        Add staff
+      </button>
+      <dialog
+        ref={dialogRef}
+        onClose={() => setOpen(false)}
+        className="fixed inset-0 m-auto h-fit max-h-[90vh] w-fit max-w-[95vw] rounded-lg p-0 shadow-xl backdrop:bg-black/40"
+      >
+        {open && (
+          <form action={onSubmit} className="flex w-[760px] flex-col gap-4 p-6 text-sm">
+            <header className="flex items-baseline justify-between">
+              <h2 className="text-base font-semibold">Add staff member</h2>
+              <span className="text-[10px] uppercase tracking-wider text-zinc-400">
+                head count + 1
+              </span>
+            </header>
+            <section className="grid grid-cols-3 gap-3 text-xs">
+              <Field label="Name" hint="optional">
         <input
           name="personName"
-          className="w-44 rounded-md border border-zinc-300 px-2 py-1"
+          className="w-full rounded-md border border-zinc-300 px-2 py-1"
         />
       </Field>
       <Field label="Role / title">
         <input
           name="role"
           required
-          className="w-44 rounded-md border border-zinc-300 px-2 py-1"
+          className="w-full rounded-md border border-zinc-300 px-2 py-1"
         />
       </Field>
       <Field label="Employment">
         <select
           name="employmentType"
           defaultValue="full_time"
-          className="w-28 rounded-md border border-zinc-300 px-2 py-1"
+          className="w-full rounded-md border border-zinc-300 px-2 py-1"
         >
           <option value="full_time">Full-time</option>
           <option value="part_time">Part-time</option>
@@ -101,7 +134,7 @@ export function AddStaffForm({
           name="ftePct"
           defaultValue="1"
           inputMode="decimal"
-          className="w-20 rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
+          className="w-full rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
         />
       </Field>
       <Field label="Band">
@@ -109,7 +142,7 @@ export function AddStaffForm({
           name="band"
           value={band}
           onChange={(e) => applyBand(e.target.value, tier)}
-          className="w-24 rounded-md border border-zinc-300 px-2 py-1"
+          className="w-full rounded-md border border-zinc-300 px-2 py-1"
         >
           <option value="">—</option>
           {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((b) => (
@@ -124,7 +157,7 @@ export function AddStaffForm({
           name="tier"
           value={tier}
           onChange={(e) => applyBand(band, e.target.value)}
-          className="w-24 rounded-md border border-zinc-300 px-2 py-1"
+          className="w-full rounded-md border border-zinc-300 px-2 py-1"
         >
           <option value="">—</option>
           {[1, 2, 3, 4].map((t) => (
@@ -152,7 +185,7 @@ export function AddStaffForm({
             setSalaryDirty(true);
           }}
           inputMode="decimal"
-          className="w-36 rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
+          className="w-full rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
         />
       </Field>
       <Field label="Super %" hint="AU SG (default 12)">
@@ -160,7 +193,7 @@ export function AddStaffForm({
           name="superPct"
           defaultValue={defaultSuperPct ?? "12"}
           inputMode="decimal"
-          className="w-20 rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
+          className="w-full rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
         />
       </Field>
       <Field label="On-cost %" hint="payroll tax, workcover">
@@ -168,7 +201,7 @@ export function AddStaffForm({
           name="onCostPct"
           defaultValue="8"
           inputMode="decimal"
-          className="w-20 rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
+          className="w-full rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
         />
       </Field>
       <Field label="CPI % p.a." hint={defaultCpiPct ? `default ${defaultCpiPct}` : "salary growth"}>
@@ -176,7 +209,7 @@ export function AddStaffForm({
           name="salaryGrowthPctAnnual"
           defaultValue={defaultCpiPct ?? ""}
           inputMode="decimal"
-          className="w-20 rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
+          className="w-full rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
         />
       </Field>
       <Field label="OPEX account">
@@ -184,7 +217,7 @@ export function AddStaffForm({
           name="accountCode"
           required
           defaultValue=""
-          className="w-48 rounded-md border border-zinc-300 px-2 py-1"
+          className="w-full rounded-md border border-zinc-300 px-2 py-1"
         >
           <option value="" disabled>
             Select account…
@@ -202,24 +235,38 @@ export function AddStaffForm({
           required
           defaultValue={defaultStartPeriod}
           pattern="\d{4}-(0[1-9]|1[0-2])"
-          className="w-24 rounded-md border border-zinc-300 px-2 py-1 text-center font-mono"
+          className="w-full rounded-md border border-zinc-300 px-2 py-1 text-center font-mono"
         />
       </Field>
       <Field label="End" hint="optional">
         <input
           name="endPeriodKey"
           pattern="\d{4}-(0[1-9]|1[0-2])"
-          className="w-24 rounded-md border border-zinc-300 px-2 py-1 text-center font-mono"
+          className="w-full rounded-md border border-zinc-300 px-2 py-1 text-center font-mono"
         />
       </Field>
-      <button
-        type="submit"
-        disabled={pending}
-        className="ml-auto rounded-md bg-zinc-900 px-4 py-1.5 font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
-      >
-        {pending ? "Adding…" : "Add staff"}
-      </button>
-    </form>
+            </section>
+            <footer className="flex justify-end gap-2 border-t border-zinc-200 pt-3">
+              <button
+                type="button"
+                onClick={hide}
+                disabled={pending}
+                className="rounded-md px-3 py-1 text-zinc-600 hover:bg-zinc-100"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={pending}
+                className="rounded-md bg-zinc-900 px-4 py-1 font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+              >
+                {pending ? "Adding…" : "Add staff member"}
+              </button>
+            </footer>
+          </form>
+        )}
+      </dialog>
+    </div>
   );
 }
 

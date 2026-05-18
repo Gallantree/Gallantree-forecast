@@ -11,6 +11,8 @@ import {
 } from "./pnl";
 import type { LoanInput, NimTier } from "./loans";
 import type { ProgramFeeInput } from "./programs";
+import type { PlatformLicenseInput } from "./platformLicenses";
+import type { ProgramLiabilityInput } from "./programLiabilities";
 
 export interface ScenarioAssumptions {
   dsoDays?: Decimal.Value;
@@ -19,12 +21,16 @@ export interface ScenarioAssumptions {
   openingCash?: Decimal.Value;
   openingEquity?: Decimal.Value;
   nimTier?: NimTier;
+  loanBookGrowthPctByYear?: Decimal.Value[];
+  baseRateBps?: Decimal.Value;
 }
 
 export interface PnLExtended extends PnL {
   depreciation: MonthlyValue[];
+  interestExpense: MonthlyValue[];
   ebitda: MonthlyValue[];
   ebit: MonthlyValue[];
+  pretaxIncome: MonthlyValue[];
   taxExpense: MonthlyValue[];
   netIncome: MonthlyValue[];
   netIncomeTotal: Money;
@@ -100,6 +106,8 @@ export function computeStatements(
   assumptions: ScenarioAssumptions = {},
   loans: LoanInput[] = [],
   programFees: ProgramFeeInput[] = [],
+  platformLicenses: PlatformLicenseInput[] = [],
+  programLiabilities: ProgramLiabilityInput[] = [],
 ): Statements {
   const pnl = computePnL(
     drivers,
@@ -108,6 +116,10 @@ export function computeStatements(
     loans,
     assumptions.nimTier ?? "default",
     programFees,
+    assumptions.loanBookGrowthPctByYear ?? [],
+    platformLicenses,
+    programLiabilities,
+    assumptions.baseRateBps ?? 0,
   );
 
   const capex = drivers.filter(
@@ -129,25 +141,52 @@ export function computeStatements(
     return { periodKey: pk, value };
   });
 
-  // P&L extension: EBITDA = revenue - (opex - depreciation); EBIT = EBITDA - dep; tax on EBIT.
+  // Interest expense = sum of program_liability items inside the OPEX section.
+  // They live in pnl.opex but conceptually sit BELOW operating income, so we
+  // back them out of EBITDA / EBIT and pull them down to the pre-tax line.
+  const interestExpense: MonthlyValue[] = horizon.map((pk, i) => {
+    let acc = ZERO as Money;
+    for (const line of pnl.opex.lines) {
+      for (const item of line.items) {
+        if (item.source === "program_liability") {
+          acc = acc.plus(item.monthly[i].value);
+        }
+      }
+    }
+    return { periodKey: pk, value: acc };
+  });
+
+  // Proper P&L cascade:
+  //   EBITDA          = revenue − (opex − depreciation − interest)
+  //   EBIT            = EBITDA − depreciation
+  //   Pre-tax income  = EBIT − interest expense
+  //   Tax             = max(0, pre-tax) × rate
+  //   Net income      = pre-tax − tax
   const taxRate = money(assumptions.taxRatePct ?? 0).div(100);
   const ebitda: MonthlyValue[] = horizon.map((pk, i) => ({
     periodKey: pk,
     value: pnl.revenue.totals[i].value
       .minus(pnl.opex.totals[i].value)
-      .plus(depreciation[i].value),
+      .plus(depreciation[i].value)
+      .plus(interestExpense[i].value),
   }));
   const ebit: MonthlyValue[] = horizon.map((pk, i) => ({
     periodKey: pk,
     value: ebitda[i].value.minus(depreciation[i].value),
   }));
+  const pretaxIncome: MonthlyValue[] = horizon.map((pk, i) => ({
+    periodKey: pk,
+    value: ebit[i].value.minus(interestExpense[i].value),
+  }));
   const taxExpense: MonthlyValue[] = horizon.map((pk, i) => ({
     periodKey: pk,
-    value: ebit[i].value.gt(0) ? ebit[i].value.times(taxRate) : (ZERO as Money),
+    value: pretaxIncome[i].value.gt(0)
+      ? pretaxIncome[i].value.times(taxRate)
+      : (ZERO as Money),
   }));
   const netIncome: MonthlyValue[] = horizon.map((pk, i) => ({
     periodKey: pk,
-    value: ebit[i].value.minus(taxExpense[i].value),
+    value: pretaxIncome[i].value.minus(taxExpense[i].value),
   }));
   const netIncomeTotal = netIncome.reduce(
     (acc, m) => acc.plus(m.value),
@@ -217,8 +256,10 @@ export function computeStatements(
     pnl: {
       ...pnl,
       depreciation,
+      interestExpense,
       ebitda,
       ebit,
+      pretaxIncome,
       taxExpense,
       netIncome,
       netIncomeTotal,

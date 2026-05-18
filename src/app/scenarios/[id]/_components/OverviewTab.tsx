@@ -9,16 +9,29 @@ export interface OverviewLine {
   total: number;
 }
 
+export interface OverviewLiabilityLine {
+  accountCode: string;
+  accountName: string;
+  trancheLabel: string; // e.g. "Gallantree CRE CLO 2026 FL-1 · AAA"
+  fyTotals: number[];
+  total: number;
+}
+
 export interface OverviewData {
   fys: number[]; // e.g. [2027, 2028, 2029, 2030, 2031]
   revenueLines: OverviewLine[];
   opexLines: OverviewLine[];
+  liabilityLines: OverviewLiabilityLine[];
+  liabilityTotalsByYear: number[];
+  liabilityTotal: number;
   totals: {
     revenue: number[];
     opex: number[];
     depreciation: number[];
+    interestExpense: number[];
     ebitda: number[];
     ebit: number[];
+    pretaxIncome: number[];
     tax: number[];
     netIncome: number[];
   };
@@ -26,23 +39,34 @@ export interface OverviewData {
     revenue: number;
     opex: number;
     depreciation: number;
+    interestExpense: number;
     ebitda: number;
     ebit: number;
+    pretaxIncome: number;
     tax: number;
     netIncome: number;
   };
 }
 
+interface OverviewMonthlyItem {
+  id: string;
+  label: string;
+  source: string;
+  monthly: { periodKey: string; value: { toFixed: (n: number) => string } }[];
+}
+
 export function buildOverviewData(
   groups: FYGroup[],
   revenueLines: { accountCode: string; monthly: { periodKey: string; value: { toFixed: (n: number) => string } }[] }[],
-  opexLines: { accountCode: string; monthly: { periodKey: string; value: { toFixed: (n: number) => string } }[] }[],
+  opexLines: { accountCode: string; items: OverviewMonthlyItem[]; monthly: { periodKey: string; value: { toFixed: (n: number) => string } }[] }[],
   pnlExt: {
     revenue: { totals: { periodKey: string; value: { toFixed: (n: number) => string } }[] };
     opex: { totals: { periodKey: string; value: { toFixed: (n: number) => string } }[] };
     depreciation: { periodKey: string; value: { toFixed: (n: number) => string } }[];
+    interestExpense: { periodKey: string; value: { toFixed: (n: number) => string } }[];
     ebitda: { periodKey: string; value: { toFixed: (n: number) => string } }[];
     ebit: { periodKey: string; value: { toFixed: (n: number) => string } }[];
+    pretaxIncome: { periodKey: string; value: { toFixed: (n: number) => string } }[];
     taxExpense: { periodKey: string; value: { toFixed: (n: number) => string } }[];
     netIncome: { periodKey: string; value: { toFixed: (n: number) => string } }[];
   },
@@ -72,11 +96,39 @@ export function buildOverviewData(
     };
   };
 
+  // Liability tranches: each program_liability item gets its own row so the
+  // user can see the AAA / Mezz / etc. breakdown rather than just a single
+  // 6800 roll-up.
+  const liabilityLines: OverviewLiabilityLine[] = [];
+  for (const line of opexLines) {
+    for (const item of line.items ?? []) {
+      if (item.source !== "program_liability") continue;
+      const fyTotals = sumByFy(item.monthly);
+      liabilityLines.push({
+        accountCode: line.accountCode,
+        accountName: accountByCode.get(line.accountCode) ?? "",
+        trancheLabel: item.label,
+        fyTotals,
+        total: fyTotals.reduce((a, b) => a + b, 0),
+      });
+    }
+  }
+  liabilityLines.sort((a, b) => {
+    const byAccount = a.accountCode.localeCompare(b.accountCode);
+    return byAccount !== 0 ? byAccount : a.trancheLabel.localeCompare(b.trancheLabel);
+  });
+  const liabilityTotalsByYear = groups.map((_, i) =>
+    liabilityLines.reduce((acc, l) => acc + l.fyTotals[i], 0),
+  );
+  const liabilityTotal = liabilityTotalsByYear.reduce((a, b) => a + b, 0);
+
   const revenue = sumByFy(pnlExt.revenue.totals);
   const opex = sumByFy(pnlExt.opex.totals);
   const depreciation = sumByFy(pnlExt.depreciation);
+  const interestExpenseTotals = sumByFy(pnlExt.interestExpense);
   const ebitda = sumByFy(pnlExt.ebitda);
   const ebit = sumByFy(pnlExt.ebit);
+  const pretaxIncome = sumByFy(pnlExt.pretaxIncome);
   const tax = sumByFy(pnlExt.taxExpense);
   const netIncome = sumByFy(pnlExt.netIncome);
 
@@ -90,13 +142,28 @@ export function buildOverviewData(
     opexLines: opexLines.map(lineToOverview).sort((a, b) =>
       a.accountCode.localeCompare(b.accountCode),
     ),
-    totals: { revenue, opex, depreciation, ebitda, ebit, tax, netIncome },
+    liabilityLines,
+    liabilityTotalsByYear,
+    liabilityTotal,
+    totals: {
+      revenue,
+      opex,
+      depreciation,
+      interestExpense: interestExpenseTotals,
+      ebitda,
+      ebit,
+      pretaxIncome,
+      tax,
+      netIncome,
+    },
     fiveYear: {
       revenue: sum(revenue),
       opex: sum(opex),
       depreciation: sum(depreciation),
+      interestExpense: sum(interestExpenseTotals),
       ebitda: sum(ebitda),
       ebit: sum(ebit),
+      pretaxIncome: sum(pretaxIncome),
       tax: sum(tax),
       netIncome: sum(netIncome),
     },
@@ -169,10 +236,30 @@ export function OverviewTab({ data }: { data: OverviewData }) {
               <DetailRow key={l.accountCode} line={l} />
             ))}
             <TotalRow
-              label="Total OPEX (incl. dep)"
+              label="Total OPEX (incl. dep + interest)"
               perFy={data.totals.opex}
               total={fiveYear.opex}
             />
+
+            {/* Capital program liabilities — already included in Total OPEX
+                above, surfaced here for transparency. */}
+            {data.liabilityLines.length > 0 ? (
+              <>
+                <SectionHeader
+                  label="Capital program liabilities · interest expense (memo)"
+                  color="bg-amber-50 text-amber-800"
+                  cols={fys.length + 1}
+                />
+                {data.liabilityLines.map((l) => (
+                  <LiabilityRow key={`${l.accountCode}-${l.trancheLabel}`} line={l} />
+                ))}
+                <TotalRow
+                  label="Total interest expense"
+                  perFy={data.liabilityTotalsByYear}
+                  total={data.liabilityTotal}
+                />
+              </>
+            ) : null}
 
             {/* Profitability cascade */}
             <SectionHeader label="Profitability" color="bg-sky-50 text-sky-800" cols={fys.length + 1} />
@@ -185,7 +272,20 @@ export function OverviewTab({ data }: { data: OverviewData }) {
                 total: -Math.abs(fiveYear.depreciation),
               }}
             />
-            <TotalRow label="EBIT" perFy={data.totals.ebit} total={fiveYear.ebit} />
+            <TotalRow label="EBIT (Operating income)" perFy={data.totals.ebit} total={fiveYear.ebit} />
+            <DetailRow
+              line={{
+                accountCode: "",
+                accountName: "Less: Interest expense (capital program liabilities)",
+                fyTotals: data.totals.interestExpense.map((v) => -Math.abs(v)),
+                total: -Math.abs(fiveYear.interestExpense),
+              }}
+            />
+            <TotalRow
+              label="Pre-tax income"
+              perFy={data.totals.pretaxIncome}
+              total={fiveYear.pretaxIncome}
+            />
             <DetailRow
               line={{
                 accountCode: "",
@@ -244,6 +344,31 @@ function SectionHeader({
         className={`border-b border-t-2 border-zinc-400 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider ${color}`}
       >
         {label}
+      </td>
+    </tr>
+  );
+}
+
+function LiabilityRow({ line }: { line: OverviewLiabilityLine }) {
+  return (
+    <tr className="hover:bg-yellow-50/40">
+      <td className="sticky left-0 z-20 w-80 border-b border-r border-zinc-100 bg-white px-4 py-1.5">
+        <span className="font-mono text-zinc-500">{line.accountCode}</span>{" "}
+        <span className="text-zinc-800">{line.trancheLabel}</span>
+        <span className="ml-2 text-[10px] uppercase tracking-wider text-zinc-400">
+          {line.accountName}
+        </span>
+      </td>
+      {line.fyTotals.map((v, i) => (
+        <td
+          key={i}
+          className="border-b border-zinc-100 px-3 py-1.5 text-right tabular-nums text-zinc-700"
+        >
+          {v === 0 ? <span className="text-zinc-300">—</span> : fmtMoney2(v)}
+        </td>
+      ))}
+      <td className="border-b border-l border-zinc-200 bg-zinc-50 px-3 py-1.5 text-right font-semibold tabular-nums text-zinc-900">
+        {line.total === 0 ? <span className="text-zinc-300">—</span> : fmtMoney2(line.total)}
       </td>
     </tr>
   );
