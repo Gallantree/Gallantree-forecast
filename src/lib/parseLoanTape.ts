@@ -7,6 +7,7 @@ export interface ParsedLoan {
   scenarioId: Types.ObjectId;
   loanId: string;
   borrower?: string;
+  lenderOfRecord?: string;
   state?: string;
   postcode?: string;
   assetClass?: string;
@@ -43,6 +44,7 @@ export interface ParsedLoan {
 const HEADER_ALIASES: Record<string, string> = {
   "Loan ID": "loanId",
   Borrower: "borrower",
+  "Lender of Record": "lenderOfRecord",
   State: "state",
   Postcode: "postcode",
   "Asset Class": "assetClass",
@@ -159,6 +161,7 @@ export async function parseLoanTape(
       scenarioId,
       loanId: asString(raw.loanId)!,
       borrower: asString(raw.borrower),
+      lenderOfRecord: asString(raw.lenderOfRecord),
       state: asString(raw.state),
       postcode: asString(raw.postcode),
       assetClass: asString(raw.assetClass),

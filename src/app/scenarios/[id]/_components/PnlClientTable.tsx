@@ -2,6 +2,8 @@
 
 import { Fragment, useState } from "react";
 import { fmtNum0 } from "@/utils/format";
+import { AddOpexDriverModal, type OpexDriverFormInitial } from "./AddOpexDriverModal";
+import type { OpexDriverPayload } from "../_actions";
 
 export interface FYGroup {
   fy: number;
@@ -11,7 +13,13 @@ export interface FYGroup {
 export interface SerializedItem {
   id: string;
   label: string;
-  source: "driver" | "headcount" | "loan" | "program_fee";
+  source:
+    | "driver"
+    | "headcount"
+    | "loan"
+    | "program_fee"
+    | "platform_license"
+    | "program_liability";
   monthly: Record<string, string>; // periodKey -> value
 }
 
@@ -26,6 +34,22 @@ export interface SerializedSection {
   totals: Record<string, string>;
 }
 
+export interface OpexItemEditTarget {
+  formInitial: OpexDriverFormInitial;
+  updateAction: (payload: OpexDriverPayload) => Promise<void>;
+  deleteAction: () => Promise<void>;
+}
+
+export interface PnlCascadeSeries {
+  ebitda: Record<string, string>;
+  depreciation: Record<string, string>;
+  ebit: Record<string, string>;
+  interestExpense: Record<string, string>;
+  pretaxIncome: Record<string, string>;
+  taxExpense: Record<string, string>;
+  netIncome: Record<string, string>;
+}
+
 export interface PnlClientTableProps {
   horizon: string[];
   groups: FYGroup[];
@@ -33,8 +57,14 @@ export interface PnlClientTableProps {
   revenue?: SerializedSection;
   opex?: SerializedSection;
   grossProfit?: Record<string, string>;
+  cascade?: PnlCascadeSeries;
   showSection: "both" | "revenue" | "opex";
   initiallyExpandedThreshold?: number;
+  // OPEX edit affordance (optional). When provided, driver items with a
+  // matching entry get an inline Edit + Delete affordance next to their label.
+  opexItemEditTargets?: Record<string, OpexItemEditTarget>;
+  expenseAccounts?: { code: string; name: string }[];
+  defaultStartPeriod?: string;
 }
 
 const SOURCE_LABEL: Record<SerializedItem["source"], string> = {
@@ -42,6 +72,8 @@ const SOURCE_LABEL: Record<SerializedItem["source"], string> = {
   headcount: "staff",
   loan: "loan",
   program_fee: "fee",
+  platform_license: "licence",
+  program_liability: "liability",
 };
 
 function fySum(values: Record<string, string>, months: string[]): number {
@@ -66,6 +98,10 @@ export function PnlClientTable(props: PnlClientTableProps) {
     grossProfit,
     showSection,
     initiallyExpandedThreshold = 5,
+    opexItemEditTargets,
+    expenseAccounts,
+    defaultStartPeriod,
+    cascade,
   } = props;
 
   // Per-account expand state; default expanded only when item count is small.
@@ -149,14 +185,40 @@ export function PnlClientTable(props: PnlClientTableProps) {
 
               {/* Per-item sub-rows — only when expanded */}
               {isOpen &&
-                line.items.map((item) => (
-                  <tr key={`${line.accountCode}-${item.id}`} className="hover:bg-yellow-50/30">
+                line.items.map((item) => {
+                  const editTarget =
+                    opexItemEditTargets && item.source === "driver"
+                      ? opexItemEditTargets[item.id]
+                      : undefined;
+                  return (
+                  <tr key={`${line.accountCode}-${item.id}`} className="group hover:bg-yellow-50/30">
                     <td className="sticky left-0 z-20 w-72 border-b border-r border-zinc-100 bg-white px-3 py-1 pl-10 text-zinc-600">
                       <span className="text-zinc-300">↳</span>{" "}
                       <span className="text-zinc-700">{item.label}</span>
                       <span className="ml-2 text-[10px] uppercase tracking-wider text-zinc-400">
                         {SOURCE_LABEL[item.source]}
                       </span>
+                      {editTarget && expenseAccounts && defaultStartPeriod ? (
+                        <span className="ml-2 inline-flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
+                          <AddOpexDriverModal
+                            defaultStartPeriod={defaultStartPeriod}
+                            expenseAccounts={expenseAccounts}
+                            initial={editTarget.formInitial}
+                            saveAction={editTarget.updateAction}
+                            triggerLabel="Edit"
+                            triggerClassName="rounded px-1.5 py-0.5 text-[10px] font-medium text-zinc-600 hover:bg-zinc-200 hover:text-zinc-900"
+                          />
+                          <form action={editTarget.deleteAction}>
+                            <button
+                              type="submit"
+                              className="rounded px-1.5 py-0.5 text-[10px] font-medium text-zinc-400 hover:bg-rose-50 hover:text-rose-600"
+                              aria-label={`Delete driver ${item.label}`}
+                            >
+                              Delete
+                            </button>
+                          </form>
+                        </span>
+                      ) : null}
                     </td>
                     {groups.map((g) => {
                       const fyTotal = fySum(item.monthly, g.months);
@@ -188,7 +250,8 @@ export function PnlClientTable(props: PnlClientTableProps) {
                       );
                     })}
                   </tr>
-                ))}
+                  );
+                })}
 
               {/* Use total to silence unused-var lint */}
               {total < Number.NEGATIVE_INFINITY ? <tr /> : null}
@@ -256,7 +319,7 @@ export function PnlClientTable(props: PnlClientTableProps) {
         {(showSection === "both" || showSection === "opex") && opex
           ? renderSection(opex, "Operating expenses", "bg-rose-50 text-rose-800")
           : null}
-        {showSection === "both" && grossProfit ? (
+        {showSection === "both" && grossProfit && !cascade ? (
           <SectionTotalRow
             label="Gross profit"
             totals={grossProfit}
@@ -265,8 +328,116 @@ export function PnlClientTable(props: PnlClientTableProps) {
             variant="grand"
           />
         ) : null}
+        {showSection === "both" && cascade ? (
+          <>
+            <tr>
+              <td
+                colSpan={totalCols}
+                className="border-b border-t-2 border-zinc-400 bg-sky-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-sky-800"
+              >
+                Profitability cascade
+              </td>
+            </tr>
+            <SectionTotalRow
+              label="EBITDA"
+              totals={cascade.ebitda}
+              horizon={horizon}
+              groups={groups}
+              variant="section"
+            />
+            <CascadeNegativeRow
+              label="Less: Depreciation"
+              totals={cascade.depreciation}
+              horizon={horizon}
+              groups={groups}
+            />
+            <SectionTotalRow
+              label="EBIT (Operating income)"
+              totals={cascade.ebit}
+              horizon={horizon}
+              groups={groups}
+              variant="section"
+            />
+            <CascadeNegativeRow
+              label="Less: Interest expense"
+              totals={cascade.interestExpense}
+              horizon={horizon}
+              groups={groups}
+            />
+            <SectionTotalRow
+              label="Pre-tax income"
+              totals={cascade.pretaxIncome}
+              horizon={horizon}
+              groups={groups}
+              variant="section"
+            />
+            <CascadeNegativeRow
+              label="Less: Tax"
+              totals={cascade.taxExpense}
+              horizon={horizon}
+              groups={groups}
+            />
+            <SectionTotalRow
+              label="Net income"
+              totals={cascade.netIncome}
+              horizon={horizon}
+              groups={groups}
+              variant="grand"
+            />
+          </>
+        ) : null}
       </tbody>
     </table>
+  );
+}
+
+function CascadeNegativeRow({
+  label,
+  totals,
+  horizon,
+  groups,
+}: {
+  label: string;
+  totals: Record<string, string>;
+  horizon: string[];
+  groups: FYGroup[];
+}) {
+  void horizon;
+  return (
+    <tr className="text-zinc-600 hover:bg-yellow-50/30">
+      <td className="sticky left-0 z-20 w-72 border-b border-r border-zinc-100 bg-white px-3 py-1 pl-8 italic">
+        {label}
+      </td>
+      {groups.map((g) => {
+        const fyTotal = fySum(totals, g.months);
+        return (
+          <Fragment key={`${label}-fy${g.fy}`}>
+            {g.months.map((pk) => {
+              const v = Number(totals[pk] ?? "0");
+              return (
+                <td
+                  key={`${label}-${pk}`}
+                  className="border-b border-zinc-100 px-2 py-1 text-right tabular-nums"
+                >
+                  {v === 0 ? (
+                    <span className="text-zinc-300">—</span>
+                  ) : (
+                    `(${fmtNum0(Math.abs(v))})`
+                  )}
+                </td>
+              );
+            })}
+            <td className="border-b border-r border-zinc-200 bg-zinc-50/40 px-2 py-1 text-right tabular-nums">
+              {fyTotal === 0 ? (
+                <span className="text-zinc-300">—</span>
+              ) : (
+                `(${fmtNum0(Math.abs(fyTotal))})`
+              )}
+            </td>
+          </Fragment>
+        );
+      })}
+    </tr>
   );
 }
 

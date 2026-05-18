@@ -2,6 +2,8 @@ import type { PnL, PnLSection, MonthlyValue } from "@/engine/pnl";
 import {
   PnlClientTable,
   type FYGroup,
+  type OpexItemEditTarget,
+  type PnlCascadeSeries,
   type SerializedLine,
   type SerializedSection,
 } from "./PnlClientTable";
@@ -44,11 +46,19 @@ export function PnlTable({
   groups,
   accountByCode,
   showSection = "both",
+  opexItemEditTargets,
+  expenseAccounts,
+  defaultStartPeriod,
+  cascade,
 }: {
   pnl: PnL;
   groups: FYGroup[];
   accountByCode: Map<string, string>;
   showSection?: "both" | "revenue" | "opex";
+  opexItemEditTargets?: Record<string, OpexItemEditTarget>;
+  expenseAccounts?: { code: string; name: string }[];
+  defaultStartPeriod?: string;
+  cascade?: PnlCascadeSeries;
 }) {
   const accountByCodeObj: Record<string, string> = {};
   for (const [k, v] of accountByCode) accountByCodeObj[k] = v;
@@ -71,6 +81,10 @@ export function PnlTable({
       opex={opex}
       grossProfit={grossProfit}
       showSection={showSection}
+      opexItemEditTargets={opexItemEditTargets}
+      expenseAccounts={expenseAccounts}
+      defaultStartPeriod={defaultStartPeriod}
+      cascade={cascade}
     />
   );
 }

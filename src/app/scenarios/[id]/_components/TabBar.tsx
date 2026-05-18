@@ -5,22 +5,28 @@ export type TabKey =
   | "revenue"
   | "loan-book"
   | "capital-programs"
+  | "platform-revenues"
   | "opex-general"
   | "opex-staffing"
   | "pnl"
   | "balance-sheet"
-  | "cashflow";
+  | "cashflow"
+  | "valuation"
+  | "control-panel";
 
 export const TABS: { key: TabKey; label: string }[] = [
   { key: "overview", label: "Overview" },
   { key: "revenue", label: "Revenue" },
   { key: "loan-book", label: "Loan Book" },
   { key: "capital-programs", label: "Capital Programs" },
+  { key: "platform-revenues", label: "Platform Revenues" },
   { key: "opex-general", label: "OPEX — General" },
   { key: "opex-staffing", label: "OPEX — Staffing" },
   { key: "pnl", label: "Profit & Loss" },
   { key: "balance-sheet", label: "Balance Sheet" },
   { key: "cashflow", label: "Cashflow" },
+  { key: "valuation", label: "Valuation" },
+  { key: "control-panel", label: "Control Panel" },
 ];
 
 export function isTabKey(value: string | undefined): value is TabKey {

@@ -12,15 +12,40 @@ export interface ProgramFeeRow {
   accountCode: string;
 }
 
+export interface ProgramLiabilityRow {
+  _id: string;
+  name: string;
+  numNotes?: number;
+  returnProfileBps: number;
+  calculationMethod: "monthly" | "quarterly" | "annually";
+  rateType: "fixed" | "variable";
+  accountCode?: string;
+}
+
+export interface ProgramAggregate {
+  loanCount: number;
+  totalBalance: number;
+  weightSumScore: number;
+  weightSumLvr: number;
+  weightSumDscr: number;
+  weightSumSpreadBps: number;
+  weightBalanceForScore: number;
+  weightBalanceForLvr: number;
+  weightBalanceForDscr: number;
+  weightBalanceForSpread: number;
+}
+
 export interface ProgramRow {
   _id: string;
   name: string;
   type: "CRE_CLO" | "CMBS" | "MIT_FUND" | "WAREHOUSE" | "OTHER";
   dealSize?: { toString: () => string };
+  faceValuePerNote?: { toString: () => string };
   startPeriodKey: string;
   endPeriodKey?: string;
   notes?: string;
   fees: ProgramFeeRow[];
+  liabilities?: ProgramLiabilityRow[];
 }
 
 const TYPE_LABEL: Record<ProgramRow["type"], string> = {
@@ -54,6 +79,7 @@ function toFormInitial(p: ProgramRow): ProgramFormInitial {
     name: p.name,
     type: p.type,
     dealSize: fmtMoneyInput(p.dealSize?.toString()),
+    faceValuePerNote: fmtMoneyInput(p.faceValuePerNote?.toString()) || "1,000.00",
     startPeriodKey: p.startPeriodKey,
     endPeriodKey: p.endPeriodKey ?? "",
     notes: p.notes ?? "",
@@ -64,19 +90,31 @@ function toFormInitial(p: ProgramRow): ProgramFormInitial {
       feeBps: f.feeBps,
       accountCode: f.accountCode,
     })),
+    liabilities: (p.liabilities ?? []).map((l) => ({
+      name: l.name,
+      numNotes: l.numNotes,
+      returnProfileBps: l.returnProfileBps,
+      calculationMethod: l.calculationMethod,
+      rateType: l.rateType,
+      accountCode: l.accountCode,
+    })),
   };
 }
 
 export function ProgramsTab({
   scenarioId,
   programs,
+  aggregates,
   expenseAccounts,
   defaultStartPeriod,
+  baseRateBps,
 }: {
   scenarioId: string;
   programs: ProgramRow[];
+  aggregates: Record<string, ProgramAggregate>;
   expenseAccounts: { code: string; name: string }[];
   defaultStartPeriod: string;
+  baseRateBps: number;
 }) {
   const createAction = createProgram.bind(null, scenarioId);
 
@@ -118,6 +156,7 @@ export function ProgramsTab({
           defaultStartPeriod={defaultStartPeriod}
           expenseAccountsForOverride={expenseAccounts}
           createAction={createAction}
+          baseRateBps={baseRateBps}
         />
       </div>
 
@@ -161,6 +200,23 @@ export function ProgramsTab({
                           </span>
                         </span>
                       ) : null}
+                      {p.dealSize && p.faceValuePerNote ? (() => {
+                        const d = Number(p.dealSize!.toString());
+                        const f = Number(p.faceValuePerNote!.toString());
+                        if (!(f > 0)) return null;
+                        const notes = d / f;
+                        return (
+                          <span className="text-[11px] text-zinc-500">
+                            Notes{" "}
+                            <span className="font-semibold text-zinc-700">
+                              {notes.toLocaleString("en-AU", { maximumFractionDigits: 0 })}
+                            </span>
+                            <span className="ml-1 text-zinc-400">
+                              @ {fmtMoney2(p.faceValuePerNote!.toString())}
+                            </span>
+                          </span>
+                        );
+                      })() : null}
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="text-xs text-zinc-500">
@@ -176,6 +232,7 @@ export function ProgramsTab({
                         saveAction={updateProgram.bind(null, scenarioId, p._id)}
                         triggerLabel="Edit"
                         triggerClassName="rounded px-2 py-0.5 text-xs text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+                        baseRateBps={baseRateBps}
                       />
                       <form action={deleteProgram.bind(null, scenarioId, p._id)}>
                         <button
@@ -187,6 +244,7 @@ export function ProgramsTab({
                       </form>
                     </div>
                   </header>
+                  <ProgramAggregateStrip agg={aggregates[p._id]} />
                   {p.notes ? (
                     <div className="border-b border-zinc-100 bg-amber-50/40 px-4 py-1.5 text-[11px] text-zinc-700">
                       {p.notes}
@@ -244,12 +302,179 @@ export function ProgramsTab({
                       </tbody>
                     </table>
                   )}
+                  <LiabilitiesBlock
+                    liabilities={p.liabilities ?? []}
+                    faceValuePerNote={Number(p.faceValuePerNote?.toString() ?? "0")}
+                    baseRateBps={baseRateBps}
+                  />
                 </section>
               );
             })}
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+const CALC_LABEL: Record<ProgramLiabilityRow["calculationMethod"], string> = {
+  monthly: "Monthly",
+  quarterly: "Quarterly",
+  annually: "Annually",
+};
+
+function tranchePrincipal(l: ProgramLiabilityRow, faceValuePerNote: number): number {
+  return (l.numNotes ?? 0) * faceValuePerNote;
+}
+
+function trancheRateBps(l: ProgramLiabilityRow, baseRateBps: number): number {
+  return l.rateType === "variable"
+    ? baseRateBps + l.returnProfileBps
+    : l.returnProfileBps;
+}
+
+function LiabilitiesBlock({
+  liabilities,
+  faceValuePerNote,
+  baseRateBps,
+}: {
+  liabilities: ProgramLiabilityRow[];
+  faceValuePerNote: number;
+  baseRateBps: number;
+}) {
+  if (liabilities.length === 0) return null;
+  const totalAnnual = liabilities.reduce(
+    (acc, l) =>
+      acc + (tranchePrincipal(l, faceValuePerNote) * trancheRateBps(l, baseRateBps)) / 10000,
+    0,
+  );
+  return (
+    <div className="border-t border-zinc-100">
+      <div className="flex items-baseline justify-between border-b border-zinc-100 bg-zinc-50 px-4 py-1">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+          Liability streams · notes issued
+        </span>
+        <span className="text-[11px] text-zinc-500">
+          Annual interest{" "}
+          <span className="font-semibold text-rose-700">
+            {fmtMoney2(totalAnnual)}
+          </span>
+        </span>
+      </div>
+      <table className="w-full border-collapse text-xs">
+        <thead className="bg-white text-zinc-500">
+          <tr>
+            <Th>Tranche</Th>
+            <Th className="text-right"># notes</Th>
+            <Th className="text-right">Spread (bps)</Th>
+            <Th>Calc</Th>
+            <Th>Rate</Th>
+            <Th className="text-right">All-in rate</Th>
+            <Th className="text-right">$ / yr</Th>
+            <Th className="text-right">$ / mo</Th>
+            <Th>Account</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {liabilities.map((l) => {
+            const principal = tranchePrincipal(l, faceValuePerNote);
+            const rateBps = trancheRateBps(l, baseRateBps);
+            const annual = (principal * rateBps) / 10000;
+            const monthly = annual / 12;
+            return (
+              <tr key={l._id} className="border-t border-zinc-100">
+                <Td className="font-medium">{l.name}</Td>
+                <Td className="text-right tabular-nums text-zinc-600">
+                  {l.numNotes !== undefined ? l.numNotes : "—"}
+                </Td>
+                <Td className="text-right tabular-nums text-zinc-600">{l.returnProfileBps}</Td>
+                <Td className="text-zinc-600">{CALC_LABEL[l.calculationMethod]}</Td>
+                <Td>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${
+                      l.rateType === "fixed"
+                        ? "bg-zinc-100 text-zinc-700"
+                        : "bg-amber-100 text-amber-800"
+                    }`}
+                  >
+                    {l.rateType === "fixed" ? "Fixed" : "Variable + base"}
+                  </span>
+                </Td>
+                <Td className="text-right tabular-nums text-zinc-600">
+                  {rateBps > 0 ? `${rateBps} bps (${(rateBps / 100).toFixed(2)}%)` : "—"}
+                </Td>
+                <Td className="text-right font-semibold tabular-nums text-rose-700">
+                  {annual > 0 ? fmtMoney2(annual) : "—"}
+                </Td>
+                <Td className="text-right tabular-nums text-zinc-600">
+                  {monthly > 0 ? fmtMoney2(monthly) : "—"}
+                </Td>
+                <Td className="font-mono text-[11px] text-zinc-500">
+                  {l.accountCode ?? "—"}
+                </Td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ProgramAggregateStrip({ agg }: { agg: ProgramAggregate | undefined }) {
+  if (!agg || agg.loanCount === 0) {
+    return (
+      <div className="border-b border-zinc-100 bg-zinc-50 px-4 py-2 text-[11px] text-zinc-500">
+        No loans aligned to this program yet — assign loans from the Loan Book tab.
+      </div>
+    );
+  }
+  const waScore =
+    agg.weightBalanceForScore > 0
+      ? agg.weightSumScore / agg.weightBalanceForScore
+      : null;
+  const waLvr =
+    agg.weightBalanceForLvr > 0 ? agg.weightSumLvr / agg.weightBalanceForLvr : null;
+  const waDscr =
+    agg.weightBalanceForDscr > 0 ? agg.weightSumDscr / agg.weightBalanceForDscr : null;
+  const waSpreadBps =
+    agg.weightBalanceForSpread > 0
+      ? agg.weightSumSpreadBps / agg.weightBalanceForSpread
+      : null;
+
+  return (
+    <div className="grid grid-cols-2 gap-px border-b border-zinc-200 bg-zinc-200 sm:grid-cols-6">
+      <Mini label="Loans" value={fmtNum0(agg.loanCount)} />
+      <Mini label="Aggregate balance" value={fmtMoney2(agg.totalBalance)} />
+      <Mini
+        label="WA score"
+        value={waScore !== null ? waScore.toFixed(1) : "—"}
+        sub="balance-weighted"
+      />
+      <Mini
+        label="WA LVR"
+        value={waLvr !== null ? `${(waLvr * 100).toFixed(1)}%` : "—"}
+      />
+      <Mini
+        label="WA DSCR"
+        value={waDscr !== null ? `${waDscr.toFixed(2)}x` : "—"}
+      />
+      <Mini
+        label="WA spread"
+        value={waSpreadBps !== null ? `${Math.round(waSpreadBps)} bps` : "—"}
+      />
+    </div>
+  );
+}
+
+function Mini({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="flex flex-col gap-0.5 bg-white px-3 py-1.5">
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+        {label}
+        {sub ? <span className="ml-1 font-normal lowercase text-zinc-400">· {sub}</span> : null}
+      </span>
+      <span className="text-sm font-semibold tabular-nums text-zinc-900">{value}</span>
     </div>
   );
 }

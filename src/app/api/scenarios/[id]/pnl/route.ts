@@ -32,7 +32,13 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   await connectToDatabase();
   const [periods, scenario, inputs] = await Promise.all([
     Period.find({}).sort({ index: 1 }).lean(),
-    Scenario.findById(id).select("nimTier").lean<{ nimTier?: NimTier }>(),
+    Scenario.findById(id)
+      .select("nimTier loanBookGrowthPctByYear baseRateBps")
+      .lean<{
+        nimTier?: NimTier;
+        loanBookGrowthPctByYear?: Array<{ toString: () => string }>;
+        baseRateBps?: number;
+      }>(),
     loadEngineInputs(id),
   ]);
   if (periods.length === 0) {
@@ -46,6 +52,10 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     inputs.loans,
     scenario?.nimTier ?? "default",
     inputs.programFees,
+    (scenario?.loanBookGrowthPctByYear ?? []).map((d) => d.toString()),
+    inputs.platformLicenses,
+    inputs.programLiabilities,
+    scenario?.baseRateBps ?? 0,
   );
   return NextResponse.json({
     horizon: pnl.horizon,

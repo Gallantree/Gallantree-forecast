@@ -5,8 +5,10 @@ export type LoanChannel = "CRE_CLO" | "CMBS" | "Warehouse" | "Non-Conforming";
 
 export interface ILoan {
   scenarioId: Types.ObjectId;
+  capitalProgramId?: Types.ObjectId;
   loanId: string;
   borrower?: string;
+  lenderOfRecord?: string;
   state?: string;
   postcode?: string;
   assetClass?: string;
@@ -38,6 +40,7 @@ export interface ILoan {
   allInBps?: number;
   allInPct?: Types.Decimal128;
   annualInterest?: Types.Decimal128;
+  includeInRevenue: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -45,8 +48,10 @@ export interface ILoan {
 const loanSchema = new Schema<ILoan>(
   {
     scenarioId: { type: Schema.Types.ObjectId, ref: "Scenario", required: true },
+    capitalProgramId: { type: Schema.Types.ObjectId, ref: "CapitalProgram" },
     loanId: { type: String, required: true, trim: true },
     borrower: { type: String, trim: true },
+    lenderOfRecord: { type: String, trim: true },
     state: { type: String, trim: true },
     postcode: { type: String, trim: true },
     assetClass: { type: String, trim: true },
@@ -82,12 +87,14 @@ const loanSchema = new Schema<ILoan>(
     allInBps: { type: Number },
     allInPct: { type: Schema.Types.Decimal128 },
     annualInterest: { type: Schema.Types.Decimal128 },
+    includeInRevenue: { type: Boolean, default: true, required: true },
   },
   { timestamps: true },
 );
 
 loanSchema.index({ scenarioId: 1, channel: 1 });
 loanSchema.index({ scenarioId: 1, loanId: 1 }, { unique: true });
+loanSchema.index({ scenarioId: 1, capitalProgramId: 1 });
 
 const Loan = defineModel<ILoan>("Loan", loanSchema);
 

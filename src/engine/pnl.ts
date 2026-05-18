@@ -8,6 +8,16 @@ import {
   type NimTier,
 } from "./loans";
 import { projectProgramFee, type ProgramFeeInput } from "./programs";
+import {
+  licenseAccount,
+  projectPlatformLicense,
+  type PlatformLicenseInput,
+} from "./platformLicenses";
+import {
+  DEFAULT_LIABILITY_ACCOUNT,
+  projectProgramLiability,
+  type ProgramLiabilityInput,
+} from "./programLiabilities";
 
 interface DriverBase {
   id: string;
@@ -87,7 +97,13 @@ export interface MonthlyValue {
 export interface PnLLineItem {
   id: string;
   label: string;
-  source: "driver" | "headcount" | "loan" | "program_fee";
+  source:
+    | "driver"
+    | "headcount"
+    | "loan"
+    | "program_fee"
+    | "platform_license"
+    | "program_liability";
   monthly: MonthlyValue[];
   total: Money;
 }
@@ -274,7 +290,13 @@ export function projectHeadcount(h: HeadcountInput, horizon: string[]): MonthlyV
 interface ProjectedItem {
   id: string;
   label: string;
-  source: "driver" | "headcount" | "loan" | "program_fee";
+  source:
+    | "driver"
+    | "headcount"
+    | "loan"
+    | "program_fee"
+    | "platform_license"
+    | "program_liability";
   accountCode: string;
   monthly: MonthlyValue[];
 }
@@ -333,6 +355,10 @@ export function computePnL(
   loans: LoanInput[] = [],
   nimTier: NimTier = "default",
   programFees: ProgramFeeInput[] = [],
+  loanBookGrowthPctByYear: Decimal.Value[] = [],
+  platformLicenses: PlatformLicenseInput[] = [],
+  programLiabilities: ProgramLiabilityInput[] = [],
+  baseRateBps: Decimal.Value = 0,
 ): PnL {
   const recurring = drivers.filter(
     (d): d is RecurringRevenueDriverInput => d.kind === "recurring_revenue",
@@ -373,7 +399,7 @@ export function computePnL(
         label: l.loanId,
         source: "loan",
         accountCode: CHANNEL_ACCOUNT[l.channel],
-        monthly: projectLoanRevenue(l, horizon, nimTier),
+        monthly: projectLoanRevenue(l, horizon, nimTier, loanBookGrowthPctByYear),
       }),
     ),
     ...programFees.map(
@@ -383,6 +409,15 @@ export function computePnL(
         source: "program_fee",
         accountCode: f.accountCode,
         monthly: projectProgramFee(f, horizon),
+      }),
+    ),
+    ...platformLicenses.map(
+      (l): ProjectedItem => ({
+        id: l.id,
+        label: l.name,
+        source: "platform_license",
+        accountCode: licenseAccount(l),
+        monthly: projectPlatformLicense(l, horizon),
       }),
     ),
   ];
@@ -410,6 +445,13 @@ export function computePnL(
     accountCode: h.accountCode,
     monthly: projectHeadcount(h, horizon),
   }));
+  const liabilityProjected: ProjectedItem[] = programLiabilities.map((l) => ({
+    id: l.id,
+    label: `${l.programName} · ${l.trancheName}`,
+    source: "program_liability",
+    accountCode: l.accountCode || DEFAULT_LIABILITY_ACCOUNT,
+    monthly: projectProgramLiability(l, horizon, baseRateBps),
+  }));
   const opexLines = groupByAccount(
     [
       ...fixedProjected,
@@ -417,6 +459,7 @@ export function computePnL(
       ...perFteProjected,
       ...depreciationProjected,
       ...headcountProjected,
+      ...liabilityProjected,
     ],
     horizon,
   );

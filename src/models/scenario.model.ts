@@ -16,6 +16,21 @@ export interface IScenario {
   defaultCpiPct?: Types.Decimal128;
   defaultSuperPct?: Types.Decimal128;
   nimTier?: "default" | "neg_floor" | "hard_floor";
+  // Per-FY growth/decline applied to the loan book NIM. Element [k] is the
+  // growth rate during forecast year k+1, compounded monthly within the year
+  // and onto prior years. Years beyond the array default to 0 (no growth).
+  loanBookGrowthPctByYear?: Types.Decimal128[];
+  // Valuation assumptions
+  waccPct?: Types.Decimal128;
+  terminalGrowthPct?: Types.Decimal128;
+  evEbitdaMultiple?: Types.Decimal128;
+  evRevenueMultiple?: Types.Decimal128;
+  peMultiple?: Types.Decimal128;
+  netDebt?: Types.Decimal128;
+  // Control panel — global rate context + year-label config
+  baseRateType?: "BBSW" | "BBSY" | "SOFR";
+  baseRateBps?: number;
+  firstYearLabel?: number; // calendar year shown for Year 1 columns
   createdAt: Date;
   updatedAt: Date;
 }
@@ -40,6 +55,16 @@ const scenarioSchema = new Schema<IScenario>(
       enum: ["default", "neg_floor", "hard_floor"],
       default: "default",
     },
+    loanBookGrowthPctByYear: { type: [Schema.Types.Decimal128], default: undefined },
+    waccPct: { type: Schema.Types.Decimal128 },
+    terminalGrowthPct: { type: Schema.Types.Decimal128 },
+    evEbitdaMultiple: { type: Schema.Types.Decimal128 },
+    evRevenueMultiple: { type: Schema.Types.Decimal128 },
+    peMultiple: { type: Schema.Types.Decimal128 },
+    netDebt: { type: Schema.Types.Decimal128 },
+    baseRateType: { type: String, enum: ["BBSW", "BBSY", "SOFR"] },
+    baseRateBps: { type: Number, min: 0 },
+    firstYearLabel: { type: Number, min: 2000, max: 2100 },
   },
   { timestamps: true },
 );

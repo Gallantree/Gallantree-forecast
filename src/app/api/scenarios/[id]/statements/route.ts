@@ -45,6 +45,8 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
       openingCash?: D128Like;
       openingEquity?: D128Like;
       nimTier?: "default" | "neg_floor" | "hard_floor";
+      loanBookGrowthPctByYear?: Array<{ toString: () => string }>;
+      baseRateBps?: number;
     }>(),
     loadEngineInputs(id),
   ]);
@@ -62,6 +64,10 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     openingCash: scenario.openingCash?.toString(),
     openingEquity: scenario.openingEquity?.toString(),
     nimTier: scenario.nimTier,
+    loanBookGrowthPctByYear: (scenario.loanBookGrowthPctByYear ?? []).map((d) =>
+      d.toString(),
+    ),
+    baseRateBps: scenario.baseRateBps,
   };
   const s = computeStatements(
     inputs.drivers,
@@ -70,6 +76,8 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     assumptions,
     inputs.loans,
     inputs.programFees,
+    inputs.platformLicenses,
+    inputs.programLiabilities,
   );
   return NextResponse.json({
     horizon: s.horizon,

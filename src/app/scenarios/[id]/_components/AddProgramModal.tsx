@@ -2,7 +2,39 @@
 
 import { useRef, useState, useTransition } from "react";
 import { parseDecimalInput } from "@/utils/format";
-import type { ProgramPayload, ProgramFeePayload } from "../_actions";
+import type {
+  ProgramPayload,
+  ProgramFeePayload,
+  ProgramLiabilityPayload,
+} from "../_actions";
+
+interface LiabilityRow extends ProgramLiabilityPayload {
+  rowKey: string;
+}
+
+const CALC_METHODS: { value: ProgramLiabilityPayload["calculationMethod"]; label: string }[] = [
+  { value: "monthly", label: "Monthly" },
+  { value: "quarterly", label: "Quarterly" },
+  { value: "annually", label: "Annually" },
+];
+
+const LIABILITY_ACCOUNTS: { code: string; label: string }[] = [
+  { code: "6800", label: "6800 Interest expense — senior notes" },
+  { code: "6810", label: "6810 Interest expense — subordinate notes" },
+  { code: "6820", label: "6820 Interest expense — other tranches" },
+];
+
+function makeLiabilityRow(): LiabilityRow {
+  return {
+    rowKey: crypto.randomUUID(),
+    name: "",
+    numNotes: undefined,
+    returnProfileBps: 0,
+    calculationMethod: "monthly",
+    rateType: "fixed",
+    accountCode: "6800",
+  };
+}
 
 const PROGRAM_TYPES: { value: ProgramPayload["type"]; label: string }[] = [
   { value: "CRE_CLO", label: "CRE CLO" },
@@ -50,10 +82,12 @@ export type ProgramFormInitial = {
   name: string;
   type: ProgramPayload["type"];
   dealSize?: string;
+  faceValuePerNote?: string;
   startPeriodKey: string;
   endPeriodKey?: string;
   notes?: string;
   fees: ProgramFeePayload[];
+  liabilities?: ProgramLiabilityPayload[];
 };
 
 function defaultInitial(startPeriod: string): ProgramFormInitial {
@@ -61,6 +95,7 @@ function defaultInitial(startPeriod: string): ProgramFormInitial {
     name: "",
     type: "CRE_CLO",
     dealSize: "",
+    faceValuePerNote: "1,000.00",
     startPeriodKey: startPeriod,
     endPeriodKey: "",
     notes: "",
@@ -85,6 +120,7 @@ export function AddProgramModal({
   triggerLabel,
   saveLabel,
   triggerClassName,
+  baseRateBps = 420,
 }: {
   defaultStartPeriod: string;
   expenseAccountsForOverride: { code: string; name: string }[];
@@ -95,6 +131,8 @@ export function AddProgramModal({
   triggerLabel?: string;
   saveLabel?: string;
   triggerClassName?: string;
+  // Scenario-level base rate (BBSW/BBSY/SOFR) used for variable-rate $/yr preview.
+  baseRateBps?: number;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [open, setOpen] = useState(false);
@@ -104,6 +142,9 @@ export function AddProgramModal({
   const [name, setName] = useState(seed.name);
   const [type, setType] = useState<ProgramPayload["type"]>(seed.type);
   const [dealSize, setDealSize] = useState(seed.dealSize ?? "");
+  const [faceValuePerNote, setFaceValuePerNote] = useState(
+    seed.faceValuePerNote ?? "1,000.00",
+  );
   const [startPeriodKey, setStartPeriodKey] = useState(seed.startPeriodKey);
   const [endPeriodKey, setEndPeriodKey] = useState(seed.endPeriodKey ?? "");
   const [notes, setNotes] = useState(seed.notes ?? "");
@@ -112,12 +153,18 @@ export function AddProgramModal({
       ? initial.fees.map((f) => ({ rowKey: crypto.randomUUID(), ...f }))
       : defaultFeeRows(),
   );
+  const [liabilities, setLiabilities] = useState<LiabilityRow[]>(
+    initial?.liabilities && initial.liabilities.length
+      ? initial.liabilities.map((l) => ({ rowKey: crypto.randomUUID(), ...l }))
+      : [],
+  );
 
   function reset() {
     const s = initial ?? defaultInitial(defaultStartPeriod);
     setName(s.name);
     setType(s.type);
     setDealSize(s.dealSize ?? "");
+    setFaceValuePerNote(s.faceValuePerNote ?? "1,000.00");
     setStartPeriodKey(s.startPeriodKey);
     setEndPeriodKey(s.endPeriodKey ?? "");
     setNotes(s.notes ?? "");
@@ -126,6 +173,21 @@ export function AddProgramModal({
         ? s.fees.map((f) => ({ rowKey: crypto.randomUUID(), ...f }))
         : defaultFeeRows(),
     );
+    setLiabilities(
+      initial?.liabilities && initial.liabilities.length
+        ? initial.liabilities.map((l) => ({ rowKey: crypto.randomUUID(), ...l }))
+        : [],
+    );
+  }
+
+  function updateLiability(i: number, patch: Partial<LiabilityRow>) {
+    setLiabilities((arr) => arr.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
+  }
+  function removeLiability(i: number) {
+    setLiabilities((arr) => arr.filter((_, idx) => idx !== i));
+  }
+  function addLiability() {
+    setLiabilities((arr) => [...arr, makeLiabilityRow()]);
   }
 
   function show() {
@@ -154,12 +216,17 @@ export function AddProgramModal({
       name: name.trim(),
       type,
       dealSize: dealSize.trim() || undefined,
+      faceValuePerNote: faceValuePerNote.trim() || undefined,
       startPeriodKey,
       endPeriodKey: endPeriodKey.trim() || undefined,
       notes: notes.trim() || undefined,
       fees: fees.map(({ rowKey: _rk, ...f }) => {
         void _rk;
         return f;
+      }),
+      liabilities: liabilities.map(({ rowKey: _rk, ...l }) => {
+        void _rk;
+        return l;
       }),
     };
     const action = saveAction ?? createAction;
@@ -185,7 +252,7 @@ export function AddProgramModal({
       <dialog
         ref={dialogRef}
         onClose={() => setOpen(false)}
-        className="rounded-lg p-0 backdrop:bg-black/30"
+        className="fixed inset-0 m-auto h-fit max-h-[90vh] w-fit max-w-[95vw] rounded-lg p-0 shadow-xl backdrop:bg-black/40"
       >
         {open && (
           <div className="flex w-[820px] flex-col gap-4 p-6 text-sm">
@@ -220,7 +287,7 @@ export function AddProgramModal({
                   ))}
                 </select>
               </Field>
-              <Field label="Deal size $" hint="informational; total notes issued">
+              <Field label="Deal size $" hint="total notes issued">
                 <input
                   value={dealSize}
                   onChange={(e) => setDealSize(e.target.value)}
@@ -228,6 +295,15 @@ export function AddProgramModal({
                   className="rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
                 />
               </Field>
+              <Field label="Face value / note" hint="typical $1,000">
+                <input
+                  value={faceValuePerNote}
+                  onChange={(e) => setFaceValuePerNote(e.target.value)}
+                  inputMode="decimal"
+                  className="rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
+                />
+              </Field>
+              <NotesCount dealSize={dealSize} faceValue={faceValuePerNote} />
               <Field label="Start" hint="YYYY-MM">
                 <input
                   value={startPeriodKey}
@@ -385,6 +461,182 @@ export function AddProgramModal({
               </div>
             </section>
 
+            <section className="flex flex-col gap-2">
+              <div className="flex items-baseline justify-between">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-600">
+                  Liability streams
+                  <span className="ml-2 font-normal text-zinc-400">
+                    notes / tranches issued to investors
+                  </span>
+                </h3>
+                <button
+                  type="button"
+                  onClick={addLiability}
+                  className="rounded-md border border-zinc-300 px-2 py-0.5 text-xs text-zinc-700 hover:bg-zinc-100"
+                >
+                  + Add liability
+                </button>
+              </div>
+              <div className="overflow-hidden rounded-md border border-zinc-200">
+                <table className="w-full border-collapse text-xs">
+                  <thead className="bg-zinc-50 text-zinc-500">
+                    <tr>
+                      <th className="px-2 py-1 text-left font-medium">Tranche</th>
+                      <th className="px-2 py-1 text-right font-medium"># notes</th>
+                      <th className="px-2 py-1 text-right font-medium">Spread (bps)</th>
+                      <th className="px-2 py-1 text-left font-medium">Calc</th>
+                      <th className="px-2 py-1 text-left font-medium">Rate</th>
+                      <th className="px-2 py-1 text-right font-medium">$ / yr</th>
+                      <th className="px-2 py-1 text-right font-medium">$ / mo</th>
+                      <th className="px-2 py-1 text-left font-medium">Account</th>
+                      <th className="px-2 py-1" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {liabilities.map((l, i) => (
+                      <tr key={l.rowKey} className="border-t border-zinc-100">
+                        <td className="px-2 py-1">
+                          <input
+                            value={l.name}
+                            onChange={(e) => updateLiability(i, { name: e.target.value })}
+                            placeholder="AAA / Mezz / Equity"
+                            className="w-full rounded border border-zinc-200 px-1.5 py-0.5"
+                          />
+                        </td>
+                        <td className="px-2 py-1">
+                          <input
+                            value={l.numNotes ?? ""}
+                            onChange={(e) =>
+                              updateLiability(i, {
+                                numNotes: e.target.value
+                                  ? Number(e.target.value)
+                                  : undefined,
+                              })
+                            }
+                            inputMode="numeric"
+                            className="w-20 rounded border border-zinc-200 px-1.5 py-0.5 text-right tabular-nums"
+                          />
+                        </td>
+                        <td className="px-2 py-1">
+                          <input
+                            value={l.returnProfileBps}
+                            onChange={(e) =>
+                              updateLiability(i, {
+                                returnProfileBps: Number(e.target.value) || 0,
+                              })
+                            }
+                            inputMode="decimal"
+                            className="w-20 rounded border border-zinc-200 px-1.5 py-0.5 text-right tabular-nums"
+                          />
+                        </td>
+                        <td className="px-2 py-1">
+                          <select
+                            value={l.calculationMethod}
+                            onChange={(e) =>
+                              updateLiability(i, {
+                                calculationMethod: e.target.value as ProgramLiabilityPayload["calculationMethod"],
+                              })
+                            }
+                            className="w-full rounded border border-zinc-200 px-1.5 py-0.5"
+                          >
+                            {CALC_METHODS.map((c) => (
+                              <option key={c.value} value={c.value}>
+                                {c.label}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="px-2 py-1">
+                          <select
+                            value={l.rateType}
+                            onChange={(e) =>
+                              updateLiability(i, {
+                                rateType: e.target.value as ProgramLiabilityPayload["rateType"],
+                              })
+                            }
+                            className="w-full rounded border border-zinc-200 px-1.5 py-0.5"
+                          >
+                            <option value="fixed">Fixed</option>
+                            <option value="variable">Variable (+ base rate)</option>
+                          </select>
+                        </td>
+                        <td className="px-2 py-1 text-right tabular-nums text-emerald-700">
+                          {(() => {
+                            const principal =
+                              (l.numNotes ?? 0) *
+                              Number(parseDecimalInput(faceValuePerNote || "0"));
+                            const rateBps =
+                              l.rateType === "variable"
+                                ? baseRateBps + (l.returnProfileBps || 0)
+                                : l.returnProfileBps || 0;
+                            const annual = (principal * rateBps) / 10000;
+                            if (!annual)
+                              return <span className="text-zinc-300">—</span>;
+                            return annual.toLocaleString("en-AU", {
+                              style: "currency",
+                              currency: "AUD",
+                              maximumFractionDigits: 0,
+                            });
+                          })()}
+                        </td>
+                        <td className="px-2 py-1 text-right tabular-nums text-zinc-600">
+                          {(() => {
+                            const principal =
+                              (l.numNotes ?? 0) *
+                              Number(parseDecimalInput(faceValuePerNote || "0"));
+                            const rateBps =
+                              l.rateType === "variable"
+                                ? baseRateBps + (l.returnProfileBps || 0)
+                                : l.returnProfileBps || 0;
+                            const monthly = (principal * rateBps) / 10000 / 12;
+                            if (!monthly)
+                              return <span className="text-zinc-300">—</span>;
+                            return monthly.toLocaleString("en-AU", {
+                              style: "currency",
+                              currency: "AUD",
+                              maximumFractionDigits: 0,
+                            });
+                          })()}
+                        </td>
+                        <td className="px-2 py-1">
+                          <select
+                            value={l.accountCode ?? "6800"}
+                            onChange={(e) =>
+                              updateLiability(i, { accountCode: e.target.value })
+                            }
+                            className="w-full rounded border border-zinc-200 px-1.5 py-0.5 font-mono text-[11px]"
+                          >
+                            {LIABILITY_ACCOUNTS.map((a) => (
+                              <option key={a.code} value={a.code}>
+                                {a.label}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="px-2 py-1 text-right">
+                          <button
+                            type="button"
+                            onClick={() => removeLiability(i)}
+                            className="rounded px-1.5 py-0.5 text-zinc-400 hover:bg-rose-50 hover:text-rose-600"
+                            aria-label="Remove liability"
+                          >
+                            ×
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {liabilities.length === 0 && (
+                      <tr>
+                        <td colSpan={9} className="px-2 py-3 text-center text-zinc-400">
+                          No liability streams. Click + Add liability to model AAA / Mezz / Equity tranches.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
             <footer className="flex justify-end gap-2 border-t border-zinc-200 pt-3">
               <button
                 type="button"
@@ -427,5 +679,25 @@ function Field({
       </span>
       {children}
     </label>
+  );
+}
+
+function NotesCount({ dealSize, faceValue }: { dealSize: string; faceValue: string }) {
+  const d = Number(parseDecimalInput(dealSize));
+  const f = Number(parseDecimalInput(faceValue));
+  const notes = f > 0 ? d / f : null;
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+        Number of notes <span className="ml-1 font-normal lowercase text-zinc-400">· computed</span>
+      </span>
+      <div className="flex h-[34px] items-center justify-end rounded-md border border-dashed border-zinc-300 bg-zinc-50 px-2 text-right tabular-nums text-zinc-700">
+        {notes === null || !Number.isFinite(notes) ? (
+          <span className="text-zinc-400">—</span>
+        ) : (
+          notes.toLocaleString("en-AU", { maximumFractionDigits: 0 })
+        )}
+      </div>
+    </div>
   );
 }
