@@ -1,13 +1,21 @@
 import { Schema, type Types } from "mongoose";
 import { defineModel } from "./_define";
 
+export type EmploymentType = "full_time" | "part_time" | "contractor";
+
 export interface IHeadcount {
   scenarioId: Types.ObjectId;
+  personName?: string;
   role: string;
   accountCode: string;
+  employmentType: EmploymentType;
+  ftePct: Types.Decimal128;
+  band?: number;
+  tier?: number;
   startPeriodKey: string;
   endPeriodKey?: string;
   salaryAnnual: Types.Decimal128;
+  superPct: Types.Decimal128;
   onCostPct: Types.Decimal128;
   salaryGrowthPctAnnual: Types.Decimal128;
   createdAt: Date;
@@ -19,11 +27,22 @@ const periodPattern = /^\d{4}-(0[1-9]|1[0-2])$/;
 const headcountSchema = new Schema<IHeadcount>(
   {
     scenarioId: { type: Schema.Types.ObjectId, ref: "Scenario", required: true },
+    personName: { type: String, trim: true },
     role: { type: String, required: true, trim: true },
     accountCode: { type: String, required: true, trim: true },
+    employmentType: {
+      type: String,
+      enum: ["full_time", "part_time", "contractor"],
+      required: true,
+      default: "full_time",
+    },
+    ftePct: { type: Schema.Types.Decimal128, required: true },
+    band: { type: Number, min: 1, max: 11 },
+    tier: { type: Number, min: 1, max: 4 },
     startPeriodKey: { type: String, required: true, match: periodPattern },
     endPeriodKey: { type: String, match: periodPattern },
     salaryAnnual: { type: Schema.Types.Decimal128, required: true },
+    superPct: { type: Schema.Types.Decimal128, required: true },
     onCostPct: { type: Schema.Types.Decimal128, required: true },
     salaryGrowthPctAnnual: { type: Schema.Types.Decimal128, required: true },
   },

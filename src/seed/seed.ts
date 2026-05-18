@@ -1,8 +1,15 @@
-import "dotenv/config";
+import { config as loadEnv } from "dotenv";
+// Next.js convention: .env.development.local overrides .env.local overrides .env.
+// Load in reverse so later files don't clobber earlier ones (override: false).
+loadEnv({ path: ".env" });
+loadEnv({ path: ".env.local" });
+loadEnv({ path: ".env.development.local" });
 import { connectToDatabase } from "@/lib/db";
-import { Account, Period } from "@/models";
+import { Account, Period, Payband } from "@/models";
 import { DEFAULT_COA } from "./coa";
+import { DEFAULT_PAYBANDS } from "./paybands";
 import { FORECAST_HORIZON_MONTHS, periodKey } from "@/constants/periods";
+import { toDecimal128 } from "@/utils/money";
 
 // Gallantree fiscal year: July–June (Australian standard).
 function fiscalYear(year: number, month: number): number {
@@ -10,15 +17,19 @@ function fiscalYear(year: number, month: number): number {
 }
 
 async function seedAccounts() {
+  // $set on seed-owned fields so re-seed re-asserts the canonical chart;
+  // user-added accounts (those not in DEFAULT_COA) are untouched.
   const ops = DEFAULT_COA.map((a) => ({
     updateOne: {
       filter: { code: a.code },
-      update: { $setOnInsert: a },
+      update: { $set: { name: a.name, type: a.type } },
       upsert: true,
     },
   }));
   const result = await Account.bulkWrite(ops);
-  console.log(`accounts: upserted ${result.upsertedCount}, matched ${result.matchedCount}`);
+  console.log(
+    `accounts: upserted ${result.upsertedCount}, modified ${result.modifiedCount}, matched ${result.matchedCount}`,
+  );
 }
 
 async function seedPeriods(startYear = 2026, startMonth = 7) {
@@ -53,10 +64,30 @@ async function seedPeriods(startYear = 2026, startMonth = 7) {
   console.log(`periods: upserted ${result.upsertedCount}, matched ${result.matchedCount}`);
 }
 
+async function seedPaybands() {
+  const ops = DEFAULT_PAYBANDS.map((p) => ({
+    updateOne: {
+      filter: { band: p.band, tier: p.tier },
+      update: {
+        $setOnInsert: {
+          band: p.band,
+          tier: p.tier,
+          caseByCase: p.caseByCase,
+          ...(p.salaryAnnual !== null ? { salaryAnnual: toDecimal128(p.salaryAnnual) } : {}),
+        },
+      },
+      upsert: true,
+    },
+  }));
+  const result = await Payband.bulkWrite(ops);
+  console.log(`paybands: upserted ${result.upsertedCount}, matched ${result.matchedCount}`);
+}
+
 async function main() {
   await connectToDatabase();
   await seedAccounts();
   await seedPeriods();
+  await seedPaybands();
   console.log("seed complete");
   process.exit(0);
 }

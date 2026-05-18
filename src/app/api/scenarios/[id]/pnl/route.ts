@@ -1,9 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { Types } from "mongoose";
 import { connectToDatabase } from "@/lib/db";
-import { Period } from "@/models";
+import { Period, Scenario } from "@/models";
 import { computePnL, type PnLSection } from "@/engine/pnl";
 import { loadEngineInputs } from "@/engine/inputs";
+import type { NimTier } from "@/engine/loans";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,15 +30,23 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     return NextResponse.json({ error: "invalid scenario id" }, { status: 400 });
   }
   await connectToDatabase();
-  const [periods, inputs] = await Promise.all([
+  const [periods, scenario, inputs] = await Promise.all([
     Period.find({}).sort({ index: 1 }).lean(),
+    Scenario.findById(id).select("nimTier").lean<{ nimTier?: NimTier }>(),
     loadEngineInputs(id),
   ]);
   if (periods.length === 0) {
     return NextResponse.json({ error: "periods not seeded — run `npm run seed`" }, { status: 412 });
   }
   const horizon = periods.map((p) => p.key);
-  const pnl = computePnL(inputs.drivers, inputs.headcount, horizon);
+  const pnl = computePnL(
+    inputs.drivers,
+    inputs.headcount,
+    horizon,
+    inputs.loans,
+    scenario?.nimTier ?? "default",
+    inputs.programFees,
+  );
   return NextResponse.json({
     horizon: pnl.horizon,
     revenue: serializeSection(pnl.revenue),

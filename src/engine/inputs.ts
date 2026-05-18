@@ -1,89 +1,218 @@
-import { Driver, Headcount } from "@/models";
+import { CapitalProgram, Driver, Headcount, Loan } from "@/models";
 import type { DriverInput, HeadcountInput } from "./pnl";
+import { dateToPeriodKey, type LoanInput } from "./loans";
+import type { ProgramFeeInput, FeeCategory } from "./programs";
+
+type D128 = { toString: () => string };
 
 interface DriverDoc {
   _id: unknown;
   name: string;
-  type: "recurring_revenue" | "opex_fixed" | "opex_pct_revenue";
+  type:
+    | "recurring_revenue"
+    | "fee_x_volume"
+    | "one_off"
+    | "opex_fixed"
+    | "opex_pct_revenue"
+    | "opex_per_fte"
+    | "capex_straight_line";
   accountCode: string;
   startPeriodKey: string;
   endPeriodKey?: string;
-  baseMonthly?: { toString: () => string };
-  monthlyGrowthPct?: { toString: () => string };
-  pctOfRevenue?: { toString: () => string };
+  baseMonthly?: D128;
+  monthlyGrowthPct?: D128;
+  pctOfRevenue?: D128;
+  feeBps?: D128;
+  volumeMonthly?: D128;
+  volumeMonthlyGrowthPct?: D128;
+  amount?: D128;
+  periodKey?: string;
+  costPerFteMonthly?: D128;
+  cost?: D128;
+  inServicePeriodKey?: string;
+  usefulLifeMonths?: number;
 }
 
 interface HeadcountDoc {
   _id: unknown;
+  personName?: string;
   role: string;
   accountCode: string;
+  employmentType?: "full_time" | "part_time" | "contractor";
+  ftePct?: D128;
+  band?: number;
+  tier?: number;
   startPeriodKey: string;
   endPeriodKey?: string;
-  salaryAnnual: { toString: () => string };
-  onCostPct: { toString: () => string };
-  salaryGrowthPctAnnual: { toString: () => string };
+  salaryAnnual: D128;
+  superPct?: D128;
+  onCostPct: D128;
+  salaryGrowthPctAnnual: D128;
 }
 
 function toDriverInput(d: DriverDoc): DriverInput {
   const id = String(d._id);
-  if (d.type === "recurring_revenue") {
-    return {
-      kind: "recurring_revenue",
-      id,
-      name: d.name,
-      accountCode: d.accountCode,
-      startPeriodKey: d.startPeriodKey,
-      endPeriodKey: d.endPeriodKey,
-      baseMonthly: d.baseMonthly!.toString(),
-      monthlyGrowthPct: d.monthlyGrowthPct!.toString(),
-    };
-  }
-  if (d.type === "opex_fixed") {
-    return {
-      kind: "opex_fixed",
-      id,
-      name: d.name,
-      accountCode: d.accountCode,
-      startPeriodKey: d.startPeriodKey,
-      endPeriodKey: d.endPeriodKey,
-      baseMonthly: d.baseMonthly!.toString(),
-      monthlyGrowthPct: d.monthlyGrowthPct!.toString(),
-    };
-  }
-  return {
-    kind: "opex_pct_revenue",
+  const baseFields = {
     id,
     name: d.name,
     accountCode: d.accountCode,
     startPeriodKey: d.startPeriodKey,
     endPeriodKey: d.endPeriodKey,
-    pctOfRevenue: d.pctOfRevenue!.toString(),
   };
+  switch (d.type) {
+    case "recurring_revenue":
+      return {
+        kind: "recurring_revenue",
+        ...baseFields,
+        baseMonthly: d.baseMonthly!.toString(),
+        monthlyGrowthPct: d.monthlyGrowthPct!.toString(),
+      };
+    case "fee_x_volume":
+      return {
+        kind: "fee_x_volume",
+        ...baseFields,
+        feeBps: d.feeBps!.toString(),
+        volumeMonthly: d.volumeMonthly!.toString(),
+        volumeMonthlyGrowthPct: d.volumeMonthlyGrowthPct!.toString(),
+      };
+    case "one_off":
+      return {
+        kind: "one_off",
+        ...baseFields,
+        amount: d.amount!.toString(),
+        periodKey: d.periodKey!,
+      };
+    case "opex_fixed":
+      return {
+        kind: "opex_fixed",
+        ...baseFields,
+        baseMonthly: d.baseMonthly!.toString(),
+        monthlyGrowthPct: d.monthlyGrowthPct!.toString(),
+      };
+    case "opex_pct_revenue":
+      return {
+        kind: "opex_pct_revenue",
+        ...baseFields,
+        pctOfRevenue: d.pctOfRevenue!.toString(),
+      };
+    case "opex_per_fte":
+      return {
+        kind: "opex_per_fte",
+        ...baseFields,
+        costPerFteMonthly: d.costPerFteMonthly!.toString(),
+      };
+    case "capex_straight_line":
+      return {
+        kind: "capex_straight_line",
+        ...baseFields,
+        cost: d.cost!.toString(),
+        inServicePeriodKey: d.inServicePeriodKey!,
+        usefulLifeMonths: d.usefulLifeMonths!,
+      };
+  }
 }
 
 function toHeadcountInput(h: HeadcountDoc): HeadcountInput {
   return {
     id: String(h._id),
+    personName: h.personName,
     role: h.role,
     accountCode: h.accountCode,
+    employmentType: h.employmentType,
+    ftePct: h.ftePct?.toString() ?? "1",
+    band: h.band,
+    tier: h.tier,
     startPeriodKey: h.startPeriodKey,
     endPeriodKey: h.endPeriodKey,
     salaryAnnual: h.salaryAnnual.toString(),
+    superPct: h.superPct?.toString() ?? "0",
     onCostPct: h.onCostPct.toString(),
     salaryGrowthPctAnnual: h.salaryGrowthPctAnnual.toString(),
   };
 }
 
+interface LoanDoc {
+  _id: unknown;
+  loanId: string;
+  channel: "CRE_CLO" | "CMBS" | "Warehouse" | "Non-Conforming";
+  balance: D128;
+  originationDate: Date;
+  maturityDate: Date;
+  nimDefaultBps?: number;
+  nimNegFloorBps?: number;
+  nimHardFloorBps?: number;
+}
+
+function toLoanInput(l: LoanDoc): LoanInput {
+  return {
+    id: String(l._id),
+    loanId: l.loanId,
+    channel: l.channel,
+    balance: l.balance.toString(),
+    originationPeriodKey: dateToPeriodKey(new Date(l.originationDate)),
+    maturityPeriodKey: dateToPeriodKey(new Date(l.maturityDate)),
+    nimDefaultBps: l.nimDefaultBps,
+    nimNegFloorBps: l.nimNegFloorBps,
+    nimHardFloorBps: l.nimHardFloorBps,
+  };
+}
+
+interface ProgramFeeDoc {
+  _id: unknown;
+  name: string;
+  category: FeeCategory;
+  basisAmount: D128;
+  feeBps: number;
+  accountCode: string;
+}
+
+interface ProgramDoc {
+  _id: unknown;
+  name: string;
+  type: string;
+  startPeriodKey: string;
+  endPeriodKey?: string;
+  fees: ProgramFeeDoc[];
+}
+
+function flattenProgramFees(programs: ProgramDoc[]): ProgramFeeInput[] {
+  const out: ProgramFeeInput[] = [];
+  for (const p of programs) {
+    for (const f of p.fees ?? []) {
+      out.push({
+        id: String(f._id),
+        programId: String(p._id),
+        programName: p.name,
+        programType: p.type,
+        feeName: f.name,
+        category: f.category,
+        basisAmount: f.basisAmount.toString(),
+        feeBps: f.feeBps,
+        accountCode: f.accountCode,
+        startPeriodKey: p.startPeriodKey,
+        endPeriodKey: p.endPeriodKey,
+      });
+    }
+  }
+  return out;
+}
+
 export async function loadEngineInputs(scenarioId: string): Promise<{
   drivers: DriverInput[];
   headcount: HeadcountInput[];
+  loans: LoanInput[];
+  programFees: ProgramFeeInput[];
 }> {
-  const [driverDocs, headcountDocs] = await Promise.all([
+  const [driverDocs, headcountDocs, loanDocs, programDocs] = await Promise.all([
     Driver.find({ scenarioId }).lean<DriverDoc[]>(),
     Headcount.find({ scenarioId }).lean<HeadcountDoc[]>(),
+    Loan.find({ scenarioId }).lean<LoanDoc[]>(),
+    CapitalProgram.find({ scenarioId }).lean<ProgramDoc[]>(),
   ]);
   return {
     drivers: driverDocs.map(toDriverInput),
     headcount: headcountDocs.map(toHeadcountInput),
+    loans: loanDocs.map(toLoanInput),
+    programFees: flattenProgramFees(programDocs),
   };
 }

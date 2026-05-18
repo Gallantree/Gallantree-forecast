@@ -8,8 +8,16 @@ export interface SeedAccount {
 
 export const DEFAULT_COA: SeedAccount[] = [
   { code: "4000", name: "Management fees", type: "revenue" },
-  { code: "4100", name: "Performance fees", type: "revenue" },
-  { code: "4200", name: "Other income", type: "revenue" },
+  { code: "4050", name: "Performance fees", type: "revenue" },
+  { code: "4100", name: "NIM revenue — CRE CLO", type: "revenue" },
+  { code: "4200", name: "NIM revenue — CMBS", type: "revenue" },
+  { code: "4300", name: "NIM revenue — Warehouse", type: "revenue" },
+  { code: "4400", name: "NIM revenue — Non-Conforming", type: "revenue" },
+  { code: "4500", name: "Senior management fees", type: "revenue" },
+  { code: "4510", name: "Subordinate management fees", type: "revenue" },
+  { code: "4520", name: "Servicing fees", type: "revenue" },
+  { code: "4530", name: "Other capital program fees", type: "revenue" },
+  { code: "4900", name: "Other income", type: "revenue" },
   { code: "6000", name: "Salaries & wages", type: "expense" },
   { code: "6100", name: "Contractors", type: "expense" },
   { code: "6200", name: "Rent & occupancy", type: "expense" },

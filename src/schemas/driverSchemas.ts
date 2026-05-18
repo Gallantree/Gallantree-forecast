@@ -17,6 +17,19 @@ export const driverCreateSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     ...base,
+    type: z.literal("fee_x_volume"),
+    feeBps: decimalStringSchema,
+    volumeMonthly: decimalStringSchema,
+    volumeMonthlyGrowthPct: decimalStringSchema,
+  }),
+  z.object({
+    ...base,
+    type: z.literal("one_off"),
+    amount: decimalStringSchema,
+    periodKey: periodKeySchema,
+  }),
+  z.object({
+    ...base,
     type: z.literal("opex_fixed"),
     baseMonthly: decimalStringSchema,
     monthlyGrowthPct: decimalStringSchema,
@@ -25,6 +38,18 @@ export const driverCreateSchema = z.discriminatedUnion("type", [
     ...base,
     type: z.literal("opex_pct_revenue"),
     pctOfRevenue: decimalStringSchema,
+  }),
+  z.object({
+    ...base,
+    type: z.literal("opex_per_fte"),
+    costPerFteMonthly: decimalStringSchema,
+  }),
+  z.object({
+    ...base,
+    type: z.literal("capex_straight_line"),
+    cost: decimalStringSchema,
+    inServicePeriodKey: periodKeySchema,
+    usefulLifeMonths: z.number().int().positive(),
   }),
 ]);
 export type DriverCreate = z.infer<typeof driverCreateSchema>;
