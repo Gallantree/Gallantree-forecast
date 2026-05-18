@@ -40,11 +40,32 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     startPeriodKey: data.startPeriodKey,
     endPeriodKey: data.endPeriodKey,
   };
-  if (data.type === "recurring_revenue" || data.type === "opex_fixed") {
-    doc.baseMonthly = toDecimal128(data.baseMonthly);
-    doc.monthlyGrowthPct = toDecimal128(data.monthlyGrowthPct);
-  } else if (data.type === "opex_pct_revenue") {
-    doc.pctOfRevenue = toDecimal128(data.pctOfRevenue);
+  switch (data.type) {
+    case "recurring_revenue":
+    case "opex_fixed":
+      doc.baseMonthly = toDecimal128(data.baseMonthly);
+      doc.monthlyGrowthPct = toDecimal128(data.monthlyGrowthPct);
+      break;
+    case "opex_pct_revenue":
+      doc.pctOfRevenue = toDecimal128(data.pctOfRevenue);
+      break;
+    case "fee_x_volume":
+      doc.feeBps = toDecimal128(data.feeBps);
+      doc.volumeMonthly = toDecimal128(data.volumeMonthly);
+      doc.volumeMonthlyGrowthPct = toDecimal128(data.volumeMonthlyGrowthPct);
+      break;
+    case "one_off":
+      doc.amount = toDecimal128(data.amount);
+      doc.periodKey = data.periodKey;
+      break;
+    case "opex_per_fte":
+      doc.costPerFteMonthly = toDecimal128(data.costPerFteMonthly);
+      break;
+    case "capex_straight_line":
+      doc.cost = toDecimal128(data.cost);
+      doc.inServicePeriodKey = data.inServicePeriodKey;
+      doc.usefulLifeMonths = data.usefulLifeMonths;
+      break;
   }
   const driver = await Driver.create(doc);
   return NextResponse.json({ driver }, { status: 201 });
