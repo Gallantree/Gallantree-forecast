@@ -11,7 +11,7 @@ export const authConfig = {
   pages: {
     signIn: "/login",
     verifyRequest: "/login/verify-request",
-    error: "/login?error=1",
+    error: "/login",
   },
   // JWT sessions are required for middleware-based gating: the session cookie
   // is self-contained and edge-decodable, no DB lookup needed per request.
