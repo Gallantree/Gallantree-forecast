@@ -57,6 +57,11 @@ export interface ProgramOption {
   _id: string;
   name: string;
   type: string;
+  // YYYY-MM period keys (Australian fiscal calendar applies). Used by the
+  // seed-loans modal to derive the FY window each program spans and to
+  // distribute seeded loans across those FYs.
+  startPeriodKey?: string;
+  endPeriodKey?: string;
 }
 
 const PROGRAM_TYPE_LABEL: Record<ProgramTypeKey, string> = {
