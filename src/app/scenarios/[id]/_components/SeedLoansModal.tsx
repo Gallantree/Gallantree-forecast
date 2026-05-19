@@ -295,7 +295,8 @@ export function SeedLoansModal({
                       Loans per capital program
                     </span>
                     <span className="text-[11px] text-zinc-500">
-                      Total <span className="font-semibold tabular-nums text-zinc-900">{total}</span>
+                      Total{" "}
+                      <span className="font-semibold tabular-nums text-zinc-900">{total}</span>
                     </span>
                   </div>
 
@@ -439,13 +440,7 @@ const RISK_TONE: Record<RiskLevel, string> = {
   5: "bg-rose-500",
 };
 
-function RiskPicker({
-  value,
-  onChange,
-}: {
-  value: RiskLevel;
-  onChange: (r: RiskLevel) => void;
-}) {
+function RiskPicker({ value, onChange }: { value: RiskLevel; onChange: (r: RiskLevel) => void }) {
   return (
     <div className="flex items-center gap-1">
       <div className="inline-flex overflow-hidden rounded-md border border-zinc-300">
@@ -460,9 +455,7 @@ function RiskPicker({
               aria-label={`Risk ${r} of 5 — ${RISK_LABEL[r]}`}
               aria-pressed={selected}
               className={`h-6 w-6 text-[10px] font-semibold transition ${
-                selected
-                  ? `${RISK_TONE[r]} text-white`
-                  : "bg-white text-zinc-500 hover:bg-zinc-50"
+                selected ? `${RISK_TONE[r]} text-white` : "bg-white text-zinc-500 hover:bg-zinc-50"
               } ${r > 1 ? "border-l border-zinc-300" : ""}`}
             >
               {r}
@@ -470,9 +463,7 @@ function RiskPicker({
           );
         })}
       </div>
-      <span className="hidden text-[10px] text-zinc-500 md:inline">
-        {RISK_LABEL[value]}
-      </span>
+      <span className="hidden text-[10px] text-zinc-500 md:inline">{RISK_LABEL[value]}</span>
     </div>
   );
 }
