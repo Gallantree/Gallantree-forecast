@@ -1,16 +1,19 @@
 import Decimal from "decimal.js";
 import { fmtMoney2, fmtMoneyInput, fmtNum0 } from "@/utils/format";
-import { cloneProgram, createProgram, deleteProgram, updateProgram } from "../_actions";
+import {
+  cloneProgram,
+  createProgram,
+  deleteProgram,
+  seedCmbsPrograms,
+  seedCreCloPrograms,
+  seedLoanBook,
+  updateProgram,
+} from "../_actions";
 import { AddProgramModal, type ProgramFormInitial } from "./AddProgramModal";
 import { CalibrateProgramButton } from "./CalibrateProgramButton";
 import { ProgramAnalysisModal } from "./ProgramAnalysisModal";
 import type { ProgramAnalysisData } from "./programAnalysisData";
 import { SeedMenu } from "./SeedMenu";
-import {
-  seedCmbsPrograms,
-  seedCreCloPrograms,
-  seedLoanBook,
-} from "../_actions";
 
 export interface ProgramFeeRow {
   _id: string;
@@ -135,8 +138,7 @@ export function ProgramsTab({
   const createAction = createProgram.bind(null, scenarioId);
 
   const totalAnnualFees = programs.reduce(
-    (acc, p) =>
-      acc.plus(p.fees.reduce((a, f) => a.plus(annualFee(f)), new Decimal(0))),
+    (acc, p) => acc.plus(p.fees.reduce((a, f) => a.plus(annualFee(f)), new Decimal(0))),
     new Decimal(0),
   );
 
@@ -212,8 +214,8 @@ export function ProgramsTab({
           <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-zinc-500">
             <div>No capital programs yet.</div>
             <div className="text-xs">
-              Click <span className="font-medium text-zinc-700">Add capital program</span> to
-              create a CLO, CMBS trust, MIT fund or warehouse facility.
+              Click <span className="font-medium text-zinc-700">Add capital program</span> to create
+              a CLO, CMBS trust, MIT fund or warehouse facility.
             </div>
           </div>
         ) : (
@@ -246,23 +248,25 @@ export function ProgramsTab({
                           </span>
                         </span>
                       ) : null}
-                      {p.dealSize && p.faceValuePerNote ? (() => {
-                        const d = Number(p.dealSize!.toString());
-                        const f = Number(p.faceValuePerNote!.toString());
-                        if (!(f > 0)) return null;
-                        const notes = d / f;
-                        return (
-                          <span className="text-[11px] text-zinc-500">
-                            Notes{" "}
-                            <span className="font-semibold text-zinc-700">
-                              {notes.toLocaleString("en-AU", { maximumFractionDigits: 0 })}
-                            </span>
-                            <span className="ml-1 text-zinc-400">
-                              @ {fmtMoney2(p.faceValuePerNote!.toString())}
-                            </span>
-                          </span>
-                        );
-                      })() : null}
+                      {p.dealSize && p.faceValuePerNote
+                        ? (() => {
+                            const d = Number(p.dealSize!.toString());
+                            const f = Number(p.faceValuePerNote!.toString());
+                            if (!(f > 0)) return null;
+                            const notes = d / f;
+                            return (
+                              <span className="text-[11px] text-zinc-500">
+                                Notes{" "}
+                                <span className="font-semibold text-zinc-700">
+                                  {notes.toLocaleString("en-AU", { maximumFractionDigits: 0 })}
+                                </span>
+                                <span className="ml-1 text-zinc-400">
+                                  @ {fmtMoney2(p.faceValuePerNote!.toString())}
+                                </span>
+                              </span>
+                            );
+                          })()
+                        : null}
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="text-xs text-zinc-500">
@@ -280,10 +284,7 @@ export function ProgramsTab({
                         triggerClassName="rounded px-2 py-0.5 text-xs text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
                         baseRateBps={baseRateBps}
                       />
-                      <CalibrateProgramButton
-                        scenarioId={scenarioId}
-                        programId={p._id}
-                      />
+                      <CalibrateProgramButton scenarioId={scenarioId} programId={p._id} />
                       <form action={cloneProgram.bind(null, scenarioId, p._id)}>
                         <button
                           type="submit"
@@ -386,9 +387,7 @@ function tranchePrincipal(l: ProgramLiabilityRow, faceValuePerNote: number): num
 }
 
 function trancheRateBps(l: ProgramLiabilityRow, baseRateBps: number): number {
-  return l.rateType === "variable"
-    ? baseRateBps + l.returnProfileBps
-    : l.returnProfileBps;
+  return l.rateType === "variable" ? baseRateBps + l.returnProfileBps : l.returnProfileBps;
 }
 
 // A tranche is "funding" if it represents principal-paying debt (A–G in CRE
@@ -404,10 +403,7 @@ const NON_FUNDING_TRANCHE_NAMES = new Set([
   "interest-only",
 ]);
 
-export function isFundingTranche(
-  name: string | undefined,
-  spreadBps: number,
-): boolean {
+export function isFundingTranche(name: string | undefined, spreadBps: number): boolean {
   if (spreadBps <= 0) return false;
   const norm = (name ?? "").trim().toLowerCase();
   if (!norm) return true; // unnamed but positive-spread → assume funding
@@ -460,9 +456,7 @@ function LiabilitiesBlock({
           </span>
           <span>
             Annual interest{" "}
-            <span className="font-semibold text-rose-700">
-              {fmtMoney2(totalAnnual)}
-            </span>
+            <span className="font-semibold text-rose-700">{fmtMoney2(totalAnnual)}</span>
           </span>
         </span>
       </div>
@@ -514,9 +508,7 @@ function LiabilitiesBlock({
                 <Td className="text-right tabular-nums text-zinc-600">
                   {monthly > 0 ? fmtMoney2(monthly) : "—"}
                 </Td>
-                <Td className="font-mono text-[11px] text-zinc-500">
-                  {l.accountCode ?? "—"}
-                </Td>
+                <Td className="font-mono text-[11px] text-zinc-500">{l.accountCode ?? "—"}</Td>
               </tr>
             );
           })}
@@ -535,24 +527,16 @@ function ProgramAggregateStrip({ agg }: { agg: ProgramAggregate | undefined }) {
     );
   }
   const waScore =
-    agg.weightBalanceForScore > 0
-      ? agg.weightSumScore / agg.weightBalanceForScore
-      : null;
-  const waLvr =
-    agg.weightBalanceForLvr > 0 ? agg.weightSumLvr / agg.weightBalanceForLvr : null;
-  const waDscr =
-    agg.weightBalanceForDscr > 0 ? agg.weightSumDscr / agg.weightBalanceForDscr : null;
+    agg.weightBalanceForScore > 0 ? agg.weightSumScore / agg.weightBalanceForScore : null;
+  const waLvr = agg.weightBalanceForLvr > 0 ? agg.weightSumLvr / agg.weightBalanceForLvr : null;
+  const waDscr = agg.weightBalanceForDscr > 0 ? agg.weightSumDscr / agg.weightBalanceForDscr : null;
   const waSpreadBps =
-    agg.weightBalanceForSpread > 0
-      ? agg.weightSumSpreadBps / agg.weightBalanceForSpread
-      : null;
+    agg.weightBalanceForSpread > 0 ? agg.weightSumSpreadBps / agg.weightBalanceForSpread : null;
 
   // Program NIM = (loan WAS) − (funding WAS), expressed as a spread.
   // NIM $/yr applies that spread to the aggregate loan balance.
-  const nimBps =
-    waSpreadBps !== null ? Math.round(waSpreadBps) - agg.fundingWasBps : null;
-  const nimAnnual =
-    nimBps !== null ? (agg.totalBalance * nimBps) / 10000 : null;
+  const nimBps = waSpreadBps !== null ? Math.round(waSpreadBps) - agg.fundingWasBps : null;
+  const nimAnnual = nimBps !== null ? (agg.totalBalance * nimBps) / 10000 : null;
 
   return (
     <>
@@ -564,14 +548,8 @@ function ProgramAggregateStrip({ agg }: { agg: ProgramAggregate | undefined }) {
           value={waScore !== null ? waScore.toFixed(1) : "—"}
           sub="balance-weighted"
         />
-        <Mini
-          label="WA LVR"
-          value={waLvr !== null ? `${(waLvr * 100).toFixed(1)}%` : "—"}
-        />
-        <Mini
-          label="WA DSCR"
-          value={waDscr !== null ? `${waDscr.toFixed(2)}x` : "—"}
-        />
+        <Mini label="WA LVR" value={waLvr !== null ? `${(waLvr * 100).toFixed(1)}%` : "—"} />
+        <Mini label="WA DSCR" value={waDscr !== null ? `${waDscr.toFixed(2)}x` : "—"} />
         <Mini
           label="WA spread"
           value={waSpreadBps !== null ? `${Math.round(waSpreadBps)} bps` : "—"}
@@ -598,11 +576,7 @@ function ProgramAggregateStrip({ agg }: { agg: ProgramAggregate | undefined }) {
           label="Program NIM $/yr"
           value={nimAnnual !== null ? fmtMoney2(nimAnnual) : "—"}
           tone={
-            nimAnnual !== null && nimAnnual < 0
-              ? "warn"
-              : nimAnnual !== null
-                ? "ok"
-                : undefined
+            nimAnnual !== null && nimAnnual < 0 ? "warn" : nimAnnual !== null ? "ok" : undefined
           }
         />
       </div>
@@ -622,11 +596,7 @@ function Mini({
   tone?: "ok" | "warn";
 }) {
   const valueClass =
-    tone === "warn"
-      ? "text-rose-700"
-      : tone === "ok"
-        ? "text-emerald-700"
-        : "text-zinc-900";
+    tone === "warn" ? "text-rose-700" : tone === "ok" ? "text-emerald-700" : "text-zinc-900";
   return (
     <div className="flex flex-col gap-0.5 bg-white px-3 py-1.5">
       <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
@@ -640,9 +610,7 @@ function Mini({
 
 function Th({ children, className = "" }: { children?: React.ReactNode; className?: string }) {
   return (
-    <th
-      className={`border-b border-zinc-200 px-3 py-1.5 text-left font-medium ${className}`}
-    >
+    <th className={`border-b border-zinc-200 px-3 py-1.5 text-left font-medium ${className}`}>
       {children}
     </th>
   );

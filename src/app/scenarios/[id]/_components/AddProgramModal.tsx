@@ -2,11 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { parseDecimalInput } from "@/utils/format";
-import type {
-  ProgramPayload,
-  ProgramFeePayload,
-  ProgramLiabilityPayload,
-} from "../_actions";
+import type { ProgramFeePayload, ProgramLiabilityPayload, ProgramPayload } from "../_actions";
 
 interface LiabilityRow extends ProgramLiabilityPayload {
   rowKey: string;
@@ -142,19 +138,15 @@ export function AddProgramModal({
   const [name, setName] = useState(seed.name);
   const [type, setType] = useState<ProgramPayload["type"]>(seed.type);
   const [dealSize, setDealSize] = useState(seed.dealSize ?? "");
-  const [faceValuePerNote, setFaceValuePerNote] = useState(
-    seed.faceValuePerNote ?? "1,000.00",
-  );
+  const [faceValuePerNote, setFaceValuePerNote] = useState(seed.faceValuePerNote ?? "1,000.00");
   const [startPeriodKey, setStartPeriodKey] = useState(seed.startPeriodKey);
   const [endPeriodKey, setEndPeriodKey] = useState(seed.endPeriodKey ?? "");
   const [notes, setNotes] = useState(seed.notes ?? "");
   const [fees, setFees] = useState<FeeRow[]>(
-    initial
-      ? initial.fees.map((f) => ({ rowKey: crypto.randomUUID(), ...f }))
-      : defaultFeeRows(),
+    initial ? initial.fees.map((f) => ({ rowKey: crypto.randomUUID(), ...f })) : defaultFeeRows(),
   );
   const [liabilities, setLiabilities] = useState<LiabilityRow[]>(
-    initial?.liabilities && initial.liabilities.length
+    initial?.liabilities?.length
       ? initial.liabilities.map((l) => ({ rowKey: crypto.randomUUID(), ...l }))
       : [],
   );
@@ -169,12 +161,10 @@ export function AddProgramModal({
     setEndPeriodKey(s.endPeriodKey ?? "");
     setNotes(s.notes ?? "");
     setFees(
-      initial
-        ? s.fees.map((f) => ({ rowKey: crypto.randomUUID(), ...f }))
-        : defaultFeeRows(),
+      initial ? s.fees.map((f) => ({ rowKey: crypto.randomUUID(), ...f })) : defaultFeeRows(),
     );
     setLiabilities(
-      initial?.liabilities && initial.liabilities.length
+      initial?.liabilities?.length
         ? initial.liabilities.map((l) => ({ rowKey: crypto.randomUUID(), ...l }))
         : [],
     );
@@ -359,7 +349,8 @@ export function AddProgramModal({
                   <tbody>
                     {fees.map((f, i) => {
                       const annual =
-                        Number(parseDecimalInput(f.basisAmount)) * (Number(f.feeBps) || 0) / 10000;
+                        (Number(parseDecimalInput(f.basisAmount)) * (Number(f.feeBps) || 0)) /
+                        10000;
                       return (
                         <tr key={f.rowKey} className="border-t border-zinc-100">
                           <td className="px-2 py-1">
@@ -374,8 +365,9 @@ export function AddProgramModal({
                               value={f.category}
                               onChange={(e) => {
                                 const cat = e.target.value as ProgramFeePayload["category"];
-                                const defaultAcct = FEE_CATEGORIES.find((c) => c.value === cat)!
-                                  .defaultAccount;
+                                const defaultAcct = FEE_CATEGORIES.find(
+                                  (c) => c.value === cat,
+                                )!.defaultAccount;
                                 updateFee(i, { category: cat, accountCode: defaultAcct });
                               }}
                               className="w-full rounded border border-zinc-200 px-1.5 py-0.5"
@@ -448,10 +440,7 @@ export function AddProgramModal({
                     })}
                     {fees.length === 0 && (
                       <tr>
-                        <td
-                          colSpan={7}
-                          className="px-2 py-3 text-center text-zinc-400"
-                        >
+                        <td colSpan={7} className="px-2 py-3 text-center text-zinc-400">
                           No fee streams. Click + Add fee.
                         </td>
                       </tr>
@@ -508,9 +497,7 @@ export function AddProgramModal({
                             value={l.numNotes ?? ""}
                             onChange={(e) =>
                               updateLiability(i, {
-                                numNotes: e.target.value
-                                  ? Number(e.target.value)
-                                  : undefined,
+                                numNotes: e.target.value ? Number(e.target.value) : undefined,
                               })
                             }
                             inputMode="numeric"
@@ -534,7 +521,8 @@ export function AddProgramModal({
                             value={l.calculationMethod}
                             onChange={(e) =>
                               updateLiability(i, {
-                                calculationMethod: e.target.value as ProgramLiabilityPayload["calculationMethod"],
+                                calculationMethod: e.target
+                                  .value as ProgramLiabilityPayload["calculationMethod"],
                               })
                             }
                             className="w-full rounded border border-zinc-200 px-1.5 py-0.5"
@@ -570,8 +558,7 @@ export function AddProgramModal({
                                 ? baseRateBps + (l.returnProfileBps || 0)
                                 : l.returnProfileBps || 0;
                             const annual = (principal * rateBps) / 10000;
-                            if (!annual)
-                              return <span className="text-zinc-300">—</span>;
+                            if (!annual) return <span className="text-zinc-300">—</span>;
                             return annual.toLocaleString("en-AU", {
                               style: "currency",
                               currency: "AUD",
@@ -589,8 +576,7 @@ export function AddProgramModal({
                                 ? baseRateBps + (l.returnProfileBps || 0)
                                 : l.returnProfileBps || 0;
                             const monthly = (principal * rateBps) / 10000 / 12;
-                            if (!monthly)
-                              return <span className="text-zinc-300">—</span>;
+                            if (!monthly) return <span className="text-zinc-300">—</span>;
                             return monthly.toLocaleString("en-AU", {
                               style: "currency",
                               currency: "AUD",
@@ -601,9 +587,7 @@ export function AddProgramModal({
                         <td className="px-2 py-1">
                           <select
                             value={l.accountCode ?? "6800"}
-                            onChange={(e) =>
-                              updateLiability(i, { accountCode: e.target.value })
-                            }
+                            onChange={(e) => updateLiability(i, { accountCode: e.target.value })}
                             className="w-full rounded border border-zinc-200 px-1.5 py-0.5 font-mono text-[11px]"
                           >
                             {LIABILITY_ACCOUNTS.map((a) => (
@@ -628,7 +612,8 @@ export function AddProgramModal({
                     {liabilities.length === 0 && (
                       <tr>
                         <td colSpan={9} className="px-2 py-3 text-center text-zinc-400">
-                          No liability streams. Click + Add liability to model AAA / Mezz / Equity tranches.
+                          No liability streams. Click + Add liability to model AAA / Mezz / Equity
+                          tranches.
                         </td>
                       </tr>
                     )}

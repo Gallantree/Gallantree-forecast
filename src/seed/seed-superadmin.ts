@@ -8,13 +8,14 @@
 // to userType=superadmin, status=active. Otherwise a new user is inserted.
 
 import { config as loadEnv } from "dotenv";
+
 loadEnv({ path: ".env" });
 loadEnv({ path: ".env.local" });
 loadEnv({ path: ".env.development.local" });
 
+import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/db";
 import { User } from "@/models";
-import mongoose from "mongoose";
 
 async function main() {
   const email = (process.argv[2] ?? "").trim().toLowerCase();

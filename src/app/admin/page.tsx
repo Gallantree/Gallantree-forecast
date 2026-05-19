@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { connectToDatabase } from "@/lib/db";
-import { User, Organisation } from "@/models";
+import { Organisation, User } from "@/models";
 
 export const dynamic = "force-dynamic";
 

@@ -52,8 +52,7 @@ export function AddStaffForm({
     return m;
   }, [paybands]);
 
-  const matchedPayband =
-    band && tier ? paybandLookup.get(`${band}-${tier}`) ?? null : null;
+  const matchedPayband = band && tier ? (paybandLookup.get(`${band}-${tier}`) ?? null) : null;
 
   function applyBand(nextBand: string, nextTier: string) {
     setBand(nextBand);
@@ -106,145 +105,148 @@ export function AddStaffForm({
             </header>
             <section className="grid grid-cols-3 gap-3 text-xs">
               <Field label="Name" hint="optional">
-        <input
-          name="personName"
-          className="w-full rounded-md border border-zinc-300 px-2 py-1"
-        />
-      </Field>
-      <Field label="Role / title">
-        <input
-          name="role"
-          required
-          className="w-full rounded-md border border-zinc-300 px-2 py-1"
-        />
-      </Field>
-      <Field label="Employment">
-        <select
-          name="employmentType"
-          defaultValue="full_time"
-          className="w-full rounded-md border border-zinc-300 px-2 py-1"
-        >
-          <option value="full_time">Full-time</option>
-          <option value="part_time">Part-time</option>
-          <option value="contractor">Contractor</option>
-        </select>
-      </Field>
-      <Field label="FTE" hint="1.0 full-time, 0.6 = 3 days/wk">
-        <input
-          name="ftePct"
-          defaultValue="1"
-          inputMode="decimal"
-          className="w-full rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
-        />
-      </Field>
-      <Field label="Band">
-        <select
-          name="band"
-          value={band}
-          onChange={(e) => applyBand(e.target.value, tier)}
-          className="w-full rounded-md border border-zinc-300 px-2 py-1"
-        >
-          <option value="">—</option>
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((b) => (
-            <option key={b} value={b}>
-              Band {b}
-            </option>
-          ))}
-        </select>
-      </Field>
-      <Field label="Tier">
-        <select
-          name="tier"
-          value={tier}
-          onChange={(e) => applyBand(band, e.target.value)}
-          className="w-full rounded-md border border-zinc-300 px-2 py-1"
-        >
-          <option value="">—</option>
-          {[1, 2, 3, 4].map((t) => (
-            <option key={t} value={t}>
-              Tier {t}
-            </option>
-          ))}
-        </select>
-      </Field>
-      <Field
-        label="Salary $/yr"
-        hint={
-          matchedPayband?.caseByCase
-            ? "case-by-case — enter manually"
-            : matchedPayband
-              ? `from B${band} T${tier}; editable`
-              : "FTE 100%; pick band or enter manually"
-        }
-      >
-        <input
-          name="salaryAnnual"
-          value={salary}
-          onChange={(e) => {
-            setSalary(e.target.value);
-            setSalaryDirty(true);
-          }}
-          inputMode="decimal"
-          className="w-full rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
-        />
-      </Field>
-      <Field label="Super %" hint="AU SG (default 12)">
-        <input
-          name="superPct"
-          defaultValue={defaultSuperPct ?? "12"}
-          inputMode="decimal"
-          className="w-full rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
-        />
-      </Field>
-      <Field label="On-cost %" hint="payroll tax, workcover">
-        <input
-          name="onCostPct"
-          defaultValue="8"
-          inputMode="decimal"
-          className="w-full rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
-        />
-      </Field>
-      <Field label="CPI % p.a." hint={defaultCpiPct ? `default ${defaultCpiPct}` : "salary growth"}>
-        <input
-          name="salaryGrowthPctAnnual"
-          defaultValue={defaultCpiPct ?? ""}
-          inputMode="decimal"
-          className="w-full rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
-        />
-      </Field>
-      <Field label="OPEX account">
-        <select
-          name="accountCode"
-          required
-          defaultValue=""
-          className="w-full rounded-md border border-zinc-300 px-2 py-1"
-        >
-          <option value="" disabled>
-            Select account…
-          </option>
-          {expenseAccounts.map((a) => (
-            <option key={a.code} value={a.code}>
-              {a.code} — {a.name}
-            </option>
-          ))}
-        </select>
-      </Field>
-      <Field label="Start" hint="YYYY-MM">
-        <input
-          name="startPeriodKey"
-          required
-          defaultValue={defaultStartPeriod}
-          pattern="\d{4}-(0[1-9]|1[0-2])"
-          className="w-full rounded-md border border-zinc-300 px-2 py-1 text-center font-mono"
-        />
-      </Field>
-      <Field label="End" hint="optional">
-        <input
-          name="endPeriodKey"
-          pattern="\d{4}-(0[1-9]|1[0-2])"
-          className="w-full rounded-md border border-zinc-300 px-2 py-1 text-center font-mono"
-        />
-      </Field>
+                <input
+                  name="personName"
+                  className="w-full rounded-md border border-zinc-300 px-2 py-1"
+                />
+              </Field>
+              <Field label="Role / title">
+                <input
+                  name="role"
+                  required
+                  className="w-full rounded-md border border-zinc-300 px-2 py-1"
+                />
+              </Field>
+              <Field label="Employment">
+                <select
+                  name="employmentType"
+                  defaultValue="full_time"
+                  className="w-full rounded-md border border-zinc-300 px-2 py-1"
+                >
+                  <option value="full_time">Full-time</option>
+                  <option value="part_time">Part-time</option>
+                  <option value="contractor">Contractor</option>
+                </select>
+              </Field>
+              <Field label="FTE" hint="1.0 full-time, 0.6 = 3 days/wk">
+                <input
+                  name="ftePct"
+                  defaultValue="1"
+                  inputMode="decimal"
+                  className="w-full rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
+                />
+              </Field>
+              <Field label="Band">
+                <select
+                  name="band"
+                  value={band}
+                  onChange={(e) => applyBand(e.target.value, tier)}
+                  className="w-full rounded-md border border-zinc-300 px-2 py-1"
+                >
+                  <option value="">—</option>
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((b) => (
+                    <option key={b} value={b}>
+                      Band {b}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Tier">
+                <select
+                  name="tier"
+                  value={tier}
+                  onChange={(e) => applyBand(band, e.target.value)}
+                  className="w-full rounded-md border border-zinc-300 px-2 py-1"
+                >
+                  <option value="">—</option>
+                  {[1, 2, 3, 4].map((t) => (
+                    <option key={t} value={t}>
+                      Tier {t}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field
+                label="Salary $/yr"
+                hint={
+                  matchedPayband?.caseByCase
+                    ? "case-by-case — enter manually"
+                    : matchedPayband
+                      ? `from B${band} T${tier}; editable`
+                      : "FTE 100%; pick band or enter manually"
+                }
+              >
+                <input
+                  name="salaryAnnual"
+                  value={salary}
+                  onChange={(e) => {
+                    setSalary(e.target.value);
+                    setSalaryDirty(true);
+                  }}
+                  inputMode="decimal"
+                  className="w-full rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
+                />
+              </Field>
+              <Field label="Super %" hint="AU SG (default 12)">
+                <input
+                  name="superPct"
+                  defaultValue={defaultSuperPct ?? "12"}
+                  inputMode="decimal"
+                  className="w-full rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
+                />
+              </Field>
+              <Field label="On-cost %" hint="payroll tax, workcover">
+                <input
+                  name="onCostPct"
+                  defaultValue="8"
+                  inputMode="decimal"
+                  className="w-full rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
+                />
+              </Field>
+              <Field
+                label="CPI % p.a."
+                hint={defaultCpiPct ? `default ${defaultCpiPct}` : "salary growth"}
+              >
+                <input
+                  name="salaryGrowthPctAnnual"
+                  defaultValue={defaultCpiPct ?? ""}
+                  inputMode="decimal"
+                  className="w-full rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
+                />
+              </Field>
+              <Field label="OPEX account">
+                <select
+                  name="accountCode"
+                  required
+                  defaultValue=""
+                  className="w-full rounded-md border border-zinc-300 px-2 py-1"
+                >
+                  <option value="" disabled>
+                    Select account…
+                  </option>
+                  {expenseAccounts.map((a) => (
+                    <option key={a.code} value={a.code}>
+                      {a.code} — {a.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Start" hint="YYYY-MM">
+                <input
+                  name="startPeriodKey"
+                  required
+                  defaultValue={defaultStartPeriod}
+                  pattern="\d{4}-(0[1-9]|1[0-2])"
+                  className="w-full rounded-md border border-zinc-300 px-2 py-1 text-center font-mono"
+                />
+              </Field>
+              <Field label="End" hint="optional">
+                <input
+                  name="endPeriodKey"
+                  pattern="\d{4}-(0[1-9]|1[0-2])"
+                  className="w-full rounded-md border border-zinc-300 px-2 py-1 text-center font-mono"
+                />
+              </Field>
             </section>
             <footer className="flex justify-end gap-2 border-t border-zinc-200 pt-3">
               <button

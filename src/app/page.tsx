@@ -1,9 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
-import { connectToDatabase } from "@/lib/db";
-import { Scenario, Driver, Headcount, Loan, CapitalProgram } from "@/models";
 import { getCurrentUser } from "@/lib/currentUser";
-import { UserMenu } from "./_components/UserMenu";
+import { connectToDatabase } from "@/lib/db";
+import { CapitalProgram, Driver, Headcount, Loan, Scenario } from "@/models";
 import {
   branchFromBase,
   createScenario,
@@ -11,6 +10,7 @@ import {
   setBaseScenario,
   unsetBaseScenario,
 } from "./_actions";
+import { UserMenu } from "./_components/UserMenu";
 
 export const dynamic = "force-dynamic";
 
@@ -51,9 +51,7 @@ export default async function Home() {
     updatedAt: Date;
   };
 
-  const scenarios = await Scenario.find({})
-    .sort({ updatedAt: -1 })
-    .lean<LeanScenario[]>();
+  const scenarios = await Scenario.find({}).sort({ updatedAt: -1 }).lean<LeanScenario[]>();
 
   // Aggregate per-scenario counts in a single query each.
   const ids = scenarios.map((s) => s._id.toString());
@@ -115,11 +113,7 @@ export default async function Home() {
       {/* Header */}
       <header className="border-b border-zinc-200 bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-6 py-3">
-          <Link
-            href="/"
-            className="inline-flex items-center"
-            aria-label="Gallantree"
-          >
+          <Link href="/" className="inline-flex items-center" aria-label="Gallantree">
             <Image
               src="/gallantree-logo.png"
               alt="Gallantree"
@@ -133,9 +127,7 @@ export default async function Home() {
             <h1 className="text-sm font-semibold tracking-tight text-zinc-800">
               Gallantree Forecast
             </h1>
-            <span className="text-xs text-zinc-500">
-              Driver-based 5-year scenarios
-            </span>
+            <span className="text-xs text-zinc-500">Driver-based 5-year scenarios</span>
           </div>
           <div className="flex items-center gap-4">
             <span className="text-xs text-zinc-500">
@@ -169,9 +161,7 @@ export default async function Home() {
             <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-600">
               Branched scenarios
             </h2>
-            <span className="text-xs text-zinc-500">
-              Edit freely — the base stays untouched.
-            </span>
+            <span className="text-xs text-zinc-500">Edit freely — the base stays untouched.</span>
           </div>
 
           {base ? (
@@ -292,13 +282,10 @@ function NoBaseCard({ candidates }: { candidates: ScenarioRow[] }) {
   return (
     <div className="rounded-md border border-dashed border-zinc-300 bg-white px-5 py-4">
       <p className="text-sm text-zinc-700">
-        No base scenario is set. Pick one to designate as the baseline that
-        branches will fork from.
+        No base scenario is set. Pick one to designate as the baseline that branches will fork from.
       </p>
       {candidates.length === 0 ? (
-        <p className="mt-2 text-xs text-zinc-500">
-          Create a scenario first — see below.
-        </p>
+        <p className="mt-2 text-xs text-zinc-500">Create a scenario first — see below.</p>
       ) : (
         <ul className="mt-3 flex flex-wrap gap-2">
           {candidates.map((c) => (
@@ -403,17 +390,9 @@ function Stat({ label, value }: { label: string; value: number }) {
 }
 
 function Th({ children, className = "" }: { children?: React.ReactNode; className?: string }) {
-  return (
-    <th className={`px-4 py-2 text-left font-medium ${className}`}>{children}</th>
-  );
+  return <th className={`px-4 py-2 text-left font-medium ${className}`}>{children}</th>;
 }
 
-function Td({
-  children,
-  className = "",
-}: {
-  children?: React.ReactNode;
-  className?: string;
-}) {
+function Td({ children, className = "" }: { children?: React.ReactNode; className?: string }) {
   return <td className={`px-4 py-2 ${className}`}>{children}</td>;
 }

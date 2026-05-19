@@ -4,13 +4,7 @@ import { Types } from "mongoose";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { connectToDatabase } from "@/lib/db";
-import {
-  Scenario,
-  Driver,
-  Headcount,
-  Loan,
-  CapitalProgram,
-} from "@/models";
+import { CapitalProgram, Driver, Headcount, Loan, Scenario } from "@/models";
 
 export async function createScenario(formData: FormData): Promise<void> {
   const name = String(formData.get("name") ?? "").trim();
@@ -124,7 +118,9 @@ export async function branchFromBase(formData: FormData): Promise<void> {
     headcount.length
       ? Headcount.insertMany(headcount.map((h) => stripIds(h as unknown as LeanDoc)))
       : Promise.resolve(),
-    loans.length ? Loan.insertMany(loans.map((l) => stripIds(l as unknown as LeanDoc))) : Promise.resolve(),
+    loans.length
+      ? Loan.insertMany(loans.map((l) => stripIds(l as unknown as LeanDoc)))
+      : Promise.resolve(),
     programs.length
       ? CapitalProgram.insertMany(programs.map((p) => stripProgramFees(p as unknown as LeanDoc)))
       : Promise.resolve(),

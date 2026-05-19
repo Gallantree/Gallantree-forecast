@@ -84,8 +84,8 @@ export function ControlPanelTab({
       <div className="border-b border-zinc-200 bg-zinc-50 px-4 py-3 text-xs">
         <h2 className="text-sm font-semibold text-zinc-900">Control panel</h2>
         <p className="mt-0.5 text-[11px] text-zinc-500">
-          Global rate + year-label settings for this scenario. These flow into
-          variable-rate liability calculations and Overview / Valuation labels.
+          Global rate + year-label settings for this scenario. These flow into variable-rate
+          liability calculations and Overview / Valuation labels.
         </p>
       </div>
 
@@ -97,8 +97,8 @@ export function ControlPanelTab({
               Scenario
             </h3>
             <p className="mt-0.5 text-[11px] text-zinc-500">
-              Rename the scenario or flip its lifecycle status. Archived scenarios
-              stay accessible but are clearly marked stale.
+              Rename the scenario or flip its lifecycle status. Archived scenarios stay accessible
+              but are clearly marked stale.
             </p>
           </header>
           <div className="grid grid-cols-2 gap-4 p-4 text-xs">
@@ -157,8 +157,7 @@ export function ControlPanelTab({
               Base rate
             </h3>
             <p className="mt-0.5 text-[11px] text-zinc-500">
-              Reference rate used by variable-rate liability tranches in capital
-              programs.
+              Reference rate used by variable-rate liability tranches in capital programs.
             </p>
           </header>
           <div className="grid grid-cols-2 gap-4 p-4 text-xs">
@@ -210,8 +209,7 @@ export function ControlPanelTab({
               Year labels
             </h3>
             <p className="mt-0.5 text-[11px] text-zinc-500">
-              Map Year 1 of the forecast to a calendar year. Used by Overview and
-              Valuation columns.
+              Map Year 1 of the forecast to a calendar year. Used by Overview and Valuation columns.
             </p>
           </header>
           <div className="flex flex-col gap-4 p-4 text-xs">

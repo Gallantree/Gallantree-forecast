@@ -10,9 +10,7 @@ type Params = {
 
 export default async function LoginPage({ searchParams }: Params) {
   const { error } = await searchParams;
-  const googleEnabled = Boolean(
-    process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET,
-  );
+  const googleEnabled = Boolean(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET);
 
   return (
     <main className="flex min-h-screen flex-col bg-zinc-50">

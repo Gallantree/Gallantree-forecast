@@ -1,7 +1,7 @@
 import { Fragment } from "react";
 import { fmtMoney2, fmtNum0 } from "@/utils/format";
-import type { FYGroup } from "./PnlClientTable";
 import type { SerializedSeries } from "./BalanceSheetTab";
+import type { FYGroup } from "./PnlClientTable";
 
 export interface CashflowData {
   horizon: string[];
@@ -58,8 +58,7 @@ export function CashflowTab({ data }: { data: CashflowData }) {
   const totalOperating = data.horizon.reduce((acc, pk) => acc + valueAt(operatingFlow, pk), 0);
   const totalCapex = data.horizon.reduce((acc, pk) => acc + valueAt(data.capexOutflow, pk), 0);
   const totalFinancing = data.horizon.reduce(
-    (acc, pk) =>
-      acc + valueAt(data.notesIssuance, pk) - valueAt(data.notesRepayment, pk),
+    (acc, pk) => acc + valueAt(data.notesIssuance, pk) - valueAt(data.notesRepayment, pk),
     0,
   );
   const financingFlow: SerializedSeries = {
@@ -99,8 +98,8 @@ export function CashflowTab({ data }: { data: CashflowData }) {
       </div>
 
       <div className="border-b border-zinc-200 bg-zinc-50 px-4 py-2 text-[11px] text-zinc-500">
-        Indirect method. Monthly cells show the movement that period; FY columns sum flows and
-        show the FY-end cash balance.
+        Indirect method. Monthly cells show the movement that period; FY columns sum flows and show
+        the FY-end cash balance.
       </div>
 
       <div className="flex-1 overflow-auto">
@@ -165,23 +164,14 @@ export function CashflowTab({ data }: { data: CashflowData }) {
               groups={groups}
               subtle
             />
-            <SubtotalRow
-              label="Operating cash flow"
-              series={operatingFlow}
-              groups={groups}
-            />
+            <SubtotalRow label="Operating cash flow" series={operatingFlow} groups={groups} />
 
             <SectionHeader
               label="Investing activities"
               color="bg-amber-50 text-amber-800"
               colSpan={totalCols(groups)}
             />
-            <FlowRow
-              label="− Capex outflow"
-              series={data.capexOutflow}
-              groups={groups}
-              negate
-            />
+            <FlowRow label="− Capex outflow" series={data.capexOutflow} groups={groups} negate />
 
             <SectionHeader
               label="Financing activities"
@@ -199,11 +189,7 @@ export function CashflowTab({ data }: { data: CashflowData }) {
               groups={groups}
               negate
             />
-            <SubtotalRow
-              label="Financing cash flow"
-              series={financingFlow}
-              groups={groups}
-            />
+            <SubtotalRow label="Financing cash flow" series={financingFlow} groups={groups} />
 
             <SubtotalRow
               label="Net cash movement"
@@ -212,11 +198,7 @@ export function CashflowTab({ data }: { data: CashflowData }) {
               variant="grand"
             />
 
-            <BalanceRow
-              label="Ending cash"
-              series={data.endingCash}
-              groups={groups}
-            />
+            <BalanceRow label="Ending cash" series={data.endingCash} groups={groups} />
           </tbody>
         </table>
       </div>
@@ -315,7 +297,10 @@ function SubtotalRow({
         return (
           <Fragment key={`${label}-fy${g.fy}`}>
             {g.months.map((pk) => (
-              <td key={`${label}-${pk}`} className={`${border} px-2 py-1.5 text-right tabular-nums`}>
+              <td
+                key={`${label}-${pk}`}
+                className={`${border} px-2 py-1.5 text-right tabular-nums`}
+              >
                 {fmtNum0(valueAt(series, pk))}
               </td>
             ))}
@@ -368,21 +353,9 @@ function BalanceRow({
   );
 }
 
-function Tile({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: "ok" | "warn";
-}) {
+function Tile({ label, value, tone }: { label: string; value: string; tone?: "ok" | "warn" }) {
   const valueClass =
-    tone === "warn"
-      ? "text-rose-700"
-      : tone === "ok"
-        ? "text-emerald-700"
-        : "text-zinc-900";
+    tone === "warn" ? "text-rose-700" : tone === "ok" ? "text-emerald-700" : "text-zinc-900";
   return (
     <div className="flex flex-col gap-1 bg-white px-4 py-3">
       <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">

@@ -24,9 +24,7 @@ export function SeedMenu({
   const [open, setOpen] = useState(false);
   const [running, setRunning] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const [toast, setToast] = useState<{ msg: string; tone: "ok" | "warn" } | null>(
-    null,
-  );
+  const [toast, setToast] = useState<{ msg: string; tone: "ok" | "warn" } | null>(null);
 
   function run(opt: SeedOption) {
     setOpen(false);
@@ -78,11 +76,7 @@ export function SeedMenu({
       </button>
       {open && (
         <>
-          <div
-            className="fixed inset-0 z-30"
-            onClick={() => setOpen(false)}
-            aria-hidden="true"
-          />
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} aria-hidden="true" />
           <div className="absolute right-0 z-40 mt-1 w-72 rounded-md border border-zinc-200 bg-white shadow-lg">
             <div className="border-b border-zinc-100 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
               AI-generated seed (Claude)
@@ -94,12 +88,8 @@ export function SeedMenu({
                 onClick={() => run(opt)}
                 className="block w-full border-b border-zinc-100 px-3 py-2 text-left last:border-b-0 hover:bg-zinc-50"
               >
-                <div className="text-xs font-semibold text-zinc-900">
-                  {opt.label}
-                </div>
-                <div className="text-[11px] text-zinc-500">
-                  {opt.description}
-                </div>
+                <div className="text-xs font-semibold text-zinc-900">{opt.label}</div>
+                <div className="text-[11px] text-zinc-500">{opt.description}</div>
               </button>
             ))}
           </div>

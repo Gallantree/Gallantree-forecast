@@ -1,10 +1,6 @@
 import Decimal from "decimal.js";
 import { fmtMoney2, fmtNum0, fmtPercent } from "@/utils/format";
-import {
-  createPlatformLicense,
-  deletePlatformLicense,
-  updatePlatformLicense,
-} from "../_actions";
+import { createPlatformLicense, deletePlatformLicense, updatePlatformLicense } from "../_actions";
 import { AddLicenseModal, type LicenseFormInitial } from "./AddLicenseModal";
 
 export interface PlatformLicenseRow {
@@ -47,8 +43,7 @@ function num(x: { toString: () => string } | undefined, fallback = 0): number {
 function effectiveMonthlyForCompliance(l: PlatformLicenseRow): number {
   const fee = num(l.monthlyFeePerSeat);
   const seats = l.seatCount ?? 0;
-  const discount =
-    l.billingFrequency === "annual" ? 1 - num(l.annualDiscountPct) / 100 : 1;
+  const discount = l.billingFrequency === "annual" ? 1 - num(l.annualDiscountPct) / 100 : 1;
   return fee * seats * discount;
 }
 
@@ -73,7 +68,7 @@ function fiveYearForCompliance(l: PlatformLicenseRow): number {
   if (growth === 0) return eff * 12 * 5;
   let total = 0;
   for (let y = 0; y < 5; y++) {
-    const factor = Math.pow(1 + growth, y);
+    const factor = (1 + growth) ** y;
     total += eff * 12 * factor;
   }
   return total;
@@ -152,8 +147,8 @@ export function PlatformRevenuesTab({
           <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-zinc-500">
             <div>No platform licences yet.</div>
             <div className="text-xs">
-              Click <span className="font-medium text-zinc-700">Add licence</span> to model
-              a Compliance SaaS subscription or a Trustee platform contract.
+              Click <span className="font-medium text-zinc-700">Add licence</span> to model a
+              Compliance SaaS subscription or a Trustee platform contract.
             </div>
           </div>
         ) : (
@@ -193,9 +188,7 @@ function LicenseCard({
           <h3 className="text-sm font-semibold text-zinc-900">{l.name}</h3>
           <span
             className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${
-              l.type === "compliance"
-                ? "bg-sky-100 text-sky-800"
-                : "bg-violet-100 text-violet-800"
+              l.type === "compliance" ? "bg-sky-100 text-sky-800" : "bg-violet-100 text-violet-800"
             }`}
           >
             {TYPE_LABEL[l.type]}
@@ -207,8 +200,7 @@ function LicenseCard({
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-zinc-500">
-            5y revenue{" "}
-            <span className="font-semibold text-emerald-700">{fmtMoney2(annual5y)}</span>
+            5y revenue <span className="font-semibold text-emerald-700">{fmtMoney2(annual5y)}</span>
           </span>
           <AddLicenseModal
             defaultStartPeriod={defaultStartPeriod}
@@ -256,22 +248,12 @@ function ComplianceBody({ license: l }: { license: PlatformLicenseRow }) {
         value={l.billingFrequency === "annual" ? `Annual (-${fmtPercent(discount)})` : "Monthly"}
       />
       <Mini label="Seat growth p.a." value={fmtPercent(num(l.seatGrowthPctAnnual))} />
-      <Mini
-        label="Effective $/mo at t=0"
-        value={fmtMoney2(eff)}
-        emphasis
-      />
+      <Mini label="Effective $/mo at t=0" value={fmtMoney2(eff)} emphasis />
     </div>
   );
 }
 
-function TrusteeBody({
-  license: l,
-  fys,
-}: {
-  license: PlatformLicenseRow;
-  fys: number[];
-}) {
+function TrusteeBody({ license: l, fys }: { license: PlatformLicenseRow; fys: number[] }) {
   const monthly = num(l.monthlyFee);
   const config = num(l.configFee);
   const aumByYear = (l.aumByYear ?? []).map((v) => num(v));
@@ -327,10 +309,7 @@ function TrusteeBody({
                 const aumFee = (a * f) / 100;
                 const annual = monthly * 12 + aumFee + (i === 0 ? config : 0);
                 return (
-                  <td
-                    key={fy}
-                    className="px-2 py-1 text-right tabular-nums text-emerald-700"
-                  >
+                  <td key={fy} className="px-2 py-1 text-right tabular-nums text-emerald-700">
                     {fmtMoney2(annual)}
                   </td>
                 );
@@ -343,15 +322,7 @@ function TrusteeBody({
   );
 }
 
-function Tile({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: "ok";
-}) {
+function Tile({ label, value, tone }: { label: string; value: string; tone?: "ok" }) {
   return (
     <div>
       <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">

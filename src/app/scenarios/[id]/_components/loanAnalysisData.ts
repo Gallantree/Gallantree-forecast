@@ -76,14 +76,7 @@ function bucketDscr(d: number): string {
   if (d < 1.6) return "1.40-1.60x";
   return "1.60x+";
 }
-const DSCR_ORDER = [
-  "<1.00x",
-  "1.00-1.15x",
-  "1.15-1.25x",
-  "1.25-1.40x",
-  "1.40-1.60x",
-  "1.60x+",
-];
+const DSCR_ORDER = ["<1.00x", "1.00-1.15x", "1.15-1.25x", "1.25-1.40x", "1.40-1.60x", "1.60x+"];
 
 // Gallantree's 15-tier internal grade scale, ordered best → worst.
 const GRADE_ORDER = [
@@ -104,13 +97,8 @@ const GRADE_ORDER = [
   "E-",
 ];
 
-function ordered<T extends string>(
-  map: Map<T, BarPoint>,
-  order: readonly T[],
-): BarPoint[] {
-  return order
-    .map((k) => map.get(k))
-    .filter((b): b is BarPoint => Boolean(b));
+function ordered<T extends string>(map: Map<T, BarPoint>, order: readonly T[]): BarPoint[] {
+  return order.map((k) => map.get(k)).filter((b): b is BarPoint => Boolean(b));
 }
 
 export function buildLoanAnalysisData(loans: LoanRow[]): LoanAnalysisData {
@@ -125,9 +113,8 @@ export function buildLoanAnalysisData(loans: LoanRow[]): LoanAnalysisData {
   // ── 1. Originations by FY (count + $ volume) ──────────────────────────────
   const byFy = new Map<number, { count: number; volume: number }>();
   for (const l of included) {
-    const orig = typeof l.originationDate === "string"
-      ? new Date(l.originationDate)
-      : l.originationDate;
+    const orig =
+      typeof l.originationDate === "string" ? new Date(l.originationDate) : l.originationDate;
     if (!(orig instanceof Date) || Number.isNaN(orig.getTime())) continue;
     const fy = fyOf(orig);
     const bal = Number(l.balance.toString());
@@ -153,9 +140,7 @@ export function buildLoanAnalysisData(loans: LoanRow[]): LoanAnalysisData {
     b.volume += Number(l.balance.toString());
     byState.set(st, b);
   }
-  const stateRows = Array.from(byState.entries()).sort(
-    ([, a], [, b]) => b.count - a.count,
-  );
+  const stateRows = Array.from(byState.entries()).sort(([, a], [, b]) => b.count - a.count);
   const countByState: BarPoint[] = stateRows.map(([s, b]) => ({
     label: s,
     value: b.count,
@@ -207,9 +192,7 @@ export function buildLoanAnalysisData(loans: LoanRow[]): LoanAnalysisData {
     cur.value += Number(l.balance.toString());
     byProgramType.set(t, cur);
   }
-  const programTypeVolume = Array.from(byProgramType.values()).sort(
-    (a, b) => b.value - a.value,
-  );
+  const programTypeVolume = Array.from(byProgramType.values()).sort((a, b) => b.value - a.value);
 
   // ── 6. Asset class mix ($ volume) ─────────────────────────────────────────
   const byAsset = new Map<string, BarPoint>();
@@ -235,9 +218,8 @@ export function buildLoanAnalysisData(loans: LoanRow[]): LoanAnalysisData {
   // ── 8. Origination by month ───────────────────────────────────────────────
   const byMonth = new Map<string, BarPoint>();
   for (const l of included) {
-    const orig = typeof l.originationDate === "string"
-      ? new Date(l.originationDate)
-      : l.originationDate;
+    const orig =
+      typeof l.originationDate === "string" ? new Date(l.originationDate) : l.originationDate;
     if (!(orig instanceof Date) || Number.isNaN(orig.getTime())) continue;
     const key = toMonthKey(orig);
     const cur = byMonth.get(key) ?? { label: key, value: 0 };

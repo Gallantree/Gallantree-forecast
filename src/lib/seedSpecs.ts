@@ -7,13 +7,9 @@ import type { ToolDef } from "./anthropic";
 
 // ── Common helpers ──────────────────────────────────────────────────────────
 
-const periodKey = z
-  .string()
-  .regex(/^\d{4}-(0[1-9]|1[0-2])$/, "must be YYYY-MM");
+const periodKey = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "must be YYYY-MM");
 
-const moneyString = z
-  .string()
-  .regex(/^-?\d+(\.\d+)?$/, "must be a numeric string");
+const moneyString = z.string().regex(/^-?\d+(\.\d+)?$/, "must be a numeric string");
 
 // ── Program-creation schemas ────────────────────────────────────────────────
 
@@ -80,24 +76,13 @@ const programInputSchema = {
                 name: { type: "string" },
                 category: {
                   type: "string",
-                  enum: [
-                    "senior_mgmt",
-                    "subordinate_mgmt",
-                    "servicing",
-                    "other",
-                  ],
+                  enum: ["senior_mgmt", "subordinate_mgmt", "servicing", "other"],
                 },
                 basisAmount: { type: "string" },
                 feeBps: { type: "number" },
                 accountCode: { type: "string" },
               },
-              required: [
-                "name",
-                "category",
-                "basisAmount",
-                "feeBps",
-                "accountCode",
-              ],
+              required: ["name", "category", "basisAmount", "feeBps", "accountCode"],
             },
           },
           liabilities: {
@@ -115,13 +100,7 @@ const programInputSchema = {
                 rateType: { type: "string", enum: ["fixed", "variable"] },
                 accountCode: { type: "string" },
               },
-              required: [
-                "name",
-                "numNotes",
-                "returnProfileBps",
-                "calculationMethod",
-                "rateType",
-              ],
+              required: ["name", "numNotes", "returnProfileBps", "calculationMethod", "rateType"],
             },
           },
         },
@@ -241,8 +220,7 @@ Return the structured result via the create_capital_programs tool. Do not return
 export const CMBS_SEED = {
   systemPrompt: CMBS_SYSTEM,
   tool: CRE_CLO_TOOL, // same tool, different prompt
-  userMessage:
-    "Generate the 4 CMBS programs and 1 Warehouse facility per the specification.",
+  userMessage: "Generate the 4 CMBS programs and 1 Warehouse facility per the specification.",
 } as const;
 
 // ── Loan-book seed ──────────────────────────────────────────────────────────
@@ -400,8 +378,7 @@ Return the structured result via the create_loans tool. Do not return prose. Ret
 
 export const LOAN_BOOK_TOOL: ToolDef<{ loans: SeedLoan[] }> = {
   name: "create_loans",
-  description:
-    "Persist a batch of synthetic loans assigned to existing capital programs.",
+  description: "Persist a batch of synthetic loans assigned to existing capital programs.",
   input_schema: loanInputSchema,
   parse: (input) => LoansResultSchema.parse(input),
 };
@@ -412,12 +389,8 @@ export interface ProgramRefForSeed {
   type: "CRE_CLO" | "CMBS" | "MIT_FUND" | "WAREHOUSE" | "OTHER";
 }
 
-export function buildLoanBookUserMessage(
-  programs: ProgramRefForSeed[],
-): string {
-  const lines = programs.map(
-    (p) => `  - id="${p.id}", name="${p.name}", type=${p.type}`,
-  );
+export function buildLoanBookUserMessage(programs: ProgramRefForSeed[]): string {
+  const lines = programs.map((p) => `  - id="${p.id}", name="${p.name}", type=${p.type}`);
   return `Available capital programs (assign loans by their id):\n${lines.join("\n")}\n\nGenerate exactly 250 loans per the specification.`;
 }
 

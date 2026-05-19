@@ -1,18 +1,18 @@
 import Decimal from "decimal.js";
-import { money, ZERO, type Money } from "@/utils/money";
+import { type Money, money, ZERO } from "@/utils/money";
+import type { LoanInput } from "./loans";
+import type { PlatformLicenseInput } from "./platformLicenses";
 import {
+  type CapexStraightLineDriverInput,
   computePnL,
-  projectCapexDepreciation,
   type DriverInput,
   type HeadcountInput,
-  type CapexStraightLineDriverInput,
   type MonthlyValue,
   type PnL,
+  projectCapexDepreciation,
 } from "./pnl";
-import type { LoanInput } from "./loans";
-import type { ProgramFeeInput } from "./programs";
-import type { PlatformLicenseInput } from "./platformLicenses";
 import type { ProgramLiabilityInput } from "./programLiabilities";
+import type { ProgramFeeInput } from "./programs";
 
 export interface ScenarioAssumptions {
   dsoDays?: Decimal.Value;
@@ -89,11 +89,7 @@ function diffSeries(series: MonthlyValue[], opening: Money, horizon: string[]): 
   });
 }
 
-function runningSum(
-  series: MonthlyValue[],
-  opening: Money,
-  horizon: string[],
-): MonthlyValue[] {
+function runningSum(series: MonthlyValue[], opening: Money, horizon: string[]): MonthlyValue[] {
   let acc = opening;
   return horizon.map((pk, i) => {
     acc = acc.plus(series[i].value);
@@ -158,9 +154,7 @@ export function computeStatements(
   const taxRate = money(assumptions.taxRatePct ?? 0).div(100);
   const ebitda: MonthlyValue[] = horizon.map((pk, i) => ({
     periodKey: pk,
-    value: pnl.revenue.totals[i].value
-      .minus(pnl.opex.totals[i].value)
-      .plus(depreciation[i].value),
+    value: pnl.revenue.totals[i].value.minus(pnl.opex.totals[i].value).plus(depreciation[i].value),
   }));
   const ebit: MonthlyValue[] = horizon.map((pk, i) => ({
     periodKey: pk,
@@ -172,18 +166,13 @@ export function computeStatements(
   }));
   const taxExpense: MonthlyValue[] = horizon.map((pk, i) => ({
     periodKey: pk,
-    value: pretaxIncome[i].value.gt(0)
-      ? pretaxIncome[i].value.times(taxRate)
-      : (ZERO as Money),
+    value: pretaxIncome[i].value.gt(0) ? pretaxIncome[i].value.times(taxRate) : (ZERO as Money),
   }));
   const netIncome: MonthlyValue[] = horizon.map((pk, i) => ({
     periodKey: pk,
     value: pretaxIncome[i].value.minus(taxExpense[i].value),
   }));
-  const netIncomeTotal = netIncome.reduce(
-    (acc, m) => acc.plus(m.value),
-    ZERO as Money,
-  );
+  const netIncomeTotal = netIncome.reduce((acc, m) => acc.plus(m.value), ZERO as Money);
 
   // Working capital: AR/AP scaled by monthly P&L flows (DSO/30, DPO/30).
   const dso = money(assumptions.dsoDays ?? 0).div(DAYS_PER_MONTH);
@@ -243,8 +232,7 @@ export function computeStatements(
         .map((p, j) => ({ p, j }))
         .filter(
           ({ p }) =>
-            p.localeCompare(l.startPeriodKey) >= 0 &&
-            p.localeCompare(l.endPeriodKey!) <= 0,
+            p.localeCompare(l.startPeriodKey) >= 0 && p.localeCompare(l.endPeriodKey!) <= 0,
         )
         .map(({ j }) => j)
         .pop();

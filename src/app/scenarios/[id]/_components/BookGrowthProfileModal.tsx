@@ -48,12 +48,8 @@ export function BookGrowthProfileModal({
     initial?.capitalProgramId ?? programs[0]?._id ?? "",
   );
   const [risk, setRisk] = useState<Risk>(initial?.riskLevel ?? "medium");
-  const [avgTenor, setAvgTenor] = useState<string>(
-    String(initial?.avgTenorMonths ?? 36),
-  );
-  const [avgSpread, setAvgSpread] = useState<string>(
-    String(initial?.avgSpreadBps ?? 200),
-  );
+  const [avgTenor, setAvgTenor] = useState<string>(String(initial?.avgTenorMonths ?? 36));
+  const [avgSpread, setAvgSpread] = useState<string>(String(initial?.avgSpreadBps ?? 200));
   const [pcts, setPcts] = useState<string[]>(() =>
     fys.map((_, i) => initial?.fyGrowthPcts[i] ?? ""),
   );
@@ -116,8 +112,7 @@ export function BookGrowthProfileModal({
           <div className="flex flex-col gap-4 px-5 py-4 text-xs">
             {programs.length === 0 ? (
               <div className="rounded-md bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
-                Create a capital program first — growth profiles target a
-                specific program.
+                Create a capital program first — growth profiles target a specific program.
               </div>
             ) : null}
             <div className="grid grid-cols-2 gap-4">
@@ -202,10 +197,9 @@ export function BookGrowthProfileModal({
             </div>
 
             <div className="rounded-md bg-zinc-50 px-3 py-2 text-[11px] text-zinc-600">
-              Synthetic loans will be injected each FY at deterministic-random
-              months, assigned to the selected program. Count = round(running
-              book size × growth %). Loan size equals the average of existing
-              loans in this program.
+              Synthetic loans will be injected each FY at deterministic-random months, assigned to
+              the selected program. Count = round(running book size × growth %). Loan size equals
+              the average of existing loans in this program.
             </div>
           </div>
 

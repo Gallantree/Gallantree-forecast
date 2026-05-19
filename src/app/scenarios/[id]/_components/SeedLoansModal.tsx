@@ -1,16 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { type SeedResult, seedLoansByFy } from "../_actions";
 import type { ProgramOption } from "./LoansTab";
-import { seedLoansByFy, type SeedResult } from "../_actions";
 
 type Style = "CRE_CLO" | "CMBS";
 
 const STYLE_HINTS: Record<Style, string> = {
   CRE_CLO:
     "~85% Transitional · spread 270-370 bps · balance $5m-$55m · tenor 24-48 mo · LVR 55-75% · DSCR 1.05-1.40",
-  CMBS:
-    "~90% Stabilised · spread 90-270 bps · balance $20m-$150m · tenor 60-120 mo · LVR 50-68% · DSCR 1.25-1.80",
+  CMBS: "~90% Stabilised · spread 90-270 bps · balance $20m-$150m · tenor 60-120 mo · LVR 50-68% · DSCR 1.25-1.80",
 };
 
 const DEFAULT_RAMP = [220, 320, 400, 450, 500];
@@ -35,9 +34,7 @@ export function SeedLoansModal({
 }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
-  const [toast, setToast] = useState<{ msg: string; tone: "ok" | "warn" } | null>(
-    null,
-  );
+  const [toast, setToast] = useState<{ msg: string; tone: "ok" | "warn" } | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   const [style, setStyle] = useState<Style>("CRE_CLO");
@@ -48,9 +45,7 @@ export function SeedLoansModal({
     () =>
       programs
         .filter((p) =>
-          style === "CRE_CLO"
-            ? p.type === "CRE_CLO"
-            : p.type === "CMBS" || p.type === "WAREHOUSE",
+          style === "CRE_CLO" ? p.type === "CRE_CLO" : p.type === "CMBS" || p.type === "WAREHOUSE",
         )
         // Stable sort by name so the default round-robin is predictable.
         .slice()
@@ -63,8 +58,7 @@ export function SeedLoansModal({
   const buildDefaultRows = (): FyRow[] =>
     fys.map((_, i) => ({
       count: String(DEFAULT_RAMP[i] ?? 500),
-      capitalProgramId:
-        matchingPrograms[i % Math.max(1, matchingPrograms.length)]?._id ?? "",
+      capitalProgramId: matchingPrograms[i % Math.max(1, matchingPrograms.length)]?._id ?? "",
     }));
 
   const [rows, setRows] = useState<FyRow[]>(buildDefaultRows);
@@ -74,12 +68,11 @@ export function SeedLoansModal({
     setRows((prev) =>
       prev.map((r, i) => ({
         count: r.count,
-        capitalProgramId:
-          matchingPrograms[i % Math.max(1, matchingPrograms.length)]?._id ?? "",
+        capitalProgramId: matchingPrograms[i % Math.max(1, matchingPrograms.length)]?._id ?? "",
       })),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [style]);
+  }, [matchingPrograms.length, matchingPrograms]);
 
   const total = rows.reduce((acc, r) => acc + (Number(r.count) || 0), 0);
   const activeFyCount = rows.filter((r) => (Number(r.count) || 0) > 0).length;
@@ -218,10 +211,7 @@ export function SeedLoansModal({
                   Loans per fiscal year · target program
                 </span>
                 <span className="text-[11px] text-zinc-500">
-                  Total{" "}
-                  <span className="font-semibold tabular-nums text-zinc-900">
-                    {total}
-                  </span>
+                  Total <span className="font-semibold tabular-nums text-zinc-900">{total}</span>
                   <span className="ml-2 text-zinc-400">
                     across {activeFyCount} FY{activeFyCount === 1 ? "" : "s"}
                   </span>
@@ -229,17 +219,13 @@ export function SeedLoansModal({
               </div>
               {matchingPrograms.length === 0 ? (
                 <div className="rounded-md bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
-                  No {style === "CRE_CLO" ? "CRE CLO" : "CMBS / Warehouse"}{" "}
-                  programs exist yet. Seed programs first on the Capital Programs
-                  tab.
+                  No {style === "CRE_CLO" ? "CRE CLO" : "CMBS / Warehouse"} programs exist yet. Seed
+                  programs first on the Capital Programs tab.
                 </div>
               ) : (
                 <div className="flex flex-col gap-1.5">
                   {fys.map((fy, i) => (
-                    <div
-                      key={fy}
-                      className="grid grid-cols-[64px_88px_1fr] items-center gap-2"
-                    >
+                    <div key={fy} className="grid grid-cols-[64px_88px_1fr] items-center gap-2">
                       <span className="text-[11px] font-mono text-zinc-500">
                         FY{String(fy).slice(-2)}
                       </span>
@@ -253,9 +239,7 @@ export function SeedLoansModal({
                       />
                       <select
                         value={rows[i]?.capitalProgramId ?? ""}
-                        onChange={(e) =>
-                          setRow(i, { capitalProgramId: e.target.value })
-                        }
+                        onChange={(e) => setRow(i, { capitalProgramId: e.target.value })}
                         className="w-full rounded-md border border-zinc-300 px-2 py-1"
                       >
                         {matchingPrograms.map((p) => (
@@ -269,16 +253,15 @@ export function SeedLoansModal({
                 </div>
               )}
               <div className="mt-1.5 text-[10px] text-zinc-400">
-                Each FY can target a different capital program. Capped at 300
-                loans per FY per AI call.
+                Each FY can target a different capital program. Capped at 300 loans per FY per AI
+                call.
               </div>
             </div>
 
             <div className="rounded-md bg-zinc-50 px-3 py-2 text-[11px] text-zinc-600">
-              Loans will be deterministically populated for every field
-              (borrower, state, postcode, location, asset class, LVR, DSCR, NOI,
-              NCF, ICR, WALE, internal grade, indicative ratings, all-in
-              interest, etc.). One AI call per active FY — expect ~10-30s each.
+              Loans will be deterministically populated for every field (borrower, state, postcode,
+              location, asset class, LVR, DSCR, NOI, NCF, ICR, WALE, internal grade, indicative
+              ratings, all-in interest, etc.). One AI call per active FY — expect ~10-30s each.
             </div>
           </div>
 

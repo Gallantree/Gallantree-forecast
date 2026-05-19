@@ -1,8 +1,8 @@
-import { NextResponse, type NextRequest } from "next/server";
 import mongoose, { Types } from "mongoose";
+import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { connectToDatabase } from "@/lib/db";
-import { Scenario, Driver, Headcount } from "@/models";
+import { Driver, Headcount, Scenario } from "@/models";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -74,10 +74,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
         await Driver.insertMany(drivers.map(cloneDoc), session ? { session } : {});
       }
       if (headcount.length) {
-        await Headcount.insertMany(
-          headcount.map(cloneDoc),
-          session ? { session } : {},
-        );
+        await Headcount.insertMany(headcount.map(cloneDoc), session ? { session } : {});
       }
     };
 

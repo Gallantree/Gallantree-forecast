@@ -98,7 +98,7 @@ function programInterest(p: ProgramRow, baseRateBps: number): number {
 
 function trimName(name: string, max = 22): string {
   if (name.length <= max) return name;
-  return name.slice(0, max - 1) + "…";
+  return `${name.slice(0, max - 1)}…`;
 }
 
 export function buildProgramAnalysisData(
@@ -199,9 +199,7 @@ export function buildProgramAnalysisData(
     .sort((a, b) => b.value - a.value);
 
   // ── Top-10 per-program comparators ────────────────────────────────────────
-  const top = [...enriched]
-    .sort((a, b) => b.dealSize - a.dealSize)
-    .slice(0, 10);
+  const top = [...enriched].sort((a, b) => b.dealSize - a.dealSize).slice(0, 10);
   const annualInterestByProgram: BarPoint[] = top.map((e) => ({
     label: trimName(e.name),
     value: e.annualInterest,

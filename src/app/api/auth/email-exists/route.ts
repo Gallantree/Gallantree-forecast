@@ -2,7 +2,7 @@
 // it can show a friendly "no account — contact your admin" toast instead of
 // silently sending a sign-in link for an account that doesn't exist.
 
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/db";
 import { User } from "@/models";
 
@@ -13,7 +13,9 @@ export async function POST(req: NextRequest) {
   let email: string;
   try {
     const body = (await req.json()) as { email?: unknown };
-    email = String(body?.email ?? "").trim().toLowerCase();
+    email = String(body?.email ?? "")
+      .trim()
+      .toLowerCase();
   } catch {
     return NextResponse.json({ exists: false, error: "bad request" }, { status: 400 });
   }

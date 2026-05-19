@@ -1,5 +1,5 @@
-import Decimal from "decimal.js";
-import { money, ZERO, type Money } from "@/utils/money";
+import type Decimal from "decimal.js";
+import { type Money, money, ZERO } from "@/utils/money";
 import type { MonthlyValue } from "./pnl";
 
 export type FeeCategory = "senior_mgmt" | "subordinate_mgmt" | "servicing" | "other";
@@ -31,16 +31,11 @@ function isActive(periodKey: string, start: string, end: string | undefined): bo
   return true;
 }
 
-export function projectProgramFee(
-  fee: ProgramFeeInput,
-  horizon: string[],
-): MonthlyValue[] {
+export function projectProgramFee(fee: ProgramFeeInput, horizon: string[]): MonthlyValue[] {
   // Annualised fee = basisAmount × bps/10000; spread evenly across 12 months.
   const monthly: Money = money(fee.basisAmount).times(fee.feeBps).div(10000).div(12);
   return horizon.map((pk) => ({
     periodKey: pk,
-    value: isActive(pk, fee.startPeriodKey, fee.endPeriodKey)
-      ? monthly
-      : (ZERO as Money),
+    value: isActive(pk, fee.startPeriodKey, fee.endPeriodKey) ? monthly : (ZERO as Money),
   }));
 }

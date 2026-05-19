@@ -2,16 +2,13 @@
 
 import { Fragment, useState } from "react";
 import { fmtMoney2 } from "@/utils/format";
-import type {
-  OverviewData,
-  OverviewLine,
-  OverviewLiabilityLine,
-} from "./overviewData";
+import type { OverviewData, OverviewLiabilityLine, OverviewLine } from "./overviewData";
+
 // Re-export so existing imports from this file keep working. The runtime
 // builder (`buildOverviewData`) is intentionally NOT re-exported — pages
 // that need it should import from "./overviewData" so the server bundle
 // doesn't get the "use client" treatment.
-export type { OverviewData, OverviewLine, OverviewLiabilityLine };
+export type { OverviewData, OverviewLiabilityLine, OverviewLine };
 
 function pct(numer: number, denom: number): string {
   if (denom === 0) return "—";
@@ -27,15 +24,18 @@ export function OverviewTab({ data }: { data: OverviewData }) {
     opex: false,
     interest: false,
   });
-  const toggle = (key: SectionKey) =>
-    setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
+  const toggle = (key: SectionKey) => setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
 
   return (
     <div className="flex h-full flex-col bg-white">
       {/* Headline tiles */}
       <div className="grid grid-cols-5 gap-px border-b border-zinc-200 bg-zinc-200">
         <Tile label="5y Revenue" value={fmtMoney2(fiveYear.revenue)} />
-        <Tile label="5y EBITDA" value={fmtMoney2(fiveYear.ebitda)} tone={fiveYear.ebitda >= 0 ? "ok" : "warn"} />
+        <Tile
+          label="5y EBITDA"
+          value={fmtMoney2(fiveYear.ebitda)}
+          tone={fiveYear.ebitda >= 0 ? "ok" : "warn"}
+        />
         <Tile
           label="5y Net income"
           value={fmtMoney2(fiveYear.netIncome)}
@@ -46,8 +46,8 @@ export function OverviewTab({ data }: { data: OverviewData }) {
       </div>
 
       <div className="border-b border-zinc-200 bg-zinc-50 px-4 py-2 text-[11px] text-zinc-500">
-        Consolidated by fiscal year (Jul → Jun). Each column is the FY total; the right column
-        is the 5y total.
+        Consolidated by fiscal year (Jul → Jun). Each column is the FY total; the right column is
+        the 5y total.
       </div>
 
       <div className="flex-1 overflow-auto">
@@ -81,14 +81,8 @@ export function OverviewTab({ data }: { data: OverviewData }) {
               detailCount={data.revenueLines.length}
             />
             {!collapsed.revenue &&
-              data.revenueLines.map((l) => (
-                <DetailRow key={l.accountCode} line={l} />
-              ))}
-            <TotalRow
-              label="Total revenue"
-              perFy={data.totals.revenue}
-              total={fiveYear.revenue}
-            />
+              data.revenueLines.map((l) => <DetailRow key={l.accountCode} line={l} />)}
+            <TotalRow label="Total revenue" perFy={data.totals.revenue} total={fiveYear.revenue} />
 
             {/* OPEX */}
             <SectionHeader
@@ -100,9 +94,7 @@ export function OverviewTab({ data }: { data: OverviewData }) {
               detailCount={data.opexLines.length}
             />
             {!collapsed.opex &&
-              data.opexLines.map((l) => (
-                <DetailRow key={l.accountCode} line={l} />
-              ))}
+              data.opexLines.map((l) => <DetailRow key={l.accountCode} line={l} />)}
             <TotalRow
               label="Total OPEX (incl. dep)"
               perFy={data.totals.opex}
@@ -123,10 +115,7 @@ export function OverviewTab({ data }: { data: OverviewData }) {
                 />
                 {!collapsed.interest &&
                   data.liabilityLines.map((l) => (
-                    <LiabilityRow
-                      key={`${l.accountCode}-${l.trancheLabel}`}
-                      line={l}
-                    />
+                    <LiabilityRow key={`${l.accountCode}-${l.trancheLabel}`} line={l} />
                   ))}
                 <TotalRow
                   label="Total interest expense"
@@ -137,7 +126,11 @@ export function OverviewTab({ data }: { data: OverviewData }) {
             ) : null}
 
             {/* Profitability cascade */}
-            <SectionHeader label="Profitability" color="bg-sky-50 text-sky-800" cols={fys.length + 1} />
+            <SectionHeader
+              label="Profitability"
+              color="bg-sky-50 text-sky-800"
+              cols={fys.length + 1}
+            />
             <TotalRow label="EBITDA" perFy={data.totals.ebitda} total={fiveYear.ebitda} />
             <DetailRow
               line={{
@@ -147,7 +140,11 @@ export function OverviewTab({ data }: { data: OverviewData }) {
                 total: -Math.abs(fiveYear.depreciation),
               }}
             />
-            <TotalRow label="EBIT (Operating income)" perFy={data.totals.ebit} total={fiveYear.ebit} />
+            <TotalRow
+              label="EBIT (Operating income)"
+              perFy={data.totals.ebit}
+              total={fiveYear.ebit}
+            />
             <DetailRow
               line={{
                 accountCode: "",
@@ -177,11 +174,7 @@ export function OverviewTab({ data }: { data: OverviewData }) {
             />
 
             {/* Margins */}
-            <SectionHeader
-              label="Margins"
-              color="bg-zinc-50 text-zinc-700"
-              cols={fys.length + 1}
-            />
+            <SectionHeader label="Margins" color="bg-zinc-50 text-zinc-700" cols={fys.length + 1} />
             <MarginRow
               label="EBITDA margin"
               numer={data.totals.ebitda}
@@ -231,10 +224,7 @@ function SectionHeader({
       >
         {interactive ? (
           <span className="inline-flex items-center gap-2">
-            <span
-              aria-hidden="true"
-              className="inline-block w-3 text-[11px] leading-none"
-            >
+            <span aria-hidden="true" className="inline-block w-3 text-[11px] leading-none">
               {collapsed ? "▸" : "▾"}
             </span>
             <span>{label}</span>
@@ -326,10 +316,7 @@ function TotalRow({
         {label}
       </td>
       {perFy.map((v, i) => (
-        <td
-          key={i}
-          className="border-t-2 border-zinc-400 px-3 py-1.5 text-right tabular-nums"
-        >
+        <td key={i} className="border-t-2 border-zinc-400 px-3 py-1.5 text-right tabular-nums">
           {fmtMoney2(v)}
         </td>
       ))}
@@ -359,10 +346,7 @@ function MarginRow({
         {label}
       </td>
       {numer.map((n, i) => (
-        <td
-          key={i}
-          className="border-b border-zinc-100 px-3 py-1.5 text-right tabular-nums"
-        >
+        <td key={i} className="border-b border-zinc-100 px-3 py-1.5 text-right tabular-nums">
           {pct(n, denom[i])}
         </td>
       ))}
@@ -373,21 +357,9 @@ function MarginRow({
   );
 }
 
-function Tile({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: "ok" | "warn";
-}) {
+function Tile({ label, value, tone }: { label: string; value: string; tone?: "ok" | "warn" }) {
   const valueClass =
-    tone === "warn"
-      ? "text-rose-700"
-      : tone === "ok"
-        ? "text-emerald-700"
-        : "text-zinc-900";
+    tone === "warn" ? "text-rose-700" : tone === "ok" ? "text-emerald-700" : "text-zinc-900";
   return (
     <div className="flex flex-col gap-1 bg-white px-4 py-3">
       <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">

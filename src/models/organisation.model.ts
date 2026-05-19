@@ -30,8 +30,5 @@ const organisationSchema = new Schema<IOrganisation>(
 
 organisationSchema.index({ status: 1, updatedAt: -1 });
 
-const Organisation = defineModel<IOrganisation>(
-  "Organisation",
-  organisationSchema,
-);
+const Organisation = defineModel<IOrganisation>("Organisation", organisationSchema);
 export default Organisation;

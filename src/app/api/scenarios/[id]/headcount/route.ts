@@ -1,5 +1,5 @@
-import { NextResponse, type NextRequest } from "next/server";
 import { Types } from "mongoose";
+import { type NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/db";
 import { Headcount, Scenario } from "@/models";
 import { headcountCreateSchema } from "@/schemas/headcountSchemas";
@@ -36,12 +36,10 @@ export async function POST(request: NextRequest, { params }: Ctx) {
   let cpi = d.salaryGrowthPctAnnual;
   let superPct = d.superPct;
   if (cpi === undefined || superPct === undefined) {
-    const scenario = await Scenario.findById(id)
-      .select("defaultCpiPct defaultSuperPct")
-      .lean<{
-        defaultCpiPct?: { toString: () => string };
-        defaultSuperPct?: { toString: () => string };
-      }>();
+    const scenario = await Scenario.findById(id).select("defaultCpiPct defaultSuperPct").lean<{
+      defaultCpiPct?: { toString: () => string };
+      defaultSuperPct?: { toString: () => string };
+    }>();
     if (cpi === undefined) cpi = scenario?.defaultCpiPct?.toString() ?? "0";
     if (superPct === undefined) superPct = scenario?.defaultSuperPct?.toString() ?? "12";
   }

@@ -1,5 +1,5 @@
-import { NextResponse, type NextRequest } from "next/server";
 import { Types } from "mongoose";
+import { type NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/db";
 import { CapitalProgram } from "@/models";
 

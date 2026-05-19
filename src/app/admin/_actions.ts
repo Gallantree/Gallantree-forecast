@@ -2,9 +2,9 @@
 
 import { Types } from "mongoose";
 import { revalidatePath } from "next/cache";
-import { connectToDatabase } from "@/lib/db";
-import { User, Organisation } from "@/models";
 import { auth, signIn } from "@/lib/auth";
+import { connectToDatabase } from "@/lib/db";
+import { Organisation, User } from "@/models";
 
 async function requireSuperadmin() {
   const session = await auth();
@@ -135,9 +135,7 @@ export async function updateUser(
   return { ok: true };
 }
 
-export async function sendInvite(
-  email: string,
-): Promise<{ ok: boolean; error?: string }> {
+export async function sendInvite(email: string): Promise<{ ok: boolean; error?: string }> {
   const session = await requireSuperadmin();
   if (!session) return { ok: false, error: "Not authorised" };
   try {

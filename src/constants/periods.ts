@@ -4,7 +4,11 @@ export function periodKey(year: number, month: number): string {
   return `${year}-${String(month).padStart(2, "0")}`;
 }
 
-export function generateHorizon(startYear: number, startMonth: number, months = FORECAST_HORIZON_MONTHS): string[] {
+export function generateHorizon(
+  startYear: number,
+  startMonth: number,
+  months = FORECAST_HORIZON_MONTHS,
+): string[] {
   const keys: string[] = [];
   let y = startYear;
   let m = startMonth;

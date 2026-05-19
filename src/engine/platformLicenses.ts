@@ -1,5 +1,5 @@
 import Decimal from "decimal.js";
-import { money, ZERO, type Money } from "@/utils/money";
+import { type Money, money, ZERO } from "@/utils/money";
 import type { MonthlyValue } from "./pnl";
 
 export type LicenseType = "compliance" | "trustee";
@@ -62,8 +62,7 @@ export function projectComplianceLicense(
   return horizon.map((pk, i) => {
     if (!isActive(pk, l.startPeriodKey, l.endPeriodKey))
       return { periodKey: pk, value: ZERO as Money };
-    if (growthAnnual.eq(0) || startIdx < 0)
-      return { periodKey: pk, value: effective };
+    if (growthAnnual.eq(0) || startIdx < 0) return { periodKey: pk, value: effective };
     const monthsFromStart = i - startIdx;
     const years = new Decimal(monthsFromStart).div(12);
     const factor = money(1).plus(growthAnnual).pow(years);
@@ -71,10 +70,7 @@ export function projectComplianceLicense(
   });
 }
 
-export function projectTrusteeLicense(
-  l: TrusteeLicenseInput,
-  horizon: string[],
-): MonthlyValue[] {
+export function projectTrusteeLicense(l: TrusteeLicenseInput, horizon: string[]): MonthlyValue[] {
   const monthlyFee = money(l.monthlyFee);
   const configFee = money(l.configFee ?? 0);
   const aumYearly = l.aumByYear.map((v) => money(v));
@@ -105,10 +101,7 @@ export function projectTrusteeLicense(
   });
 }
 
-export function projectPlatformLicense(
-  l: PlatformLicenseInput,
-  horizon: string[],
-): MonthlyValue[] {
+export function projectPlatformLicense(l: PlatformLicenseInput, horizon: string[]): MonthlyValue[] {
   if (l.type === "compliance") return projectComplianceLicense(l, horizon);
   return projectTrusteeLicense(l, horizon);
 }

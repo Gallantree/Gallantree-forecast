@@ -1,5 +1,5 @@
-import Decimal from "decimal.js";
-import { money, ZERO, type Money } from "@/utils/money";
+import type Decimal from "decimal.js";
+import { type Money, money, ZERO } from "@/utils/money";
 import type { MonthlyValue } from "./pnl";
 
 export interface FYGroup {
@@ -77,10 +77,7 @@ export interface StatementInputs {
   netCashMovement: MonthlyValue[];
 }
 
-export function buildFyAggregates(
-  groups: FYGroup[],
-  s: StatementInputs,
-): FyAggregate[] {
+export function buildFyAggregates(groups: FYGroup[], s: StatementInputs): FyAggregate[] {
   return groups.map((g) => {
     const months = new Set(g.months);
     return {
@@ -111,8 +108,7 @@ function computeDcfForHorizon(
   }
 
   const lastFcf = explicit.length > 0 ? explicit[explicit.length - 1].fcf : (ZERO as Money);
-  const lastEbitda =
-    explicit.length > 0 ? explicit[explicit.length - 1].ebitda : (ZERO as Money);
+  const lastEbitda = explicit.length > 0 ? explicit[explicit.length - 1].ebitda : (ZERO as Money);
 
   let terminalValue: Money = ZERO as Money;
   let invalidReason: string | undefined;
@@ -129,9 +125,7 @@ function computeDcfForHorizon(
   const ev = pvFcfs.plus(pvTerminal);
   const equity = ev.minus(netDebt);
 
-  const impliedExitMultiple = lastEbitda.gt(0)
-    ? terminalValue.div(lastEbitda)
-    : (ZERO as Money);
+  const impliedExitMultiple = lastEbitda.gt(0) ? terminalValue.div(lastEbitda) : (ZERO as Money);
 
   return {
     horizonYears,

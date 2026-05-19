@@ -1,10 +1,10 @@
-import { NextResponse, type NextRequest } from "next/server";
 import { Types } from "mongoose";
+import { type NextRequest, NextResponse } from "next/server";
+import { buildScenarioPeriods } from "@/constants/periods";
+import { loadEngineInputs } from "@/engine/inputs";
+import { computePnL, type PnLSection } from "@/engine/pnl";
 import { connectToDatabase } from "@/lib/db";
 import { Period, Scenario } from "@/models";
-import { computePnL, type PnLSection } from "@/engine/pnl";
-import { loadEngineInputs } from "@/engine/inputs";
-import { buildScenarioPeriods } from "@/constants/periods";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,22 +32,19 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   await connectToDatabase();
   const [periods, scenario, inputs] = await Promise.all([
     Period.find({}).sort({ index: 1 }).lean(),
-    Scenario.findById(id)
-      .select("loanBookGrowthPctByYear baseRateBps firstYearLabel")
-      .lean<{
-        loanBookGrowthPctByYear?: Array<{ toString: () => string }>;
-        baseRateBps?: number;
-        firstYearLabel?: number;
-      }>(),
+    Scenario.findById(id).select("loanBookGrowthPctByYear baseRateBps firstYearLabel").lean<{
+      loanBookGrowthPctByYear?: Array<{ toString: () => string }>;
+      baseRateBps?: number;
+      firstYearLabel?: number;
+    }>(),
     loadEngineInputs(id),
   ]);
   if (periods.length === 0) {
     return NextResponse.json({ error: "periods not seeded — run `npm run seed`" }, { status: 412 });
   }
-  const horizon = buildScenarioPeriods(
-    scenario?.firstYearLabel ?? 2026,
-    periods.length,
-  ).map((p) => p.key);
+  const horizon = buildScenarioPeriods(scenario?.firstYearLabel ?? 2026, periods.length).map(
+    (p) => p.key,
+  );
   const pnl = computePnL(
     inputs.drivers,
     inputs.headcount,
@@ -63,7 +60,10 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     horizon: pnl.horizon,
     revenue: serializeSection(pnl.revenue),
     opex: serializeSection(pnl.opex),
-    grossProfit: pnl.grossProfit.map((m) => ({ periodKey: m.periodKey, value: m.value.toFixed(2) })),
+    grossProfit: pnl.grossProfit.map((m) => ({
+      periodKey: m.periodKey,
+      value: m.value.toFixed(2),
+    })),
     grossProfitTotal: pnl.grossProfitTotal.toFixed(2),
   });
 }

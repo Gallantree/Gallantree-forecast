@@ -2,7 +2,19 @@
 
 import { Types } from "mongoose";
 import { revalidatePath } from "next/cache";
+import { generateStructured, isAnthropicConfigured } from "@/lib/anthropic";
 import { connectToDatabase } from "@/lib/db";
+import { parseLoanTape } from "@/lib/parseLoanTape";
+import {
+  CMBS_SEED,
+  CRE_CLO_SEED,
+  FY_LOANS_SEED,
+  type FySeedLoanRow,
+  LOAN_BOOK_SEED,
+  type LoanStyle,
+  type SeedLoan,
+  type SeedProgram,
+} from "@/lib/seedSpecs";
 import {
   CapitalProgram,
   Driver,
@@ -12,20 +24,8 @@ import {
   PlatformLicense,
   Scenario,
 } from "@/models";
-import { toDecimal128 } from "@/utils/money";
 import { parseDecimalInput } from "@/utils/format";
-import { parseLoanTape } from "@/lib/parseLoanTape";
-import { generateStructured, isAnthropicConfigured } from "@/lib/anthropic";
-import {
-  CMBS_SEED,
-  CRE_CLO_SEED,
-  FY_LOANS_SEED,
-  LOAN_BOOK_SEED,
-  type FySeedLoanRow,
-  type LoanStyle,
-  type SeedLoan,
-  type SeedProgram,
-} from "@/lib/seedSpecs";
+import { toDecimal128 } from "@/utils/money";
 
 export type ProgramFeePayload = {
   name: string;
@@ -132,12 +132,10 @@ export async function addStaff(scenarioId: string, formData: FormData): Promise<
   let cpi = String(formData.get("salaryGrowthPctAnnual") ?? "").trim();
   let superPct = String(formData.get("superPct") ?? "").trim();
   if (!cpi || !superPct) {
-    const s = await Scenario.findById(scenarioId)
-      .select("defaultCpiPct defaultSuperPct")
-      .lean<{
-        defaultCpiPct?: { toString: () => string };
-        defaultSuperPct?: { toString: () => string };
-      }>();
+    const s = await Scenario.findById(scenarioId).select("defaultCpiPct defaultSuperPct").lean<{
+      defaultCpiPct?: { toString: () => string };
+      defaultSuperPct?: { toString: () => string };
+    }>();
     if (!cpi) cpi = s?.defaultCpiPct?.toString() ?? "0";
     if (!superPct) superPct = s?.defaultSuperPct?.toString() ?? "12";
   }
@@ -234,10 +232,7 @@ export async function updateStaff(
   revalidatePath(`/scenarios/${scenarioId}`);
 }
 
-export async function importLoanTape(
-  scenarioId: string,
-  formData: FormData,
-): Promise<void> {
+export async function importLoanTape(scenarioId: string, formData: FormData): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId)) return;
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) return;
@@ -289,10 +284,7 @@ function sanitiseLiabilities(payload: ProgramPayload) {
     }));
 }
 
-export async function createProgram(
-  scenarioId: string,
-  payload: ProgramPayload,
-): Promise<void> {
+export async function createProgram(scenarioId: string, payload: ProgramPayload): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId)) return;
   if (!payload.name || !PROGRAM_TYPES.has(payload.type)) return;
   if (!PERIOD_RE.test(payload.startPeriodKey)) return;
@@ -322,9 +314,7 @@ export async function createProgram(
     name: payload.name,
     type: payload.type,
     dealSize: payload.dealSize ? toDecimal128(payload.dealSize) : undefined,
-    faceValuePerNote: payload.faceValuePerNote
-      ? toDecimal128(payload.faceValuePerNote)
-      : undefined,
+    faceValuePerNote: payload.faceValuePerNote ? toDecimal128(payload.faceValuePerNote) : undefined,
     startPeriodKey: payload.startPeriodKey,
     endPeriodKey: payload.endPeriodKey,
     notes: payload.notes,
@@ -448,9 +438,7 @@ export async function calibrateProgram(
   }).lean();
   if (!program) return { ok: false, error: "program not found" };
 
-  const faceValue = program.faceValuePerNote
-    ? Number(program.faceValuePerNote.toString())
-    : 0;
+  const faceValue = program.faceValuePerNote ? Number(program.faceValuePerNote.toString()) : 0;
   if (faceValue <= 0) {
     return { ok: false, error: "program has no face value per note" };
   }
@@ -471,10 +459,7 @@ export async function calibrateProgram(
     };
   }
 
-  const oldTotalNotes = (program.liabilities ?? []).reduce(
-    (acc, l) => acc + (l.numNotes ?? 0),
-    0,
-  );
+  const oldTotalNotes = (program.liabilities ?? []).reduce((acc, l) => acc + (l.numNotes ?? 0), 0);
   const oldTotalPrincipal = oldTotalNotes * faceValue;
   if (oldTotalPrincipal <= 0) {
     return { ok: false, error: "program has no liability principal to scale" };
@@ -497,9 +482,7 @@ export async function calibrateProgram(
   const newFees = (program.fees ?? []).map((f) => ({
     name: f.name,
     category: f.category,
-    basisAmount: toDecimal128(
-      (Number(f.basisAmount.toString()) * scale).toFixed(2),
-    ),
+    basisAmount: toDecimal128((Number(f.basisAmount.toString()) * scale).toFixed(2)),
     feeBps: f.feeBps,
     accountCode: f.accountCode,
   }));
@@ -562,10 +545,7 @@ export async function updateValuationAssumptions(
   revalidatePath(`/scenarios/${scenarioId}`);
 }
 
-export async function updateLoanBookGrowth(
-  scenarioId: string,
-  formData: FormData,
-): Promise<void> {
+export async function updateLoanBookGrowth(scenarioId: string, formData: FormData): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId)) return;
   // Form sends loanBookGrowthPctY0, …Y1, … one entry per FY in the horizon.
   const raws: string[] = [];
@@ -587,15 +567,9 @@ export async function updateLoanBookGrowth(
     parsed.push(toDecimal128(cleaned));
   }
   if (parsed.length === 0 || parsed.every((d) => d.toString() === "0.00000000")) {
-    await Scenario.updateOne(
-      { _id: scenarioId },
-      { $unset: { loanBookGrowthPctByYear: "" } },
-    );
+    await Scenario.updateOne({ _id: scenarioId }, { $unset: { loanBookGrowthPctByYear: "" } });
   } else {
-    await Scenario.updateOne(
-      { _id: scenarioId },
-      { $set: { loanBookGrowthPctByYear: parsed } },
-    );
+    await Scenario.updateOne({ _id: scenarioId }, { $set: { loanBookGrowthPctByYear: parsed } });
   }
   revalidatePath(`/scenarios/${scenarioId}`);
 }
@@ -616,7 +590,9 @@ function sanitiseGrowthProfile(p: BookGrowthProfilePayload) {
   if (!Number.isFinite(p.avgTenorMonths) || p.avgTenorMonths <= 0) return null;
   if (!Number.isFinite(p.avgSpreadBps) || p.avgSpreadBps < 0) return null;
   const pcts = p.fyGrowthPcts.map((raw) => {
-    const cleaned = String(raw ?? "").trim().replace(/[,\s]/g, "");
+    const cleaned = String(raw ?? "")
+      .trim()
+      .replace(/[,\s]/g, "");
     if (!cleaned) return toDecimal128("0");
     if (!/^-?\d+(\.\d+)?$/.test(cleaned)) return null;
     return toDecimal128(cleaned);
@@ -639,10 +615,7 @@ export async function addBookGrowthProfile(
   const sanitised = sanitiseGrowthProfile(payload);
   if (!sanitised) return;
   await connectToDatabase();
-  await Scenario.updateOne(
-    { _id: scenarioId },
-    { $push: { bookGrowthProfiles: sanitised } },
-  );
+  await Scenario.updateOne({ _id: scenarioId }, { $push: { bookGrowthProfiles: sanitised } });
   revalidatePath(`/scenarios/${scenarioId}`);
 }
 
@@ -694,10 +667,7 @@ export async function toggleLoanIncluded(
 ): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId) || !Types.ObjectId.isValid(loanId)) return;
   await connectToDatabase();
-  await Loan.updateOne(
-    { _id: loanId, scenarioId },
-    { $set: { includeInRevenue: include } },
-  );
+  await Loan.updateOne({ _id: loanId, scenarioId }, { $set: { includeInRevenue: include } });
   revalidatePath(`/scenarios/${scenarioId}`);
 }
 
@@ -710,10 +680,7 @@ export async function setLoanProgram(
   const programId = String(formData.get("capitalProgramId") ?? "").trim();
   await connectToDatabase();
   if (!programId) {
-    await Loan.updateOne(
-      { _id: loanId, scenarioId },
-      { $unset: { capitalProgramId: "" } },
-    );
+    await Loan.updateOne({ _id: loanId, scenarioId }, { $unset: { capitalProgramId: "" } });
   } else if (Types.ObjectId.isValid(programId)) {
     await Loan.updateOne(
       { _id: loanId, scenarioId },
@@ -814,11 +781,7 @@ export type OpexDriverPayload =
       costPerFteMonthly: string;
     };
 
-const OPEX_DRIVER_TYPES = new Set([
-  "opex_fixed",
-  "opex_pct_revenue",
-  "opex_per_fte",
-]);
+const OPEX_DRIVER_TYPES = new Set(["opex_fixed", "opex_pct_revenue", "opex_per_fte"]);
 
 function buildDriverDoc(payload: OpexDriverPayload): Record<string, unknown> {
   const base = {
@@ -890,17 +853,11 @@ export async function updateOpexDriver(
   }
   if (!payload.endPeriodKey) unset.endPeriodKey = "";
 
-  await Driver.updateOne(
-    { _id: driverId, scenarioId },
-    { $set: set, $unset: unset },
-  );
+  await Driver.updateOne({ _id: driverId, scenarioId }, { $set: set, $unset: unset });
   revalidatePath(`/scenarios/${scenarioId}`);
 }
 
-export async function deleteOpexDriver(
-  scenarioId: string,
-  driverId: string,
-): Promise<void> {
+export async function deleteOpexDriver(scenarioId: string, driverId: string): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId) || !Types.ObjectId.isValid(driverId)) return;
   await connectToDatabase();
   await Driver.deleteOne({ _id: driverId, scenarioId });
@@ -941,14 +898,12 @@ function buildLicenseDoc(payload: PlatformLicensePayload): Record<string, unknow
   if (payload.notes) doc.notes = payload.notes.trim();
   if (payload.type === "compliance") {
     if (payload.tier) doc.tier = payload.tier;
-    if (payload.monthlyFeePerSeat)
-      doc.monthlyFeePerSeat = toDecimal128(payload.monthlyFeePerSeat);
+    if (payload.monthlyFeePerSeat) doc.monthlyFeePerSeat = toDecimal128(payload.monthlyFeePerSeat);
     if (payload.seatCount !== undefined) doc.seatCount = payload.seatCount;
     if (payload.seatGrowthPctAnnual)
       doc.seatGrowthPctAnnual = toDecimal128(payload.seatGrowthPctAnnual);
     if (payload.billingFrequency) doc.billingFrequency = payload.billingFrequency;
-    if (payload.annualDiscountPct)
-      doc.annualDiscountPct = toDecimal128(payload.annualDiscountPct);
+    if (payload.annualDiscountPct) doc.annualDiscountPct = toDecimal128(payload.annualDiscountPct);
   } else {
     if (payload.monthlyFee) doc.monthlyFee = toDecimal128(payload.monthlyFee);
     if (payload.configFee) doc.configFee = toDecimal128(payload.configFee);
@@ -1004,17 +959,11 @@ export async function updatePlatformLicense(
   }
   if (!payload.endPeriodKey) unset.endPeriodKey = "";
   if (!payload.notes) unset.notes = "";
-  await PlatformLicense.updateOne(
-    { _id: licenseId, scenarioId },
-    { $set: set, $unset: unset },
-  );
+  await PlatformLicense.updateOne({ _id: licenseId, scenarioId }, { $set: set, $unset: unset });
   revalidatePath(`/scenarios/${scenarioId}`);
 }
 
-export async function deletePlatformLicense(
-  scenarioId: string,
-  licenseId: string,
-): Promise<void> {
+export async function deletePlatformLicense(scenarioId: string, licenseId: string): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId) || !Types.ObjectId.isValid(licenseId)) return;
   await connectToDatabase();
   await PlatformLicense.deleteOne({ _id: licenseId, scenarioId });
@@ -1046,10 +995,7 @@ export async function updateScenarioMeta(
   if (!name || name.length > 120) return;
   if (!SCENARIO_STATUSES.has(payload.status)) return;
   await connectToDatabase();
-  await Scenario.updateOne(
-    { _id: scenarioId },
-    { $set: { name, status: payload.status } },
-  );
+  await Scenario.updateOne({ _id: scenarioId }, { $set: { name, status: payload.status } });
   revalidatePath(`/scenarios/${scenarioId}`);
   revalidatePath("/");
 }
@@ -1123,10 +1069,7 @@ export interface SeedResult {
   created?: number;
 }
 
-function persistSeededPrograms(
-  scenarioId: string,
-  programs: SeedProgram[],
-): Promise<unknown> {
+function persistSeededPrograms(scenarioId: string, programs: SeedProgram[]): Promise<unknown> {
   const docs = programs.map((p) => ({
     scenarioId: new Types.ObjectId(scenarioId),
     name: p.name,
@@ -1155,12 +1098,9 @@ function persistSeededPrograms(
   return CapitalProgram.insertMany(docs);
 }
 
-export async function seedCreCloPrograms(
-  scenarioId: string,
-): Promise<SeedResult> {
+export async function seedCreCloPrograms(scenarioId: string): Promise<SeedResult> {
   if (!Types.ObjectId.isValid(scenarioId)) return { ok: false, error: "invalid scenario" };
-  if (!isAnthropicConfigured())
-    return { ok: false, error: "ANTHROPIC_API_KEY is not set" };
+  if (!isAnthropicConfigured()) return { ok: false, error: "ANTHROPIC_API_KEY is not set" };
   try {
     const { programs } = await generateStructured({
       systemPrompt: CRE_CLO_SEED.systemPrompt,
@@ -1177,12 +1117,9 @@ export async function seedCreCloPrograms(
   }
 }
 
-export async function seedCmbsPrograms(
-  scenarioId: string,
-): Promise<SeedResult> {
+export async function seedCmbsPrograms(scenarioId: string): Promise<SeedResult> {
   if (!Types.ObjectId.isValid(scenarioId)) return { ok: false, error: "invalid scenario" };
-  if (!isAnthropicConfigured())
-    return { ok: false, error: "ANTHROPIC_API_KEY is not set" };
+  if (!isAnthropicConfigured()) return { ok: false, error: "ANTHROPIC_API_KEY is not set" };
   try {
     const { programs } = await generateStructured({
       systemPrompt: CMBS_SEED.systemPrompt,
@@ -1201,8 +1138,7 @@ export async function seedCmbsPrograms(
 
 export async function seedLoanBook(scenarioId: string): Promise<SeedResult> {
   if (!Types.ObjectId.isValid(scenarioId)) return { ok: false, error: "invalid scenario" };
-  if (!isAnthropicConfigured())
-    return { ok: false, error: "ANTHROPIC_API_KEY is not set" };
+  if (!isAnthropicConfigured()) return { ok: false, error: "ANTHROPIC_API_KEY is not set" };
   try {
     await connectToDatabase();
     const programs = await CapitalProgram.find({ scenarioId })
@@ -1281,19 +1217,30 @@ function monthsForFy(fy: number): string[] {
 // Map Gallantree internal grade → indicative agency ratings.
 function indicativeRatings(grade: string): { fitch: string; moodys: string } {
   switch (grade) {
-    case "A+": return { fitch: "AAAsf", moodys: "Aaa(sf)" };
-    case "A":  return { fitch: "AAsf",  moodys: "Aa(sf)" };
-    case "A-": return { fitch: "Asf",   moodys: "A(sf)" };
-    case "B+": return { fitch: "BBBsf", moodys: "Baa(sf)" };
-    case "B":  return { fitch: "BBBsf", moodys: "Baa(sf)" };
-    case "B-": return { fitch: "BBsf",  moodys: "Ba(sf)" };
-    case "C+": return { fitch: "BBsf",  moodys: "Ba(sf)" };
-    case "C":  return { fitch: "Bsf",   moodys: "B(sf)" };
-    case "C-": return { fitch: "Bsf",   moodys: "B(sf)" };
+    case "A+":
+      return { fitch: "AAAsf", moodys: "Aaa(sf)" };
+    case "A":
+      return { fitch: "AAsf", moodys: "Aa(sf)" };
+    case "A-":
+      return { fitch: "Asf", moodys: "A(sf)" };
+    case "B+":
+      return { fitch: "BBBsf", moodys: "Baa(sf)" };
+    case "B":
+      return { fitch: "BBBsf", moodys: "Baa(sf)" };
+    case "B-":
+      return { fitch: "BBsf", moodys: "Ba(sf)" };
+    case "C+":
+      return { fitch: "BBsf", moodys: "Ba(sf)" };
+    case "C":
+      return { fitch: "Bsf", moodys: "B(sf)" };
+    case "C-":
+      return { fitch: "Bsf", moodys: "B(sf)" };
     case "D+":
     case "D":
-    case "D-": return { fitch: "Bsf",   moodys: "B(sf)" };
-    default:   return { fitch: "NR",    moodys: "NR" };
+    case "D-":
+      return { fitch: "Bsf", moodys: "B(sf)" };
+    default:
+      return { fitch: "NR", moodys: "NR" };
   }
 }
 
@@ -1313,10 +1260,8 @@ export async function seedLoansByFy(
   scenarioId: string,
   params: SeedLoansByFyParams,
 ): Promise<SeedResult> {
-  if (!Types.ObjectId.isValid(scenarioId))
-    return { ok: false, error: "invalid scenario" };
-  if (!isAnthropicConfigured())
-    return { ok: false, error: "ANTHROPIC_API_KEY is not set" };
+  if (!Types.ObjectId.isValid(scenarioId)) return { ok: false, error: "invalid scenario" };
+  if (!isAnthropicConfigured()) return { ok: false, error: "ANTHROPIC_API_KEY is not set" };
 
   // Validate every program ID up front.
   for (const a of params.fyAssignments) {
@@ -1330,11 +1275,7 @@ export async function seedLoansByFy(
 
     // Bulk-load all referenced programs once, keyed by id.
     const uniqueProgramIds = Array.from(
-      new Set(
-        params.fyAssignments
-          .filter((a) => a.count > 0)
-          .map((a) => a.capitalProgramId),
-      ),
+      new Set(params.fyAssignments.filter((a) => a.count > 0).map((a) => a.capitalProgramId)),
     );
     if (uniqueProgramIds.length === 0) {
       return { ok: false, error: "no FY has a positive count" };
@@ -1345,9 +1286,7 @@ export async function seedLoansByFy(
     })
       .select("name type")
       .lean<Array<{ _id: { toString: () => string }; name: string; type: string }>>();
-    const programById = new Map(
-      programDocs.map((p) => [p._id.toString(), p]),
-    );
+    const programById = new Map(programDocs.map((p) => [p._id.toString(), p]));
     if (programById.size !== uniqueProgramIds.length) {
       return {
         ok: false,
@@ -1405,9 +1344,7 @@ export async function seedLoansByFy(
         const icr = annualInterest > 0 ? noi / annualInterest : dscr;
         // WALE: weighted-avg lease expiry, in years. Stabilised: 3-7y; Transitional: 1-3y.
         const isStabilised = l.propertyStatus === "Stabilised";
-        const waleYears = isStabilised
-          ? 3 + Math.random() * 4
-          : 1 + Math.random() * 2;
+        const waleYears = isStabilised ? 3 + Math.random() * 4 : 1 + Math.random() * 2;
         const { fitch, moodys } = indicativeRatings(l.internalGrade);
 
         return {

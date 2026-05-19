@@ -60,8 +60,15 @@ interface OverviewMonthlyItem {
 
 export function buildOverviewData(
   groups: FYGroup[],
-  revenueLines: { accountCode: string; monthly: { periodKey: string; value: { toFixed: (n: number) => string } }[] }[],
-  opexLines: { accountCode: string; items: OverviewMonthlyItem[]; monthly: { periodKey: string; value: { toFixed: (n: number) => string } }[] }[],
+  revenueLines: {
+    accountCode: string;
+    monthly: { periodKey: string; value: { toFixed: (n: number) => string } }[];
+  }[],
+  opexLines: {
+    accountCode: string;
+    items: OverviewMonthlyItem[];
+    monthly: { periodKey: string; value: { toFixed: (n: number) => string } }[];
+  }[],
   pnlExt: {
     revenue: { totals: { periodKey: string; value: { toFixed: (n: number) => string } }[] };
     opex: { totals: { periodKey: string; value: { toFixed: (n: number) => string } }[] };
@@ -145,12 +152,12 @@ export function buildOverviewData(
 
   return {
     fys: groups.map((g) => g.fy),
-    revenueLines: revenueLines.map(lineToOverview).sort((a, b) =>
-      a.accountCode.localeCompare(b.accountCode),
-    ),
-    opexLines: opexLines.map(lineToOverview).sort((a, b) =>
-      a.accountCode.localeCompare(b.accountCode),
-    ),
+    revenueLines: revenueLines
+      .map(lineToOverview)
+      .sort((a, b) => a.accountCode.localeCompare(b.accountCode)),
+    opexLines: opexLines
+      .map(lineToOverview)
+      .sort((a, b) => a.accountCode.localeCompare(b.accountCode)),
     liabilityLines,
     liabilityTotalsByYear,
     liabilityTotal,

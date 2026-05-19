@@ -12,10 +12,10 @@
 // the sign-in URL to the server console — handy in dev when you haven't
 // configured email yet.
 
-import NextAuth from "next-auth";
 import { MongoDBAdapter } from "@auth/mongodb-adapter";
-import Google from "next-auth/providers/google";
 import sgMail from "@sendgrid/mail";
+import NextAuth from "next-auth";
+import Google from "next-auth/providers/google";
 import { authConfig } from "@/lib/auth.config";
 import { authClientPromise } from "@/lib/mongoClient";
 
@@ -70,17 +70,12 @@ async function sendMagicLink({ identifier, url, expires, provider }: EmailProvid
     return;
   }
   if (!from) {
-    throw new Error(
-      "SENDGRID_FROM_EMAIL is not set — magic-link emails cannot be sent.",
-    );
+    throw new Error("SENDGRID_FROM_EMAIL is not set — magic-link emails cannot be sent.");
   }
 
   sgMail.setApiKey(apiKey);
 
-  const expiresMinutes = Math.max(
-    1,
-    Math.round((expires.getTime() - Date.now()) / 60_000),
-  );
+  const expiresMinutes = Math.max(1, Math.round((expires.getTime() - Date.now()) / 60_000));
 
   // Branch 1 — Dynamic Template path. When SENDGRID_LOGIN_EMAIL_ID is set,
   // SendGrid renders the email from the template; subject + HTML/text come
@@ -190,10 +185,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             // Stamp lastLogin (best-effort, don't block sign-in if it fails).
             await db
               .collection("users")
-              .updateOne(
-                { _id: doc._id },
-                { $set: { lastLogin: new Date() } },
-              )
+              .updateOne({ _id: doc._id }, { $set: { lastLogin: new Date() } })
               .catch(() => {});
           }
         }
@@ -217,8 +209,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     // AUTH_GOOGLE_ID / AUTH_GOOGLE_SECRET automatically via the Google()
     // provider factory; the conditional spread keeps the button hidden on
     // /login when the env isn't configured.
-    ...(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET
-      ? [Google]
-      : []),
+    ...(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET ? [Google] : []),
   ],
 });

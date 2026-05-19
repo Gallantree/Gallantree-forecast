@@ -11,14 +11,14 @@
 // callback in auth.config.ts. This guard is the live-page fallback for users
 // who sit on a tab while their token lapses.
 
-import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { signIn, useSession } from "next-auth/react";
+import { useEffect, useState } from "react";
 
 const PUBLIC_PREFIXES = ["/login", "/api/auth"];
 
 function isPublicPath(path: string): boolean {
-  return PUBLIC_PREFIXES.some((p) => path === p || path.startsWith(p + "/"));
+  return PUBLIC_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`));
 }
 
 export function SessionExpiryGuard() {
@@ -53,10 +53,7 @@ export function SessionExpiryGuard() {
 
   return (
     <>
-      <div
-        aria-hidden="true"
-        className="fixed inset-0 z-[100] bg-zinc-900/50 backdrop-blur-sm"
-      />
+      <div aria-hidden="true" className="fixed inset-0 z-[100] bg-zinc-900/50 backdrop-blur-sm" />
       <div
         role="dialog"
         aria-modal="true"
@@ -64,15 +61,12 @@ export function SessionExpiryGuard() {
         className="fixed inset-0 z-[101] grid place-items-center p-4"
       >
         <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl">
-          <h2
-            id="session-expiry-title"
-            className="text-base font-semibold text-zinc-900"
-          >
+          <h2 id="session-expiry-title" className="text-base font-semibold text-zinc-900">
             Your session has expired
           </h2>
           <p className="mt-1 text-sm text-zinc-600">
-            For your security, sessions end after 2 hours of inactivity. Please
-            sign in again to continue.
+            For your security, sessions end after 2 hours of inactivity. Please sign in again to
+            continue.
           </p>
           <div className="mt-5 flex flex-col gap-2">
             <button

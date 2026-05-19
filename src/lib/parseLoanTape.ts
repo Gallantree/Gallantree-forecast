@@ -1,5 +1,5 @@
 import ExcelJS from "exceljs";
-import { Types } from "mongoose";
+import type { Types } from "mongoose";
 import { toDecimal128 } from "@/utils/money";
 
 export interface ParsedLoan {

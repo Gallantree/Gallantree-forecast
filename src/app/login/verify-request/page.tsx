@@ -32,21 +32,17 @@ export default async function VerifyRequestPage({ searchParams }: Params) {
             <EnvelopeIcon />
           </div>
 
-          <h1 className="mt-6 text-3xl font-bold tracking-tight text-zinc-900">
-            Check your email
-          </h1>
+          <h1 className="mt-6 text-3xl font-bold tracking-tight text-zinc-900">Check your email</h1>
 
           <p className="mt-3 text-sm text-zinc-600">
             We&apos;ve sent a sign-in link to{" "}
-            <span className="font-semibold text-zinc-900">{display}</span>.{" "}
-            The link expires in 60 minutes. Click the link in your inbox to
-            continue.
+            <span className="font-semibold text-zinc-900">{display}</span>. The link expires in 60
+            minutes. Click the link in your inbox to continue.
           </p>
 
           <div className="mt-8 flex flex-col items-center gap-3">
             <p className="text-xs text-zinc-500">
-              Didn&apos;t receive the email? Check your spam folder or contact
-              your administrator.
+              Didn&apos;t receive the email? Check your spam folder or contact your administrator.
             </p>
             <Link
               href="/login"

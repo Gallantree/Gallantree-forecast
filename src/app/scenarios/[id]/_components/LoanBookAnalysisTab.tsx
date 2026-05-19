@@ -14,7 +14,7 @@ import {
   YAxis,
 } from "recharts";
 import { fmtMoney2, fmtNum0 } from "@/utils/format";
-import type { LoanAnalysisData, BarPoint } from "./loanAnalysisData";
+import type { BarPoint, LoanAnalysisData } from "./loanAnalysisData";
 
 const COLORS = {
   emerald: "#10b981",
@@ -43,9 +43,7 @@ export function LoanBookAnalysisTab({ data }: { data: LoanAnalysisData }) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 bg-white text-sm text-zinc-500">
         <div>No loans yet.</div>
-        <div className="text-xs">
-          Upload a tape or seed the loan book to see analysis.
-        </div>
+        <div className="text-xs">Upload a tape or seed the loan book to see analysis.</div>
       </div>
     );
   }
@@ -84,7 +82,12 @@ export function LoanBookAnalysisTab({ data }: { data: LoanAnalysisData }) {
               margin={{ top: 8, right: 16, left: 0, bottom: 4 }}
             >
               <CartesianGrid stroke="#e4e4e7" vertical={false} />
-              <XAxis dataKey="label" tick={{ fill: "#52525b", fontSize: 11 }} axisLine={{ stroke: "#d4d4d8" }} tickLine={false} />
+              <XAxis
+                dataKey="label"
+                tick={{ fill: "#52525b", fontSize: 11 }}
+                axisLine={{ stroke: "#d4d4d8" }}
+                tickLine={false}
+              />
               <YAxis
                 yAxisId="left"
                 tickFormatter={(v) => fmtShort(Number(v))}
@@ -109,10 +112,7 @@ export function LoanBookAnalysisTab({ data }: { data: LoanAnalysisData }) {
                     : [fmtNum0(Number(value)), "Loans"]
                 }
               />
-              <Legend
-                wrapperStyle={{ fontSize: 11, color: "#52525b" }}
-                iconType="circle"
-              />
+              <Legend wrapperStyle={{ fontSize: 11, color: "#52525b" }} iconType="circle" />
               <Bar
                 yAxisId="left"
                 dataKey="value"
@@ -134,10 +134,7 @@ export function LoanBookAnalysisTab({ data }: { data: LoanAnalysisData }) {
         </Card>
 
         {/* 2. Originations by month (timeline) */}
-        <Card
-          title="Originations by month"
-          subtitle="Monthly count across the imported tape"
-        >
+        <Card title="Originations by month" subtitle="Monthly count across the imported tape">
           <ResponsiveContainer width="100%" height={260}>
             <BarChart
               data={data.originationsByMonth}
@@ -151,21 +148,20 @@ export function LoanBookAnalysisTab({ data }: { data: LoanAnalysisData }) {
                 tickLine={false}
                 interval="preserveStartEnd"
               />
-              <YAxis tick={{ fill: "#52525b", fontSize: 11 }} axisLine={false} tickLine={false} width={40} />
-              <Tooltip
-                contentStyle={tooltipStyle}
-                formatter={countFormatter}
+              <YAxis
+                tick={{ fill: "#52525b", fontSize: 11 }}
+                axisLine={false}
+                tickLine={false}
+                width={40}
               />
+              <Tooltip contentStyle={tooltipStyle} formatter={countFormatter} />
               <Bar dataKey="value" fill={COLORS.sky} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </Card>
 
         {/* 3. State — # of deals (horizontal) */}
-        <Card
-          title="Deals by state"
-          subtitle="Loan count by Australian state"
-        >
+        <Card title="Deals by state" subtitle="Loan count by Australian state">
           <ResponsiveContainer width="100%" height={260}>
             <BarChart
               data={data.countByState}
@@ -173,7 +169,12 @@ export function LoanBookAnalysisTab({ data }: { data: LoanAnalysisData }) {
               margin={{ top: 8, right: 24, left: 8, bottom: 4 }}
             >
               <CartesianGrid stroke="#e4e4e7" horizontal={false} />
-              <XAxis type="number" tick={{ fill: "#52525b", fontSize: 11 }} axisLine={false} tickLine={false} />
+              <XAxis
+                type="number"
+                tick={{ fill: "#52525b", fontSize: 11 }}
+                axisLine={false}
+                tickLine={false}
+              />
               <YAxis
                 type="category"
                 dataKey="label"
@@ -182,10 +183,7 @@ export function LoanBookAnalysisTab({ data }: { data: LoanAnalysisData }) {
                 tickLine={false}
                 width={48}
               />
-              <Tooltip
-                contentStyle={tooltipStyle}
-                formatter={countFormatter}
-              />
+              <Tooltip contentStyle={tooltipStyle} formatter={countFormatter} />
               <Bar dataKey="value" radius={[0, 6, 6, 0]}>
                 {data.countByState.map((_, i) => (
                   <Cell key={i} fill={palette[i % palette.length]} />
@@ -196,10 +194,7 @@ export function LoanBookAnalysisTab({ data }: { data: LoanAnalysisData }) {
         </Card>
 
         {/* 4. State — $ volume (horizontal) */}
-        <Card
-          title="$ Volume by state"
-          subtitle="Aggregate loan balance by state"
-        >
+        <Card title="$ Volume by state" subtitle="Aggregate loan balance by state">
           <ResponsiveContainer width="100%" height={260}>
             <BarChart
               data={data.volumeByState}
@@ -222,10 +217,7 @@ export function LoanBookAnalysisTab({ data }: { data: LoanAnalysisData }) {
                 tickLine={false}
                 width={48}
               />
-              <Tooltip
-                contentStyle={tooltipStyle}
-                formatter={moneyFormatter("Volume")}
-              />
+              <Tooltip contentStyle={tooltipStyle} formatter={moneyFormatter("Volume")} />
               <Bar dataKey="value" radius={[0, 6, 6, 0]}>
                 {data.volumeByState.map((_, i) => (
                   <Cell key={i} fill={palette[i % palette.length]} />
@@ -236,18 +228,22 @@ export function LoanBookAnalysisTab({ data }: { data: LoanAnalysisData }) {
         </Card>
 
         {/* 5. LVR buckets — count */}
-        <Card
-          title="LVR distribution · loan count"
-          subtitle="% of loans by underwritten LVR band"
-        >
+        <Card title="LVR distribution · loan count" subtitle="% of loans by underwritten LVR band">
           <ResponsiveContainer width="100%" height={260}>
-            <BarChart
-              data={data.lvrCount}
-              margin={{ top: 8, right: 16, left: 0, bottom: 4 }}
-            >
+            <BarChart data={data.lvrCount} margin={{ top: 8, right: 16, left: 0, bottom: 4 }}>
               <CartesianGrid stroke="#e4e4e7" vertical={false} />
-              <XAxis dataKey="label" tick={{ fill: "#52525b", fontSize: 11 }} axisLine={{ stroke: "#d4d4d8" }} tickLine={false} />
-              <YAxis tick={{ fill: "#52525b", fontSize: 11 }} axisLine={false} tickLine={false} width={40} />
+              <XAxis
+                dataKey="label"
+                tick={{ fill: "#52525b", fontSize: 11 }}
+                axisLine={{ stroke: "#d4d4d8" }}
+                tickLine={false}
+              />
+              <YAxis
+                tick={{ fill: "#52525b", fontSize: 11 }}
+                axisLine={false}
+                tickLine={false}
+                width={40}
+              />
               <Tooltip
                 contentStyle={tooltipStyle}
                 formatter={countWithPctFormatter(data.loanCount)}
@@ -262,17 +258,16 @@ export function LoanBookAnalysisTab({ data }: { data: LoanAnalysisData }) {
         </Card>
 
         {/* 6. LVR buckets — $ volume */}
-        <Card
-          title="LVR distribution · $ volume"
-          subtitle="Aggregate balance by LVR band"
-        >
+        <Card title="LVR distribution · $ volume" subtitle="Aggregate balance by LVR band">
           <ResponsiveContainer width="100%" height={260}>
-            <BarChart
-              data={data.lvrVolume}
-              margin={{ top: 8, right: 16, left: 0, bottom: 4 }}
-            >
+            <BarChart data={data.lvrVolume} margin={{ top: 8, right: 16, left: 0, bottom: 4 }}>
               <CartesianGrid stroke="#e4e4e7" vertical={false} />
-              <XAxis dataKey="label" tick={{ fill: "#52525b", fontSize: 11 }} axisLine={{ stroke: "#d4d4d8" }} tickLine={false} />
+              <XAxis
+                dataKey="label"
+                tick={{ fill: "#52525b", fontSize: 11 }}
+                axisLine={{ stroke: "#d4d4d8" }}
+                tickLine={false}
+              />
               <YAxis
                 tickFormatter={(v) => fmtShort(Number(v))}
                 tick={{ fill: "#52525b", fontSize: 11 }}
@@ -280,10 +275,7 @@ export function LoanBookAnalysisTab({ data }: { data: LoanAnalysisData }) {
                 tickLine={false}
                 width={70}
               />
-              <Tooltip
-                contentStyle={tooltipStyle}
-                formatter={moneyFormatter("Volume")}
-              />
+              <Tooltip contentStyle={tooltipStyle} formatter={moneyFormatter("Volume")} />
               <Bar dataKey="value" radius={[6, 6, 0, 0]}>
                 {data.lvrVolume.map((_, i) => (
                   <Cell key={i} fill={lvrColor(i, data.lvrVolume.length)} />
@@ -294,22 +286,23 @@ export function LoanBookAnalysisTab({ data }: { data: LoanAnalysisData }) {
         </Card>
 
         {/* 7. DSCR buckets */}
-        <Card
-          title="DSCR distribution"
-          subtitle="Underwritten DSCR coverage bands"
-        >
+        <Card title="DSCR distribution" subtitle="Underwritten DSCR coverage bands">
           <ResponsiveContainer width="100%" height={260}>
-            <BarChart
-              data={data.dscrCount}
-              margin={{ top: 8, right: 16, left: 0, bottom: 4 }}
-            >
+            <BarChart data={data.dscrCount} margin={{ top: 8, right: 16, left: 0, bottom: 4 }}>
               <CartesianGrid stroke="#e4e4e7" vertical={false} />
-              <XAxis dataKey="label" tick={{ fill: "#52525b", fontSize: 11 }} axisLine={{ stroke: "#d4d4d8" }} tickLine={false} />
-              <YAxis tick={{ fill: "#52525b", fontSize: 11 }} axisLine={false} tickLine={false} width={40} />
-              <Tooltip
-                contentStyle={tooltipStyle}
-                formatter={countFormatter}
+              <XAxis
+                dataKey="label"
+                tick={{ fill: "#52525b", fontSize: 11 }}
+                axisLine={{ stroke: "#d4d4d8" }}
+                tickLine={false}
               />
+              <YAxis
+                tick={{ fill: "#52525b", fontSize: 11 }}
+                axisLine={false}
+                tickLine={false}
+                width={40}
+              />
+              <Tooltip contentStyle={tooltipStyle} formatter={countFormatter} />
               <Bar dataKey="value" radius={[6, 6, 0, 0]}>
                 {data.dscrCount.map((_, i) => (
                   <Cell key={i} fill={dscrColor(i, data.dscrCount.length)} />
@@ -320,17 +313,19 @@ export function LoanBookAnalysisTab({ data }: { data: LoanAnalysisData }) {
         </Card>
 
         {/* 8. Program type mix */}
-        <Card
-          title="Capital program mix"
-          subtitle="$ volume by program type"
-        >
+        <Card title="Capital program mix" subtitle="$ volume by program type">
           <ResponsiveContainer width="100%" height={260}>
             <BarChart
               data={data.programTypeVolume}
               margin={{ top: 8, right: 16, left: 0, bottom: 4 }}
             >
               <CartesianGrid stroke="#e4e4e7" vertical={false} />
-              <XAxis dataKey="label" tick={{ fill: "#52525b", fontSize: 11 }} axisLine={{ stroke: "#d4d4d8" }} tickLine={false} />
+              <XAxis
+                dataKey="label"
+                tick={{ fill: "#52525b", fontSize: 11 }}
+                axisLine={{ stroke: "#d4d4d8" }}
+                tickLine={false}
+              />
               <YAxis
                 tickFormatter={(v) => fmtShort(Number(v))}
                 tick={{ fill: "#52525b", fontSize: 11 }}
@@ -338,10 +333,7 @@ export function LoanBookAnalysisTab({ data }: { data: LoanAnalysisData }) {
                 tickLine={false}
                 width={70}
               />
-              <Tooltip
-                contentStyle={tooltipStyle}
-                formatter={moneyFormatter("Volume")}
-              />
+              <Tooltip contentStyle={tooltipStyle} formatter={moneyFormatter("Volume")} />
               <Bar dataKey="value" radius={[6, 6, 0, 0]}>
                 {data.programTypeVolume.map((_, i) => (
                   <Cell key={i} fill={palette[i % palette.length]} />
@@ -352,10 +344,7 @@ export function LoanBookAnalysisTab({ data }: { data: LoanAnalysisData }) {
         </Card>
 
         {/* 9. Asset class mix */}
-        <Card
-          title="Asset class mix"
-          subtitle="$ volume by collateral asset class"
-        >
+        <Card title="Asset class mix" subtitle="$ volume by collateral asset class">
           <ResponsiveContainer width="100%" height={260}>
             <BarChart
               data={data.assetClassVolume}
@@ -378,10 +367,7 @@ export function LoanBookAnalysisTab({ data }: { data: LoanAnalysisData }) {
                 tickLine={false}
                 width={110}
               />
-              <Tooltip
-                contentStyle={tooltipStyle}
-                formatter={moneyFormatter("Volume")}
-              />
+              <Tooltip contentStyle={tooltipStyle} formatter={moneyFormatter("Volume")} />
               <Bar dataKey="value" radius={[0, 6, 6, 0]}>
                 {data.assetClassVolume.map((_, i) => (
                   <Cell key={i} fill={palette[i % palette.length]} />
@@ -397,17 +383,21 @@ export function LoanBookAnalysisTab({ data }: { data: LoanAnalysisData }) {
           subtitle="Number of loans per Gallantree grade tier"
         >
           <ResponsiveContainer width="100%" height={260}>
-            <BarChart
-              data={data.gradeCount}
-              margin={{ top: 8, right: 16, left: 0, bottom: 4 }}
-            >
+            <BarChart data={data.gradeCount} margin={{ top: 8, right: 16, left: 0, bottom: 4 }}>
               <CartesianGrid stroke="#e4e4e7" vertical={false} />
-              <XAxis dataKey="label" tick={{ fill: "#52525b", fontSize: 11, fontWeight: 600 }} axisLine={{ stroke: "#d4d4d8" }} tickLine={false} />
-              <YAxis tick={{ fill: "#52525b", fontSize: 11 }} axisLine={false} tickLine={false} width={40} />
-              <Tooltip
-                contentStyle={tooltipStyle}
-                formatter={countFormatter}
+              <XAxis
+                dataKey="label"
+                tick={{ fill: "#52525b", fontSize: 11, fontWeight: 600 }}
+                axisLine={{ stroke: "#d4d4d8" }}
+                tickLine={false}
               />
+              <YAxis
+                tick={{ fill: "#52525b", fontSize: 11 }}
+                axisLine={false}
+                tickLine={false}
+                width={40}
+              />
+              <Tooltip contentStyle={tooltipStyle} formatter={countFormatter} />
               <Bar dataKey="value" radius={[6, 6, 0, 0]}>
                 {data.gradeCount.map((row, i) => (
                   <Cell key={i} fill={gradeColor(row.label)} />
@@ -434,19 +424,12 @@ const tooltipStyle = {
 
 // Recharts' Formatter type is wider than what we need — accept its full union
 // and coerce. Saves writing four near-identical inline functions per chart.
-type RechartsValue =
-  | number
-  | string
-  | readonly (number | string)[]
-  | undefined;
+type RechartsValue = number | string | readonly (number | string)[] | undefined;
 function countFormatter(v: RechartsValue): [string, string] {
   return [fmtNum0(Number(v)), "Loans"];
 }
 function moneyFormatter(label: string) {
-  return (v: RechartsValue): [string, string] => [
-    fmtMoney2(Number(v)),
-    label,
-  ];
+  return (v: RechartsValue): [string, string] => [fmtMoney2(Number(v)), label];
 }
 function countWithPctFormatter(total: number) {
   return (v: RechartsValue): [string, string] => {
@@ -500,12 +483,8 @@ function Card({
   return (
     <div className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
       <div className="mb-3">
-        <h3 className="text-sm font-semibold tracking-tight text-zinc-900">
-          {title}
-        </h3>
-        {subtitle ? (
-          <p className="mt-0.5 text-[11px] text-zinc-500">{subtitle}</p>
-        ) : null}
+        <h3 className="text-sm font-semibold tracking-tight text-zinc-900">{title}</h3>
+        {subtitle ? <p className="mt-0.5 text-[11px] text-zinc-500">{subtitle}</p> : null}
       </div>
       {children}
     </div>
@@ -518,12 +497,11 @@ function Tile({ label, value }: { label: string; value: string }) {
       <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
         {label}
       </span>
-      <span className="text-xl font-semibold tabular-nums text-zinc-900">
-        {value}
-      </span>
+      <span className="text-xl font-semibold tabular-nums text-zinc-900">{value}</span>
     </div>
   );
 }
+
 // Type-only re-export so consumers can declare prop types without dragging
 // the client bundle in.
-export type { LoanAnalysisData, BarPoint };
+export type { BarPoint, LoanAnalysisData };
