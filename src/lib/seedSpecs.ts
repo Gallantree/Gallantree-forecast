@@ -143,7 +143,12 @@ Programs 2, 3, 4 — follow-on deals:
   - dealSize: pick a randomized total between 800,000,000 and 1,200,000,000 for each (different value each time)
   - Same fee structure as Program 1 (Senior 20bps, Sub 50bps, Servicing 50bps; basisAmount = dealSize for senior/sub, dealSize − 1.5m for servicing)
   - Same tranche structure: X, A, A-S, B, C, D, E, F, G, Equity
-  - Tranche numNotes: scale proportionally with dealSize so the principal of each tranche matches the share it had in Program 1 (A is ~57%, A-S ~13%, B ~7%, C ~5.5%, D ~3.4%, E ~1.9%, F ~3.3%, G ~2.2%, X ~0.13%, Equity ~7%). Round to whole notes.
+  - Tranche numNotes: scale proportionally with dealSize so each tranche's
+    share matches Program 1.
+    Shares: X 0.13%, A 56.65%, A-S 13.09%, B 6.89%, C 5.51%, D 3.44%,
+            E 1.89%, F 3.27%, G 2.24%, Equity 6.89%.
+    Compute: numNotes = round((share × dealSize) / 1000). Sum must equal
+    dealSize / 1000. DO NOT return numNotes = 0 for any tranche.
   - Tranche spreads (pick a randomized integer in each range — vary across the 4 deals):
       X:  380-420
       A:  165-190
@@ -184,27 +189,54 @@ const CMBS_SYSTEM = `You are a CMBS structuring assistant for Gallantree, an Aus
 
 GENERATE EXACTLY 4 CMBS PROGRAMS plus 1 WAREHOUSE FACILITY (5 total).
 
-CMBS programs (4 total):
-  - Names: "Gallantree CRE CMBS 2026-1", "Gallantree CRE CMBS 2026-2", "Gallantree CRE CMBS 2027-1", "Gallantree CRE CMBS 2027-2"
+──────────────────────────────────────────────────────────────────────────
+CMBS Program 1 — anchor deal (use these EXACT values):
+  - name: "Gallantree CRE CMBS 2026-1"
   - type: "CMBS"
-  - startPeriodKey 6 months apart starting 2026-07 (so 2026-07, 2027-01, 2027-07, 2028-01)
-  - endPeriodKey: 5 years after start (CMBS tenors are typically longer than CLOs)
+  - startPeriodKey: "2026-07"
+  - endPeriodKey: "2031-07"
+  - dealSize: "500000000"
   - faceValuePerNote: "1000"
-  - dealSize: randomize $400m-$800m (CMBS deals are typically smaller than CRE CLOs)
-  - Fees: Senior 15bps on dealSize (account 4500); Subordinate 35bps on dealSize (account 4510); Servicing 25bps on (dealSize − 500k) (account 4520)
-  - Tranche structure (TIGHTER than CRE CLO — fewer subordinate tranches):
-      X (control), A, A-S, B, C, D, Equity
-  - Tranche spreads (CMBS pricing is much tighter than CRE CLO):
-      X:  150-180
-      A:  120-130
-      A-S: 145-155
-      B:  170-180
-      C:  200-215
-      D:  240-260
-      Equity: 0
-  - Tranche numNotes shares (of dealSize): X ~0.1%, A ~70%, A-S ~10%, B ~7%, C ~4%, D ~2%, Equity ~7%. Round to whole notes.
-  - For EVERY tranche: calculationMethod "monthly", rateType "variable" (debt) or "fixed" (Equity), accountCode "6800"
+  - Fees: Senior management 15bps on $500,000,000 (account 4500); Subordinate management 35bps on $500,000,000 (account 4510); Servicing 25bps on $499,500,000 (account 4520)
+  - Tranches (name, numNotes, spread bps):
+      X       500     / 165
+      A       350000  / 125
+      A-S     50000   / 150
+      B       30000   / 175
+      C       20000   / 207
+      D       10000   / 250
+      Equity  39500   / 0
+  - Notes sum to 500,000 — matches dealSize / faceValuePerNote. DO NOT
+    deviate from these absolute numNotes values. Do not return 0.
 
+CMBS Programs 2, 3, 4 — follow-on deals:
+  - Names: "Gallantree CRE CMBS 2026-2", "Gallantree CRE CMBS 2027-1", "Gallantree CRE CMBS 2027-2"
+  - startPeriodKey 6 months apart: 2027-01, 2027-07, 2028-01
+  - endPeriodKey: 5 years after start (CMBS tenors are typically longer than CLOs)
+  - faceValuePerNote: always "1000"
+  - dealSize: pick a randomized total between 400,000,000 and 800,000,000 (different value each deal)
+  - Same fee structure as Program 1 (Senior 15bps, Sub 35bps, Servicing 25bps; servicing basis = dealSize − 500,000)
+  - Same tranche structure (X, A, A-S, B, C, D, Equity)
+  - Tranche numNotes: scale proportionally with dealSize so each tranche's share matches Program 1
+    (X 0.10%, A 70.00%, A-S 10.00%, B 6.00%, C 4.00%, D 2.00%, Equity 7.90%).
+    Compute: numNotes = round((share × dealSize) / 1000). Sum must equal dealSize / 1000.
+    DO NOT return numNotes = 0 for any tranche.
+  - Tranche spreads — pick a randomized integer in each band, vary across the 4 deals.
+    CMBS pricing is much tighter than CRE CLO because the collateral is stabilised:
+      X:   150-180
+      A:   120-130
+      A-S: 145-155
+      B:   170-180
+      C:   200-215
+      D:   240-260
+      Equity: 0
+
+For EVERY CMBS tranche:
+  - calculationMethod: "monthly"
+  - rateType: "variable" for debt tranches (X, A, A-S, B, C, D); "fixed" for Equity
+  - accountCode: "6800"
+
+──────────────────────────────────────────────────────────────────────────
 Warehouse facility (1):
   - name: "Gallantree Warehouse Facility 2026"
   - type: "WAREHOUSE"
