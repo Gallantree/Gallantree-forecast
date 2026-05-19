@@ -1054,6 +1054,17 @@ export async function clearLoanTape(scenarioId: string): Promise<void> {
   revalidatePath(`/scenarios/${scenarioId}`);
 }
 
+// Wipe every CapitalProgram for the scenario in one shot. Loans tied to
+// those programs keep their existing capitalProgramId — same dangling-FK
+// behaviour as the single-program deleteProgram() above, so the user can
+// re-seed programs and re-link loans without losing the loan tape.
+export async function clearAllPrograms(scenarioId: string): Promise<void> {
+  if (!Types.ObjectId.isValid(scenarioId)) return;
+  await connectToDatabase();
+  await CapitalProgram.deleteMany({ scenarioId });
+  revalidatePath(`/scenarios/${scenarioId}`);
+}
+
 export async function deleteStaff(scenarioId: string, headcountId: string): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId) || !Types.ObjectId.isValid(headcountId)) return;
   await connectToDatabase();
