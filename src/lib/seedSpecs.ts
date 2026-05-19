@@ -17,14 +17,16 @@ const FeeSchema = z.object({
   name: z.string(),
   category: z.enum(["senior_mgmt", "subordinate_mgmt", "servicing", "other"]),
   basisAmount: moneyString,
-  feeBps: z.number().int().min(0),
+  // Coerce — Haiku sometimes quotes numeric fields even when the tool
+  // schema declares them as numbers. See FyLoanRowSchema for the note.
+  feeBps: z.coerce.number().int().min(0),
   accountCode: z.string(),
 });
 
 const LiabilitySchema = z.object({
   name: z.string(),
-  numNotes: z.number().int().min(0),
-  returnProfileBps: z.number().int().min(0),
+  numNotes: z.coerce.number().int().min(0),
+  returnProfileBps: z.coerce.number().int().min(0),
   calculationMethod: z.enum(["monthly", "quarterly", "annually"]),
   rateType: z.enum(["fixed", "variable"]),
   accountCode: z.string().default("6800"),
@@ -304,13 +306,15 @@ const LoanSchema = z.object({
   propertyStatus: z.enum(["Stabilised", "Transitional"]),
   capitalProgramId: z.string(),
   originationPeriod: periodKey,
-  termMonths: z.number().int().min(6).max(180),
+  // Coerce: Haiku sometimes returns these as quoted strings — see the
+  // matching note on FyLoanRowSchema below.
+  termMonths: z.coerce.number().int().min(6).max(180),
   balance: moneyString,
   lvr: moneyString, // 0-1
   dscr: moneyString,
-  internalScore: z.number().int().min(0).max(200),
+  internalScore: z.coerce.number().int().min(0).max(200),
   internalGrade: z.string(),
-  creditSpreadBps: z.number().int().min(0).max(2000),
+  creditSpreadBps: z.coerce.number().int().min(0).max(2000),
 });
 
 export type SeedLoan = z.infer<typeof LoanSchema>;
@@ -488,12 +492,17 @@ const FyLoanRowSchema = z.object({
   ]),
   propertyStatus: z.enum(["Stabilised", "Transitional"]),
   originationPeriod: periodKey,
-  termMonths: z.number().int().min(6).max(180),
+  // Haiku occasionally emits numeric fields as quoted strings ("350" instead
+  // of 350) even when the tool schema says "type: number". Coerce so a
+  // string-typed input is silently converted rather than the whole batch
+  // failing validation. The downstream Loan model still receives a real
+  // number.
+  termMonths: z.coerce.number().int().min(6).max(180),
   balance: moneyString,
   lvr: moneyString,
   dscr: moneyString,
-  creditSpreadBps: z.number().int().min(0).max(2000),
-  internalScore: z.number().int().min(0).max(200),
+  creditSpreadBps: z.coerce.number().int().min(0).max(2000),
+  internalScore: z.coerce.number().int().min(0).max(200),
   internalGrade: z.string(),
 });
 
