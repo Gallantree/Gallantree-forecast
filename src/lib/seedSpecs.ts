@@ -30,6 +30,16 @@ const LiabilitySchema = z.object({
   accountCode: z.string().default("6800"),
 });
 
+// One-off issuance costs (credit underwriter, legal, ratings). Stored on the
+// program for reporting; the engine can later amortise or expense per the
+// scenario's accounting policy.
+const UpfrontFeeSchema = z.object({
+  name: z.string(),
+  category: z.enum(["underwriter", "legal", "credit_rating", "other"]),
+  amount: moneyString,
+  accountCode: z.string().optional(),
+});
+
 const ProgramSchema = z.object({
   name: z.string(),
   type: z.enum(["CRE_CLO", "CMBS", "MIT_FUND", "WAREHOUSE", "OTHER"]),
@@ -40,6 +50,7 @@ const ProgramSchema = z.object({
   notes: z.string().optional(),
   fees: z.array(FeeSchema),
   liabilities: z.array(LiabilitySchema),
+  upfrontFees: z.array(UpfrontFeeSchema).optional().default([]),
 });
 
 export type SeedProgram = z.infer<typeof ProgramSchema>;
@@ -103,6 +114,22 @@ const programInputSchema = {
               required: ["name", "numNotes", "returnProfileBps", "calculationMethod", "rateType"],
             },
           },
+          upfrontFees: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string" },
+                category: {
+                  type: "string",
+                  enum: ["underwriter", "legal", "credit_rating", "other"],
+                },
+                amount: { type: "string" },
+                accountCode: { type: "string" },
+              },
+              required: ["name", "category", "amount"],
+            },
+          },
         },
         required: [
           "name",
@@ -123,7 +150,7 @@ const programInputSchema = {
 
 const CRE_CLO_SYSTEM = `You are a CRE CLO structuring assistant for Gallantree, an Australian non-bank CRE lender. You generate realistic capital program specifications for a financial model.
 
-GENERATE EXACTLY 4 CRE CLO PROGRAMS.
+GENERATE EXACTLY 5 CRE CLO PROGRAMS — one fresh issuance per fiscal year across the 5-year model horizon (FY27 through FY31).
 
 Program 1 — anchor deal (use these EXACT values):
   - name: "Gallantree CRE CLO 2026 FL-1"
@@ -134,11 +161,16 @@ Program 1 — anchor deal (use these EXACT values):
   - faceValuePerNote: "1000"
   - Fees: Senior management 20bps on $1,161,500,000 (account 4500); Subordinate management 50bps on $1,161,500,000 (account 4510); Servicing 50bps on $1,160,000,000 (account 4520)
   - Tranches (name, numNotes, spread bps): X 1500/400, A 658000/175, A-S 152000/205, B 80000/235, C 64000/295, D 40000/360, E 22000/405, F 38000/535, G 26000/675, Equity 80000/0
+  - upfrontFees: [
+      { name: "Credit underwriter retainer", category: "underwriter", amount: "500000", accountCode: "6900" },
+      { name: "Legal counsel", category: "legal", amount: "900000", accountCode: "6900" },
+      { name: "Ratings agency presale + monitoring", category: "credit_rating", amount: "300000", accountCode: "6900" }
+    ]
 
-Programs 2, 3, 4 — follow-on deals:
-  - Names: "Gallantree CRE CLO 2026 FL-2", "Gallantree CRE CLO 2027 FL-1", "Gallantree CRE CLO 2027 FL-2"
-  - startPeriodKey 4 months apart: 2026-11, 2027-03, 2027-07
-  - endPeriodKey: 3 years after start (e.g. 2029-11)
+Programs 2, 3, 4, 5 — follow-on deals, one per FY:
+  - Names: "Gallantree CRE CLO 2027 FL-1", "Gallantree CRE CLO 2028 FL-1", "Gallantree CRE CLO 2029 FL-1", "Gallantree CRE CLO 2030 FL-1"
+  - startPeriodKey, ONE PER FY (12 months apart): 2027-07, 2028-07, 2029-07, 2030-07
+  - endPeriodKey: 3 years after start (e.g. 2030-07, 2031-07, 2032-07, 2033-07)
   - faceValuePerNote: always "1000"
   - dealSize: pick a randomized total between 800,000,000 and 1,200,000,000 for each (different value each time)
   - Same fee structure as Program 1 (Senior 20bps, Sub 50bps, Servicing 50bps; basisAmount = dealSize for senior/sub, dealSize − 1.5m for servicing)
@@ -149,7 +181,7 @@ Programs 2, 3, 4 — follow-on deals:
             E 1.89%, F 3.27%, G 2.24%, Equity 6.89%.
     Compute: numNotes = round((share × dealSize) / 1000). Sum must equal
     dealSize / 1000. DO NOT return numNotes = 0 for any tranche.
-  - Tranche spreads (pick a randomized integer in each range — vary across the 4 deals):
+  - Tranche spreads (pick a randomized integer in each range — vary across the deals):
       X:  380-420
       A:  165-190
       A-S: 200-210
@@ -160,6 +192,7 @@ Programs 2, 3, 4 — follow-on deals:
       F:  520-550
       G:  660-690
       Equity: 0
+  - upfrontFees: SAME three items as Program 1 ($500k underwriter, $900k legal, $300k ratings, all accountCode "6900"). Use identical amounts on every deal.
 
 For EVERY tranche:
   - calculationMethod: "monthly"
@@ -180,16 +213,15 @@ export const CRE_CLO_SEED = {
   systemPrompt: CRE_CLO_SYSTEM,
   tool: CRE_CLO_TOOL,
   userMessage:
-    "Generate the 4 CRE CLO programs per the specification. Vary the dealSize, numNotes, and tranche spreads as instructed.",
+    "Generate exactly 5 CRE CLO programs (one fresh issuance per fiscal year FY27 through FY31) per the specification. Vary the dealSize, numNotes, and tranche spreads as instructed. Include the upfront fees on every deal.",
 } as const;
 
 // ── CMBS seed ───────────────────────────────────────────────────────────────
 
 const CMBS_SYSTEM = `You are a CMBS structuring assistant for Gallantree, an Australian non-bank CRE lender. You generate realistic capital program specifications.
 
-GENERATE EXACTLY 4 CMBS PROGRAMS plus 1 WAREHOUSE FACILITY (5 total).
+GENERATE EXACTLY 5 CMBS PROGRAMS — one fresh issuance per fiscal year across the 5-year model horizon (FY27 through FY31). Do NOT generate any warehouse facilities.
 
-──────────────────────────────────────────────────────────────────────────
 CMBS Program 1 — anchor deal (use these EXACT values):
   - name: "Gallantree CRE CMBS 2026-1"
   - type: "CMBS"
@@ -208,11 +240,16 @@ CMBS Program 1 — anchor deal (use these EXACT values):
       Equity  39500   / 0
   - Notes sum to 500,000 — matches dealSize / faceValuePerNote. DO NOT
     deviate from these absolute numNotes values. Do not return 0.
+  - upfrontFees: [
+      { name: "Credit underwriter retainer", category: "underwriter", amount: "500000", accountCode: "6900" },
+      { name: "Legal counsel", category: "legal", amount: "900000", accountCode: "6900" },
+      { name: "Ratings agency presale + monitoring", category: "credit_rating", amount: "300000", accountCode: "6900" }
+    ]
 
-CMBS Programs 2, 3, 4 — follow-on deals:
-  - Names: "Gallantree CRE CMBS 2026-2", "Gallantree CRE CMBS 2027-1", "Gallantree CRE CMBS 2027-2"
-  - startPeriodKey 6 months apart: 2027-01, 2027-07, 2028-01
-  - endPeriodKey: 5 years after start (CMBS tenors are typically longer than CLOs)
+CMBS Programs 2, 3, 4, 5 — follow-on deals, one per FY:
+  - Names: "Gallantree CRE CMBS 2027-1", "Gallantree CRE CMBS 2028-1", "Gallantree CRE CMBS 2029-1", "Gallantree CRE CMBS 2030-1"
+  - startPeriodKey, ONE PER FY (12 months apart): 2027-07, 2028-07, 2029-07, 2030-07
+  - endPeriodKey: 5 years after start (e.g. 2032-07, 2033-07, 2034-07, 2035-07)
   - faceValuePerNote: always "1000"
   - dealSize: pick a randomized total between 400,000,000 and 800,000,000 (different value each deal)
   - Same fee structure as Program 1 (Senior 15bps, Sub 35bps, Servicing 25bps; servicing basis = dealSize − 500,000)
@@ -221,7 +258,7 @@ CMBS Programs 2, 3, 4 — follow-on deals:
     (X 0.10%, A 70.00%, A-S 10.00%, B 6.00%, C 4.00%, D 2.00%, Equity 7.90%).
     Compute: numNotes = round((share × dealSize) / 1000). Sum must equal dealSize / 1000.
     DO NOT return numNotes = 0 for any tranche.
-  - Tranche spreads — pick a randomized integer in each band, vary across the 4 deals.
+  - Tranche spreads — pick a randomized integer in each band, vary across the deals.
     CMBS pricing is much tighter than CRE CLO because the collateral is stabilised:
       X:   150-180
       A:   120-130
@@ -230,29 +267,20 @@ CMBS Programs 2, 3, 4 — follow-on deals:
       C:   200-215
       D:   240-260
       Equity: 0
+  - upfrontFees: SAME three items as Program 1 ($500k underwriter, $900k legal, $300k ratings, all accountCode "6900"). Use identical amounts on every deal.
 
 For EVERY CMBS tranche:
   - calculationMethod: "monthly"
   - rateType: "variable" for debt tranches (X, A, A-S, B, C, D); "fixed" for Equity
   - accountCode: "6800"
 
-──────────────────────────────────────────────────────────────────────────
-Warehouse facility (1):
-  - name: "Gallantree Warehouse Facility 2026"
-  - type: "WAREHOUSE"
-  - startPeriodKey: "2026-07"
-  - endPeriodKey: "2029-07"
-  - dealSize: "300000000"
-  - faceValuePerNote: "1000"
-  - Fees: Servicing 30bps on dealSize (account 4520) — no senior/sub management fees on a warehouse line
-  - Tranches: just ONE — name "Facility", numNotes 300000, spread 240 bps (warehouse pricing is wider than CMBS but tighter than CLO mezz), calculationMethod "monthly", rateType "variable", accountCode "6800"
-
 Return the structured result via the create_capital_programs tool. Do not return prose.`;
 
 export const CMBS_SEED = {
   systemPrompt: CMBS_SYSTEM,
   tool: CRE_CLO_TOOL, // same tool, different prompt
-  userMessage: "Generate the 4 CMBS programs and 1 Warehouse facility per the specification.",
+  userMessage:
+    "Generate exactly 5 CMBS programs (one per fiscal year FY27-FY31) per the specification. Do NOT generate any warehouse facilities.",
 } as const;
 
 // ── Loan-book seed ──────────────────────────────────────────────────────────

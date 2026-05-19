@@ -1105,6 +1105,12 @@ function persistSeededPrograms(scenarioId: string, programs: SeedProgram[]): Pro
       rateType: l.rateType,
       accountCode: l.accountCode ?? "6800",
     })),
+    upfrontFees: (p.upfrontFees ?? []).map((u) => ({
+      name: u.name,
+      category: u.category,
+      amount: toDecimal128(u.amount),
+      accountCode: u.accountCode,
+    })),
   }));
   return CapitalProgram.insertMany(docs);
 }
