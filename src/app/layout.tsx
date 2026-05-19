@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
-import { SessionProviderClient } from "@/app/_components/SessionProviderClient";
 import { SessionExpiryGuard } from "@/app/_components/SessionExpiryGuard";
+import { SessionProviderClient } from "@/app/_components/SessionProviderClient";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -45,10 +45,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">
         <SessionProviderClient>
           {children}

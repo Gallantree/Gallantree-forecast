@@ -1,8 +1,8 @@
 import Decimal from "decimal.js";
 import { cleanDecimal, fmtMoney2, fmtMoneyInput, fmtNum0, fmtPercent } from "@/utils/format";
 import { addStaff, deleteStaff, updateStaff } from "../_actions";
-import { EditStaffButton, type EditStaffData } from "./EditStaffButton";
 import { AddStaffForm, type PlainPayband } from "./AddStaffForm";
+import { EditStaffButton, type EditStaffData } from "./EditStaffButton";
 
 export interface StaffRow {
   _id: string;
@@ -84,10 +84,7 @@ export function StaffingTab({
   const totalFte = staff
     .reduce((acc, r) => acc.plus(new Decimal(r.ftePct?.toString() ?? "1")), new Decimal(0))
     .toDecimalPlaces(2);
-  const totalAnnualCost = staff.reduce(
-    (acc, r) => acc.plus(effectiveAnnual(r)),
-    new Decimal(0),
-  );
+  const totalAnnualCost = staff.reduce((acc, r) => acc.plus(effectiveAnnual(r)), new Decimal(0));
 
   const plainPaybands: PlainPayband[] = paybands.map((p) => ({
     band: p.band,
@@ -110,9 +107,7 @@ export function StaffingTab({
             <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
               Head count
             </div>
-            <div className="text-base font-semibold text-zinc-900">
-              {fmtNum0(headCount)}
-            </div>
+            <div className="text-base font-semibold text-zinc-900">{fmtNum0(headCount)}</div>
           </div>
           <div>
             <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
@@ -155,8 +150,8 @@ export function StaffingTab({
           <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-zinc-500">
             <div>No staff yet.</div>
             <div className="text-xs">
-              Click <span className="font-medium text-zinc-700">Add staff</span> in
-              the header to create one.
+              Click <span className="font-medium text-zinc-700">Add staff</span> in the header to
+              create one.
             </div>
           </div>
         ) : (
@@ -184,9 +179,7 @@ export function StaffingTab({
                 const fte = new Decimal(r.ftePct?.toString() ?? "1");
                 const effective = effectiveAnnual(r);
                 const bandTier =
-                  r.band !== undefined && r.tier !== undefined
-                    ? `B${r.band} · T${r.tier}`
-                    : "—";
+                  r.band !== undefined && r.tier !== undefined ? `B${r.band} · T${r.tier}` : "—";
                 return (
                   <tr key={r._id} className="border-b border-zinc-100 hover:bg-yellow-50/40">
                     <Td>{r.personName ?? <span className="text-zinc-400">—</span>}</Td>
@@ -237,12 +230,12 @@ export function StaffingTab({
             </tbody>
             <tfoot className="sticky bottom-0 border-t-2 border-zinc-400 bg-zinc-100 font-semibold">
               <tr>
-                <Td colSpan={3}>Totals ({staff.length} role{staff.length === 1 ? "" : "s"})</Td>
+                <Td colSpan={3}>
+                  Totals ({staff.length} role{staff.length === 1 ? "" : "s"})
+                </Td>
                 <Td className="text-right tabular-nums">{fmtNum0(totalFte.toString())}</Td>
                 <Td colSpan={4}></Td>
-                <Td className="text-right tabular-nums">
-                  {fmtMoney2(totalAnnualCost.toFixed(2))}
-                </Td>
+                <Td className="text-right tabular-nums">{fmtMoney2(totalAnnualCost.toFixed(2))}</Td>
                 <Td colSpan={5}></Td>
               </tr>
             </tfoot>
@@ -269,8 +262,8 @@ export function StaffingTab({
               </thead>
               <tbody>
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((b) => {
-                  const row = [1, 2, 3, 4].map(
-                    (t) => paybands.find((p) => p.band === b && p.tier === t),
+                  const row = [1, 2, 3, 4].map((t) =>
+                    paybands.find((p) => p.band === b && p.tier === t),
                   );
                   return (
                     <tr key={b} className="border-b border-zinc-100">
@@ -298,9 +291,7 @@ export function StaffingTab({
 
 function Th({ children, className = "" }: { children?: React.ReactNode; className?: string }) {
   return (
-    <th
-      className={`border-b border-zinc-200 px-3 py-1.5 text-left font-medium ${className}`}
-    >
+    <th className={`border-b border-zinc-200 px-3 py-1.5 text-left font-medium ${className}`}>
       {children}
     </th>
   );

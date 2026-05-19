@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-flight runs on the same ref so a force-push doesn't queue
+# stale jobs against an already-superseded commit.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: lint · typecheck · test · build
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    env:
+      # Build-time-only dummy secrets so Next.js's static analysis +
+      # next-auth's config-eager-load don't blow up. Runtime values come
+      # from Heroku config vars.
+      AUTH_SECRET: ci-build-only-not-a-real-secret-padding-padding
+      AUTH_URL: http://localhost:3000
+      NEXTAUTH_URL: http://localhost:3000
+      AUTH_TRUST_HOST: "true"
+      MONGODB_URI: mongodb://localhost:27017/ci
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Biome (format + lint)
+        run: npx biome ci
+
+      - name: ESLint (Next.js rules)
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build

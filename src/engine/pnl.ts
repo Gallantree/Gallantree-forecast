@@ -1,18 +1,18 @@
 import Decimal from "decimal.js";
-import { money, ZERO, type Money } from "@/utils/money";
 import { periodKey } from "@/constants/periods";
-import { projectLoanRevenue, type LoanInput } from "./loans";
-import { projectProgramFee, type ProgramFeeInput } from "./programs";
+import { type Money, money, ZERO } from "@/utils/money";
+import { type LoanInput, projectLoanRevenue } from "./loans";
 import {
   licenseAccount,
-  projectPlatformLicense,
   type PlatformLicenseInput,
+  projectPlatformLicense,
 } from "./platformLicenses";
 import {
   DEFAULT_LIABILITY_ACCOUNT,
-  projectProgramLiability,
   type ProgramLiabilityInput,
+  projectProgramLiability,
 } from "./programLiabilities";
+import { type ProgramFeeInput, projectProgramFee } from "./programs";
 
 interface DriverBase {
   id: string;
@@ -177,10 +177,7 @@ export function projectRecurringRevenue(
   });
 }
 
-export function projectOpexFixed(
-  d: OpexFixedDriverInput,
-  horizon: string[],
-): MonthlyValue[] {
+export function projectOpexFixed(d: OpexFixedDriverInput, horizon: string[]): MonthlyValue[] {
   return horizon.map((pk) => {
     const idx = activeIndex(horizon, d.startPeriodKey, d.endPeriodKey, pk);
     return {
@@ -300,10 +297,7 @@ interface ProjectedItem {
 }
 
 function groupByAccount(items: ProjectedItem[], horizon: string[]): PnLLine[] {
-  const byAccount = new Map<
-    string,
-    { ids: string[]; items: PnLLineItem[]; monthly: Money[] }
-  >();
+  const byAccount = new Map<string, { ids: string[]; items: PnLLineItem[]; monthly: Money[] }>();
   for (const it of items) {
     const bucket = byAccount.get(it.accountCode) ?? {
       ids: [],
@@ -360,17 +354,13 @@ export function computePnL(
   const recurring = drivers.filter(
     (d): d is RecurringRevenueDriverInput => d.kind === "recurring_revenue",
   );
-  const feeVol = drivers.filter(
-    (d): d is FeeVolumeRevenueDriverInput => d.kind === "fee_x_volume",
-  );
+  const feeVol = drivers.filter((d): d is FeeVolumeRevenueDriverInput => d.kind === "fee_x_volume");
   const oneOff = drivers.filter((d): d is OneOffRevenueDriverInput => d.kind === "one_off");
   const opexFixed = drivers.filter((d): d is OpexFixedDriverInput => d.kind === "opex_fixed");
   const opexPct = drivers.filter(
     (d): d is OpexPctRevenueDriverInput => d.kind === "opex_pct_revenue",
   );
-  const opexPerFte = drivers.filter(
-    (d): d is OpexPerFteDriverInput => d.kind === "opex_per_fte",
-  );
+  const opexPerFte = drivers.filter((d): d is OpexPerFteDriverInput => d.kind === "opex_per_fte");
   const capex = drivers.filter(
     (d): d is CapexStraightLineDriverInput => d.kind === "capex_straight_line",
   );

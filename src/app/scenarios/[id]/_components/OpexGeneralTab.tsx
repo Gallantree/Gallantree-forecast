@@ -1,13 +1,10 @@
-import { cleanDecimal, fmtMoney2, fmtNum0 } from "@/utils/format";
 import type { PnL } from "@/engine/pnl";
+import { cleanDecimal, fmtMoney2, fmtNum0 } from "@/utils/format";
 import { createOpexDriver, deleteOpexDriver, updateOpexDriver } from "../_actions";
+import type { OpexDriverFormInitial, OpexDriverType } from "./AddOpexDriverModal";
 import { AddOpexDriverModal } from "./AddOpexDriverModal";
-import type {
-  OpexDriverFormInitial,
-  OpexDriverType,
-} from "./AddOpexDriverModal";
-import { PnlTable, type FYGroup } from "./PnlTable";
 import type { OpexItemEditTarget } from "./PnlClientTable";
+import { type FYGroup, PnlTable } from "./PnlTable";
 
 export interface OpexDriverRow {
   _id: string;
@@ -36,13 +33,9 @@ function toFormInitial(d: OpexDriverRow): OpexDriverFormInitial {
     startPeriodKey: d.startPeriodKey,
     endPeriodKey: d.endPeriodKey,
     baseMonthly: d.baseMonthly ? cleanDecimal(d.baseMonthly.toString()) : "0",
-    monthlyGrowthPct: d.monthlyGrowthPct
-      ? cleanDecimal(d.monthlyGrowthPct.toString())
-      : "0",
+    monthlyGrowthPct: d.monthlyGrowthPct ? cleanDecimal(d.monthlyGrowthPct.toString()) : "0",
     pctOfRevenue: d.pctOfRevenue ? cleanDecimal(d.pctOfRevenue.toString()) : "0",
-    costPerFteMonthly: d.costPerFteMonthly
-      ? cleanDecimal(d.costPerFteMonthly.toString())
-      : "0",
+    costPerFteMonthly: d.costPerFteMonthly ? cleanDecimal(d.costPerFteMonthly.toString()) : "0",
   };
 }
 
@@ -161,8 +154,8 @@ export function OpexGeneralTab({
           <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-zinc-500">
             <div>No OPEX drivers yet.</div>
             <div className="text-xs">
-              Click <span className="font-medium text-zinc-700">Add OPEX driver</span> to
-              add rent, software, services, or a per-FTE cost.
+              Click <span className="font-medium text-zinc-700">Add OPEX driver</span> to add rent,
+              software, services, or a per-FTE cost.
             </div>
             <div className="text-[11px] text-zinc-400">
               Salaries &amp; wages live in the OPEX — Staffing tab.
@@ -215,4 +208,3 @@ function CostCentreTile({
     </div>
   );
 }
-

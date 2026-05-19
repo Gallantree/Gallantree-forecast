@@ -1,5 +1,5 @@
 import Decimal from "decimal.js";
-import { money, ZERO, type Money } from "@/utils/money";
+import { type Money, money, ZERO } from "@/utils/money";
 import type { MonthlyValue } from "./pnl";
 
 export type LiabilityCalculationMethod = "monthly" | "quarterly" | "annually";
@@ -49,9 +49,7 @@ export function projectProgramLiability(
   const monthly = principal.times(allInBps).div(10000).div(12);
   return horizon.map((pk) => ({
     periodKey: pk,
-    value: isActive(pk, l.startPeriodKey, l.endPeriodKey)
-      ? monthly
-      : (ZERO as Money),
+    value: isActive(pk, l.startPeriodKey, l.endPeriodKey) ? monthly : (ZERO as Money),
   }));
 }
 

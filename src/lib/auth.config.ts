@@ -36,11 +36,7 @@ export const authConfig = {
       const isLoggedIn = Boolean(auth?.user);
       const path = request.nextUrl.pathname;
       // Public routes — accessible without a session.
-      if (
-        path === "/login" ||
-        path.startsWith("/login/") ||
-        path.startsWith("/api/auth/")
-      ) {
+      if (path === "/login" || path.startsWith("/login/") || path.startsWith("/api/auth/")) {
         return true;
       }
       return isLoggedIn;

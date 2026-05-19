@@ -3,8 +3,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth, signOut } from "@/lib/auth";
 import { connectToDatabase } from "@/lib/db";
-import { User } from "@/models";
 import type { IUser } from "@/models";
+import { User } from "@/models";
 
 export const dynamic = "force-dynamic";
 
@@ -13,11 +13,7 @@ async function logout() {
   await signOut({ redirectTo: "/login" });
 }
 
-export default async function AdminLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
   if (!session?.user?.email) redirect("/login?callbackUrl=/admin");
 
@@ -27,10 +23,7 @@ export default async function AdminLayout({
     .lean<Pick<IUser, "firstName" | "lastName" | "name" | "email" | "userType">>();
 
   const displayName =
-    [me?.firstName, me?.lastName].filter(Boolean).join(" ") ||
-    me?.name ||
-    me?.email ||
-    "User";
+    [me?.firstName, me?.lastName].filter(Boolean).join(" ") || me?.name || me?.email || "User";
   const initials = displayName
     .split(/\s+/)
     .map((s) => s[0])
@@ -56,9 +49,7 @@ export default async function AdminLayout({
           <span className="grid h-7 w-7 place-items-center rounded-full bg-zinc-200 text-[11px] font-semibold text-zinc-700">
             {initials}
           </span>
-          <span className="text-sm font-medium text-zinc-800">
-            {displayName}
-          </span>
+          <span className="text-sm font-medium text-zinc-800">{displayName}</span>
           <form action={logout}>
             <button
               type="submit"
@@ -73,9 +64,7 @@ export default async function AdminLayout({
       <div className="flex flex-1 overflow-hidden">
         <nav className="w-64 shrink-0 border-r border-zinc-200 bg-white px-3 py-4">
           <div className="mb-3 flex items-center gap-2 px-2">
-            <span className="text-sm font-semibold tracking-tight text-zinc-900">
-              Admin
-            </span>
+            <span className="text-sm font-semibold tracking-tight text-zinc-900">Admin</span>
             <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-indigo-700">
               {userType}
             </span>
@@ -93,24 +82,14 @@ export default async function AdminLayout({
   );
 }
 
-function NavLink({
-  href,
-  label,
-  icon,
-}: {
-  href: string;
-  label: string;
-  icon: string;
-}) {
+function NavLink({ href, label, icon }: { href: string; label: string; icon: string }) {
   return (
     <li>
       <Link
         href={href}
         className="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-100"
       >
-        <span className="grid h-4 w-4 place-items-center text-xs text-zinc-500">
-          {icon}
-        </span>
+        <span className="grid h-4 w-4 place-items-center text-xs text-zinc-500">{icon}</span>
         <span>{label}</span>
       </Link>
     </li>

@@ -1,70 +1,58 @@
-import Link from "next/link";
 import { Types } from "mongoose";
+import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getCurrentUser } from "@/lib/currentUser";
 import { UserMenu } from "@/app/_components/UserMenu";
-import { connectToDatabase } from "@/lib/db";
-import {
-  Scenario,
-  Driver,
-  Headcount,
-  Period,
-  Account,
-  Payband,
-  Loan,
-  CapitalProgram,
-  PlatformLicense,
-} from "@/models";
-import { fmtMoney2 } from "@/utils/format";
+import { buildScenarioPeriods, FORECAST_HORIZON_MONTHS } from "@/constants/periods";
+import { loadEngineInputs } from "@/engine/inputs";
 import { computePnL, type MonthlyValue } from "@/engine/pnl";
 import { computeStatements } from "@/engine/statements";
-import { loadEngineInputs } from "@/engine/inputs";
+import { computeValuation } from "@/engine/valuation";
+import { getCurrentUser } from "@/lib/currentUser";
+import { connectToDatabase } from "@/lib/db";
 import {
-  buildScenarioPeriods,
-  FORECAST_HORIZON_MONTHS,
-} from "@/constants/periods";
-import { PnlTable, buildFYGroups } from "./_components/PnlTable";
-import { TabBar, isTabKey, type TabKey } from "./_components/TabBar";
-import { StaffingTab, type StaffRow, type PaybandRow } from "./_components/StaffingTab";
+  Account,
+  CapitalProgram,
+  Driver,
+  Headcount,
+  Loan,
+  Payband,
+  Period,
+  PlatformLicense,
+  Scenario,
+} from "@/models";
+import { fmtMoney2 } from "@/utils/format";
+import { addDriver } from "./_actions";
 import {
-  LoansTab,
+  type BalanceSheetData,
+  BalanceSheetTab,
+  type SerializedSeries,
+} from "./_components/BalanceSheetTab";
+import { type CashflowData, CashflowTab } from "./_components/CashflowTab";
+import { ControlPanelTab } from "./_components/ControlPanelTab";
+import { LoanBookAnalysisTab } from "./_components/LoanBookAnalysisTab";
+import {
   type BookGrowthProfileRow,
   type LoanRow,
+  LoansTab,
   type ProgramOption,
   type ProgramTypeKey,
 } from "./_components/LoansTab";
-import { LoanBookAnalysisTab } from "./_components/LoanBookAnalysisTab";
 import { buildLoanAnalysisData } from "./_components/loanAnalysisData";
+import { type OpexDriverRow, OpexGeneralTab } from "./_components/OpexGeneralTab";
+import { type OverviewData, OverviewTab } from "./_components/OverviewTab";
+import { buildOverviewData } from "./_components/overviewData";
+import { type PlatformLicenseRow, PlatformRevenuesTab } from "./_components/PlatformRevenuesTab";
+import { buildFYGroups, PnlTable } from "./_components/PnlTable";
 import {
   isFundingTranche,
-  ProgramsTab,
-  type ProgramRow,
   type ProgramAggregate,
+  type ProgramRow,
+  ProgramsTab,
 } from "./_components/ProgramsTab";
 import { buildProgramAnalysisData } from "./_components/programAnalysisData";
-import {
-  BalanceSheetTab,
-  type BalanceSheetData,
-  type SerializedSeries,
-} from "./_components/BalanceSheetTab";
-import { CashflowTab, type CashflowData } from "./_components/CashflowTab";
-import {
-  OverviewTab,
-  type OverviewData,
-} from "./_components/OverviewTab";
-import { buildOverviewData } from "./_components/overviewData";
-import { ValuationTab, type ValuationData } from "./_components/ValuationTab";
-import {
-  PlatformRevenuesTab,
-  type PlatformLicenseRow,
-} from "./_components/PlatformRevenuesTab";
-import {
-  OpexGeneralTab,
-  type OpexDriverRow,
-} from "./_components/OpexGeneralTab";
-import { ControlPanelTab } from "./_components/ControlPanelTab";
-import { computeValuation } from "@/engine/valuation";
-import { addDriver } from "./_actions";
+import { type PaybandRow, StaffingTab, type StaffRow } from "./_components/StaffingTab";
+import { isTabKey, TabBar, type TabKey } from "./_components/TabBar";
+import { type ValuationData, ValuationTab } from "./_components/ValuationTab";
 
 function serializeSeries(series: MonthlyValue[]): SerializedSeries {
   const monthly: Record<string, string> = {};
@@ -176,12 +164,8 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
     Headcount.find({ scenarioId: id }).sort({ createdAt: 1 }).lean<StaffRow[]>(),
     Payband.find({}).sort({ band: 1, tier: 1 }).lean<PaybandRow[]>(),
     Loan.find({ scenarioId: id }).sort({ loanId: 1 }).lean(),
-    CapitalProgram.find({ scenarioId: id })
-      .sort({ startPeriodKey: 1, name: 1 })
-      .lean(),
-    PlatformLicense.find({ scenarioId: id })
-      .sort({ type: 1, startPeriodKey: 1, name: 1 })
-      .lean(),
+    CapitalProgram.find({ scenarioId: id }).sort({ startPeriodKey: 1, name: 1 }).lean(),
+    PlatformLicense.find({ scenarioId: id }).sort({ type: 1, startPeriodKey: 1, name: 1 }).lean(),
     loadEngineInputs(id),
   ]);
 
@@ -266,38 +250,32 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
     aumByYear?: Array<{ toString: () => string }>;
     feePctOfAumByYear?: Array<{ toString: () => string }>;
   };
-  const licenseRows: PlatformLicenseRow[] = (licenseDocs as unknown as LeanLicense[]).map(
-    (l) => ({
-      _id: l._id.toString(),
-      name: l.name,
-      type: l.type,
-      startPeriodKey: l.startPeriodKey,
-      endPeriodKey: l.endPeriodKey,
-      notes: l.notes,
-      tier: l.tier,
-      monthlyFeePerSeat: l.monthlyFeePerSeat
-        ? { toString: () => l.monthlyFeePerSeat!.toString() }
-        : undefined,
-      seatCount: l.seatCount,
-      seatGrowthPctAnnual: l.seatGrowthPctAnnual
-        ? { toString: () => l.seatGrowthPctAnnual!.toString() }
-        : undefined,
-      billingFrequency: l.billingFrequency,
-      annualDiscountPct: l.annualDiscountPct
-        ? { toString: () => l.annualDiscountPct!.toString() }
-        : undefined,
-      monthlyFee: l.monthlyFee
-        ? { toString: () => l.monthlyFee!.toString() }
-        : undefined,
-      configFee: l.configFee ? { toString: () => l.configFee!.toString() } : undefined,
-      aumByYear: l.aumByYear
-        ? l.aumByYear.map((v) => ({ toString: () => v.toString() }))
-        : undefined,
-      feePctOfAumByYear: l.feePctOfAumByYear
-        ? l.feePctOfAumByYear.map((v) => ({ toString: () => v.toString() }))
-        : undefined,
-    }),
-  );
+  const licenseRows: PlatformLicenseRow[] = (licenseDocs as unknown as LeanLicense[]).map((l) => ({
+    _id: l._id.toString(),
+    name: l.name,
+    type: l.type,
+    startPeriodKey: l.startPeriodKey,
+    endPeriodKey: l.endPeriodKey,
+    notes: l.notes,
+    tier: l.tier,
+    monthlyFeePerSeat: l.monthlyFeePerSeat
+      ? { toString: () => l.monthlyFeePerSeat!.toString() }
+      : undefined,
+    seatCount: l.seatCount,
+    seatGrowthPctAnnual: l.seatGrowthPctAnnual
+      ? { toString: () => l.seatGrowthPctAnnual!.toString() }
+      : undefined,
+    billingFrequency: l.billingFrequency,
+    annualDiscountPct: l.annualDiscountPct
+      ? { toString: () => l.annualDiscountPct!.toString() }
+      : undefined,
+    monthlyFee: l.monthlyFee ? { toString: () => l.monthlyFee!.toString() } : undefined,
+    configFee: l.configFee ? { toString: () => l.configFee!.toString() } : undefined,
+    aumByYear: l.aumByYear ? l.aumByYear.map((v) => ({ toString: () => v.toString() })) : undefined,
+    feePctOfAumByYear: l.feePctOfAumByYear
+      ? l.feePctOfAumByYear.map((v) => ({ toString: () => v.toString() }))
+      : undefined,
+  }));
 
   // Serialise OPEX drivers (excluding revenue + capex types) for the OPEX-General tab.
   type LeanDriver = {
@@ -314,10 +292,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
   };
   const opexDriverRows: OpexDriverRow[] = (drivers as unknown as LeanDriver[])
     .filter(
-      (d) =>
-        d.type === "opex_fixed" ||
-        d.type === "opex_pct_revenue" ||
-        d.type === "opex_per_fte",
+      (d) => d.type === "opex_fixed" || d.type === "opex_pct_revenue" || d.type === "opex_per_fte",
     )
     .map((d) => ({
       _id: d._id.toString(),
@@ -326,15 +301,11 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
       accountCode: d.accountCode,
       startPeriodKey: d.startPeriodKey,
       endPeriodKey: d.endPeriodKey,
-      baseMonthly: d.baseMonthly
-        ? { toString: () => d.baseMonthly!.toString() }
-        : undefined,
+      baseMonthly: d.baseMonthly ? { toString: () => d.baseMonthly!.toString() } : undefined,
       monthlyGrowthPct: d.monthlyGrowthPct
         ? { toString: () => d.monthlyGrowthPct!.toString() }
         : undefined,
-      pctOfRevenue: d.pctOfRevenue
-        ? { toString: () => d.pctOfRevenue!.toString() }
-        : undefined,
+      pctOfRevenue: d.pctOfRevenue ? { toString: () => d.pctOfRevenue!.toString() } : undefined,
       costPerFteMonthly: d.costPerFteMonthly
         ? { toString: () => d.costPerFteMonthly!.toString() }
         : undefined,
@@ -414,33 +385,35 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
   // Pre-serialize programs (and their embedded fee _ids) into plain shapes
   // so any bound server-action args downstream stay plain — React 19 / Next 16
   // refuses to serialize ObjectId/Decimal128 across the action boundary.
-  const programRows: ProgramRow[] = (programDocs as unknown as Array<{
-    _id: { toString: () => string };
-    name: string;
-    type: ProgramRow["type"];
-    dealSize?: { toString: () => string };
-    faceValuePerNote?: { toString: () => string };
-    startPeriodKey: string;
-    endPeriodKey?: string;
-    notes?: string;
-    fees: Array<{
+  const programRows: ProgramRow[] = (
+    programDocs as unknown as Array<{
       _id: { toString: () => string };
       name: string;
-      category: ProgramRow["fees"][number]["category"];
-      basisAmount: { toString: () => string };
-      feeBps: number;
-      accountCode: string;
-    }>;
-    liabilities?: Array<{
-      _id: { toString: () => string };
-      name: string;
-      numNotes?: number;
-      returnProfileBps: number;
-      calculationMethod: "monthly" | "quarterly" | "annually";
-      rateType: "fixed" | "variable";
-      accountCode?: string;
-    }>;
-  }>).map((p) => ({
+      type: ProgramRow["type"];
+      dealSize?: { toString: () => string };
+      faceValuePerNote?: { toString: () => string };
+      startPeriodKey: string;
+      endPeriodKey?: string;
+      notes?: string;
+      fees: Array<{
+        _id: { toString: () => string };
+        name: string;
+        category: ProgramRow["fees"][number]["category"];
+        basisAmount: { toString: () => string };
+        feeBps: number;
+        accountCode: string;
+      }>;
+      liabilities?: Array<{
+        _id: { toString: () => string };
+        name: string;
+        numNotes?: number;
+        returnProfileBps: number;
+        calculationMethod: "monthly" | "quarterly" | "annually";
+        rateType: "fixed" | "variable";
+        accountCode?: string;
+      }>;
+    }>
+  ).map((p) => ({
     _id: p._id.toString(),
     name: p.name,
     type: p.type,
@@ -478,8 +451,8 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
   const horizon = scenarioPeriods.map((p) => p.key);
   const accountByCode = new Map(accounts.map((a) => [a.code, a.name]));
   const baseRateBps = scenario.baseRateBps ?? 0;
-  const loanBookGrowthPctByYear: string[] = (scenario.loanBookGrowthPctByYear ?? []).map(
-    (d) => d.toString(),
+  const loanBookGrowthPctByYear: string[] = (scenario.loanBookGrowthPctByYear ?? []).map((d) =>
+    d.toString(),
   );
 
   // Book growth profiles are kept on the model but currently inert. Synthetic
@@ -621,10 +594,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
   const cashflowData: CashflowData | null = statements
     ? (() => {
         const cf = statements.cf;
-        const totalNetIncome = cf.netIncome.reduce(
-          (acc, m) => acc + Number(m.value.toFixed(2)),
-          0,
-        );
+        const totalNetIncome = cf.netIncome.reduce((acc, m) => acc + Number(m.value.toFixed(2)), 0);
         const totalCashMovement = cf.netCashMovement.reduce(
           (acc, m) => acc + Number(m.value.toFixed(2)),
           0,
@@ -963,30 +933,21 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
           (balanceSheetData ? (
             <BalanceSheetTab data={balanceSheetData} />
           ) : (
-            <Stub
-              title="Balance Sheet"
-              message="Seed periods first — run `npm run seed`."
-            />
+            <Stub title="Balance Sheet" message="Seed periods first — run `npm run seed`." />
           ))}
 
         {tab === "cashflow" &&
           (cashflowData ? (
             <CashflowTab data={cashflowData} />
           ) : (
-            <Stub
-              title="Cashflow"
-              message="Seed periods first — run `npm run seed`."
-            />
+            <Stub title="Cashflow" message="Seed periods first — run `npm run seed`." />
           ))}
 
         {tab === "valuation" &&
           (valuationData ? (
             <ValuationTab scenarioId={id} data={valuationData} />
           ) : (
-            <Stub
-              title="Valuation"
-              message="Seed periods first — run `npm run seed`."
-            />
+            <Stub title="Valuation" message="Seed periods first — run `npm run seed`." />
           ))}
 
         {tab === "control-panel" && (

@@ -79,18 +79,9 @@ export function BalanceSheetTab({ data }: { data: BalanceSheetData }) {
       <div className="flex flex-wrap items-center gap-x-6 gap-y-1 border-b border-zinc-200 bg-zinc-50 px-4 py-2 text-[11px] text-zinc-600">
         <Stat label="DSO (days)" value={data.assumptions.dsoDays ?? "0"} />
         <Stat label="DPO (days)" value={data.assumptions.dpoDays ?? "0"} />
-        <Stat
-          label="Tax rate"
-          value={`${data.assumptions.taxRatePct ?? "0"}%`}
-        />
-        <Stat
-          label="Opening cash"
-          value={fmtMoney2(data.assumptions.openingCash ?? "0")}
-        />
-        <Stat
-          label="Opening equity"
-          value={fmtMoney2(data.assumptions.openingEquity ?? "0")}
-        />
+        <Stat label="Tax rate" value={`${data.assumptions.taxRatePct ?? "0"}%`} />
+        <Stat label="Opening cash" value={fmtMoney2(data.assumptions.openingCash ?? "0")} />
+        <Stat label="Opening equity" value={fmtMoney2(data.assumptions.openingEquity ?? "0")} />
         <span className="ml-auto text-zinc-400">
           BS values are period-end balances; FY columns show the FY-end balance.
         </span>
@@ -134,7 +125,11 @@ export function BalanceSheetTab({ data }: { data: BalanceSheetData }) {
             </tr>
           </thead>
           <tbody>
-            <SectionHeader colSpan={totalCols(groups)} label="Assets" color="bg-emerald-50 text-emerald-800" />
+            <SectionHeader
+              colSpan={totalCols(groups)}
+              label="Assets"
+              color="bg-emerald-50 text-emerald-800"
+            />
             <Row label="Cash" series={data.cash} groups={groups} />
             <Row label="Accounts receivable" series={data.ar} groups={groups} />
             <Row label="PPE — gross" series={data.ppeGross} groups={groups} subtle />
@@ -159,7 +154,11 @@ export function BalanceSheetTab({ data }: { data: BalanceSheetData }) {
               series={data.notesPayable}
               groups={groups}
             />
-            <Row label="Equity (retained earnings + opening)" series={data.equity} groups={groups} />
+            <Row
+              label="Equity (retained earnings + opening)"
+              series={data.equity}
+              groups={groups}
+            />
             <TotalRow
               label="Total liabilities & equity"
               series={data.totalLiabilitiesAndEquity}
@@ -340,21 +339,9 @@ function CheckRow({
   );
 }
 
-function Tile({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: "ok" | "warn";
-}) {
+function Tile({ label, value, tone }: { label: string; value: string; tone?: "ok" | "warn" }) {
   const valueClass =
-    tone === "warn"
-      ? "text-rose-700"
-      : tone === "ok"
-        ? "text-emerald-700"
-        : "text-zinc-900";
+    tone === "warn" ? "text-rose-700" : tone === "ok" ? "text-emerald-700" : "text-zinc-900";
   return (
     <div className="flex flex-col gap-1 bg-white px-4 py-3">
       <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">

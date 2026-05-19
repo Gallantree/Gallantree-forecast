@@ -2,8 +2,8 @@
 
 import { Fragment, useState } from "react";
 import { fmtNum0 } from "@/utils/format";
-import { AddOpexDriverModal, type OpexDriverFormInitial } from "./AddOpexDriverModal";
 import type { OpexDriverPayload } from "../_actions";
+import { AddOpexDriverModal, type OpexDriverFormInitial } from "./AddOpexDriverModal";
 
 export interface FYGroup {
   fy: number;
@@ -191,65 +191,64 @@ export function PnlClientTable(props: PnlClientTableProps) {
                       ? opexItemEditTargets[item.id]
                       : undefined;
                   return (
-                  <tr key={`${line.accountCode}-${item.id}`} className="group hover:bg-yellow-50/30">
-                    <td className="sticky left-0 z-20 w-72 border-b border-r border-zinc-100 bg-white px-3 py-1 pl-10 text-zinc-600">
-                      <span className="text-zinc-300">↳</span>{" "}
-                      <span className="text-zinc-700">{item.label}</span>
-                      <span className="ml-2 text-[10px] uppercase tracking-wider text-zinc-400">
-                        {SOURCE_LABEL[item.source]}
-                      </span>
-                      {editTarget && expenseAccounts && defaultStartPeriod ? (
-                        <span className="ml-2 inline-flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
-                          <AddOpexDriverModal
-                            defaultStartPeriod={defaultStartPeriod}
-                            expenseAccounts={expenseAccounts}
-                            initial={editTarget.formInitial}
-                            saveAction={editTarget.updateAction}
-                            triggerLabel="Edit"
-                            triggerClassName="rounded px-1.5 py-0.5 text-[10px] font-medium text-zinc-600 hover:bg-zinc-200 hover:text-zinc-900"
-                          />
-                          <form action={editTarget.deleteAction}>
-                            <button
-                              type="submit"
-                              className="rounded px-1.5 py-0.5 text-[10px] font-medium text-zinc-400 hover:bg-rose-50 hover:text-rose-600"
-                              aria-label={`Delete driver ${item.label}`}
-                            >
-                              Delete
-                            </button>
-                          </form>
+                    <tr
+                      key={`${line.accountCode}-${item.id}`}
+                      className="group hover:bg-yellow-50/30"
+                    >
+                      <td className="sticky left-0 z-20 w-72 border-b border-r border-zinc-100 bg-white px-3 py-1 pl-10 text-zinc-600">
+                        <span className="text-zinc-300">↳</span>{" "}
+                        <span className="text-zinc-700">{item.label}</span>
+                        <span className="ml-2 text-[10px] uppercase tracking-wider text-zinc-400">
+                          {SOURCE_LABEL[item.source]}
                         </span>
-                      ) : null}
-                    </td>
-                    {groups.map((g) => {
-                      const fyTotal = fySum(item.monthly, g.months);
-                      return (
-                        <Fragment key={`${item.id}-fy${g.fy}`}>
-                          {g.months.map((pk) => {
-                            const v = Number(item.monthly[pk] ?? "0");
-                            return (
-                              <td
-                                key={`${item.id}-${pk}`}
-                                className="border-b border-zinc-100 px-2 py-1 text-right tabular-nums text-zinc-500"
+                        {editTarget && expenseAccounts && defaultStartPeriod ? (
+                          <span className="ml-2 inline-flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
+                            <AddOpexDriverModal
+                              defaultStartPeriod={defaultStartPeriod}
+                              expenseAccounts={expenseAccounts}
+                              initial={editTarget.formInitial}
+                              saveAction={editTarget.updateAction}
+                              triggerLabel="Edit"
+                              triggerClassName="rounded px-1.5 py-0.5 text-[10px] font-medium text-zinc-600 hover:bg-zinc-200 hover:text-zinc-900"
+                            />
+                            <form action={editTarget.deleteAction}>
+                              <button
+                                type="submit"
+                                className="rounded px-1.5 py-0.5 text-[10px] font-medium text-zinc-400 hover:bg-rose-50 hover:text-rose-600"
+                                aria-label={`Delete driver ${item.label}`}
                               >
-                                {v === 0 ? (
-                                  <span className="text-zinc-300">—</span>
-                                ) : (
-                                  fmtNum0(v)
-                                )}
-                              </td>
-                            );
-                          })}
-                          <td className="border-b border-r border-zinc-200 bg-zinc-50/40 px-2 py-1 text-right tabular-nums text-zinc-700">
-                            {fyTotal === 0 ? (
-                              <span className="text-zinc-300">—</span>
-                            ) : (
-                              fmtNum0(fyTotal)
-                            )}
-                          </td>
-                        </Fragment>
-                      );
-                    })}
-                  </tr>
+                                Delete
+                              </button>
+                            </form>
+                          </span>
+                        ) : null}
+                      </td>
+                      {groups.map((g) => {
+                        const fyTotal = fySum(item.monthly, g.months);
+                        return (
+                          <Fragment key={`${item.id}-fy${g.fy}`}>
+                            {g.months.map((pk) => {
+                              const v = Number(item.monthly[pk] ?? "0");
+                              return (
+                                <td
+                                  key={`${item.id}-${pk}`}
+                                  className="border-b border-zinc-100 px-2 py-1 text-right tabular-nums text-zinc-500"
+                                >
+                                  {v === 0 ? <span className="text-zinc-300">—</span> : fmtNum0(v)}
+                                </td>
+                              );
+                            })}
+                            <td className="border-b border-r border-zinc-200 bg-zinc-50/40 px-2 py-1 text-right tabular-nums text-zinc-700">
+                              {fyTotal === 0 ? (
+                                <span className="text-zinc-300">—</span>
+                              ) : (
+                                fmtNum0(fyTotal)
+                              )}
+                            </td>
+                          </Fragment>
+                        );
+                      })}
+                    </tr>
                   );
                 })}
 
@@ -419,11 +418,7 @@ function CascadeNegativeRow({
                   key={`${label}-${pk}`}
                   className="border-b border-zinc-100 px-2 py-1 text-right tabular-nums"
                 >
-                  {v === 0 ? (
-                    <span className="text-zinc-300">—</span>
-                  ) : (
-                    `(${fmtNum0(Math.abs(v))})`
-                  )}
+                  {v === 0 ? <span className="text-zinc-300">—</span> : `(${fmtNum0(Math.abs(v))})`}
                 </td>
               );
             })}
@@ -466,10 +461,7 @@ function SectionTotalRow({
       {groups.map((g) => (
         <Fragment key={`${label}-fy${g.fy}`}>
           {g.months.map((pk) => (
-            <td
-              key={`${label}-${pk}`}
-              className={`${border} px-2 py-1.5 text-right tabular-nums`}
-            >
+            <td key={`${label}-${pk}`} className={`${border} px-2 py-1.5 text-right tabular-nums`}>
               {fmtNum0(totals[pk] ?? "0")}
             </td>
           ))}

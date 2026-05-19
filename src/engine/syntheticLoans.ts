@@ -147,9 +147,7 @@ const STABILISED_PROB: Record<ProgramTypeKey, number> = {
 };
 
 function sampleStatus(programType: ProgramTypeKey, seed: number): PropertyStatus {
-  return uniform(seed) < STABILISED_PROB[programType]
-    ? "Stabilised"
-    : "Transitional";
+  return uniform(seed) < STABILISED_PROB[programType] ? "Stabilised" : "Transitional";
 }
 
 // Per-program-type balance distribution. CRE CLO sponsor loans are typically
@@ -257,9 +255,7 @@ export function generateSyntheticLoans(
       if (months.length === 0) continue;
 
       for (let i = 0; i < addedCount; i++) {
-        const seed = hash(
-          `${scenarioSeed}|${profile.id}|${fyGroups[k].fy}|${i}`,
-        );
+        const seed = hash(`${scenarioSeed}|${profile.id}|${fyGroups[k].fy}|${i}`);
         // Independent sub-seeds for each randomized field.
         const monthSeed = Math.imul(seed, 0x9e3779b1) >>> 0;
         const scoreSeed = Math.imul(seed, 0x85ebca77) >>> 0;
@@ -274,10 +270,7 @@ export function generateSyntheticLoans(
 
         // ── Tenor with ±20% variance, then snap to integer months ──
         const tenorJitter = 1 + 0.2 * triangular(tenorSeed);
-        const tenorMonths = Math.max(
-          6,
-          Math.round(profile.avgTenorMonths * tenorJitter),
-        );
+        const tenorMonths = Math.max(6, Math.round(profile.avgTenorMonths * tenorJitter));
         const maturity = addMonths(origination, tenorMonths);
 
         // ── Score sampled around target; clamped 0-200 ──
@@ -289,14 +282,8 @@ export function generateSyntheticLoans(
 
         // ── LVR / DSCR derived from grade band ──
         const gradeProf = gradeProfile(grade);
-        const lvr = Math.max(
-          0.3,
-          Math.min(0.85, gradeProf.lvr + 0.04 * triangular(lvrSeed)),
-        );
-        const dscr = Math.max(
-          0.7,
-          Math.min(3.0, gradeProf.dscr + 0.1 * triangular(dscrSeed)),
-        );
+        const lvr = Math.max(0.3, Math.min(0.85, gradeProf.lvr + 0.04 * triangular(lvrSeed)));
+        const dscr = Math.max(0.7, Math.min(3.0, gradeProf.dscr + 0.1 * triangular(dscrSeed)));
 
         // ── Balance: per-program-type distribution ──
         const balance = sampleBalance(profile.programType, base.avgBalance, balSeed);

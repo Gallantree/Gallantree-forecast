@@ -1,14 +1,14 @@
-import type { PnL, PnLSection, MonthlyValue } from "@/engine/pnl";
+import type { MonthlyValue, PnL, PnLSection } from "@/engine/pnl";
 import {
-  PnlClientTable,
   type FYGroup,
   type OpexItemEditTarget,
   type PnlCascadeSeries,
+  PnlClientTable,
   type SerializedLine,
   type SerializedSection,
 } from "./PnlClientTable";
 
-export { type FYGroup };
+export type { FYGroup };
 
 export function buildFYGroups(periods: { key: string; fiscalYear: number }[]): FYGroup[] {
   const map = new Map<number, string[]>();
@@ -64,13 +64,10 @@ export function PnlTable({
   for (const [k, v] of accountByCode) accountByCodeObj[k] = v;
 
   const revenue =
-    showSection === "both" || showSection === "revenue"
-      ? serializeSection(pnl.revenue)
-      : undefined;
+    showSection === "both" || showSection === "revenue" ? serializeSection(pnl.revenue) : undefined;
   const opex =
     showSection === "both" || showSection === "opex" ? serializeSection(pnl.opex) : undefined;
-  const grossProfit =
-    showSection === "both" ? serializeMonthly(pnl.grossProfit) : undefined;
+  const grossProfit = showSection === "both" ? serializeMonthly(pnl.grossProfit) : undefined;
 
   return (
     <PnlClientTable

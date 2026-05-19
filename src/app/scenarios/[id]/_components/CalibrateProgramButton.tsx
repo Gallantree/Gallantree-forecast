@@ -12,9 +12,7 @@ export function CalibrateProgramButton({
   programId: string;
 }) {
   const [pending, startTransition] = useTransition();
-  const [toast, setToast] = useState<{ msg: string; tone: "ok" | "warn" } | null>(
-    null,
-  );
+  const [toast, setToast] = useState<{ msg: string; tone: "ok" | "warn" } | null>(null);
 
   function onClick() {
     startTransition(async () => {

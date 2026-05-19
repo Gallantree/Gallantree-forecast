@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
 import { signOut } from "next-auth/react";
+import { useEffect, useRef, useState } from "react";
 
 export interface UserMenuUser {
   email: string;
@@ -13,11 +13,7 @@ export interface UserMenuUser {
 }
 
 function initialsFrom(u: UserMenuUser): string {
-  const full =
-    [u.firstName, u.lastName].filter(Boolean).join(" ") ||
-    u.name ||
-    u.email ||
-    "";
+  const full = [u.firstName, u.lastName].filter(Boolean).join(" ") || u.name || u.email || "";
   return full
     .split(/\s+/)
     .filter(Boolean)
@@ -28,11 +24,7 @@ function initialsFrom(u: UserMenuUser): string {
 }
 
 function displayName(u: UserMenuUser): string {
-  return (
-    [u.firstName, u.lastName].filter(Boolean).join(" ") ||
-    u.name ||
-    u.email
-  );
+  return [u.firstName, u.lastName].filter(Boolean).join(" ") || u.name || u.email;
 }
 
 export function UserMenu({ user }: { user: UserMenuUser | null }) {
@@ -76,9 +68,7 @@ export function UserMenu({ user }: { user: UserMenuUser | null }) {
         <span className="grid h-8 w-8 place-items-center rounded-full bg-zinc-200 text-[11px] font-semibold text-zinc-700">
           {initialsFrom(user)}
         </span>
-        <span className="text-sm font-medium text-zinc-800">
-          {displayName(user)}
-        </span>
+        <span className="text-sm font-medium text-zinc-800">{displayName(user)}</span>
         <span className="text-zinc-400">▾</span>
       </button>
       {open ? (

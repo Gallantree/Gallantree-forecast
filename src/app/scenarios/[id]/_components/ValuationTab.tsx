@@ -1,10 +1,10 @@
 import { Fragment } from "react";
 import { fmtMoney2, fmtPercent } from "@/utils/format";
+import { updateValuationAssumptions } from "../_actions";
 import {
   EditValuationAssumptions,
   type ValuationAssumptionsView,
 } from "./EditValuationAssumptions";
-import { updateValuationAssumptions } from "../_actions";
 
 export interface ValuationFyAggregate {
   fy: number;
@@ -44,13 +44,7 @@ export interface ValuationData {
   assumptions: ValuationAssumptionsView;
 }
 
-export function ValuationTab({
-  scenarioId,
-  data,
-}: {
-  scenarioId: string;
-  data: ValuationData;
-}) {
+export function ValuationTab({ scenarioId, data }: { scenarioId: string; data: ValuationData }) {
   const lastDcf = data.dcf[data.dcf.length - 1];
   const lastEvEbitda = data.evEbitda[data.evEbitda.length - 1];
   const lastEvRevenue = data.evRevenue[data.evRevenue.length - 1];
@@ -148,7 +142,10 @@ export function ValuationTab({
             </thead>
             <tbody>
               {data.dcf.map((row) => (
-                <tr key={row.horizonYears} className="border-b border-zinc-100 hover:bg-yellow-50/40">
+                <tr
+                  key={row.horizonYears}
+                  className="border-b border-zinc-100 hover:bg-yellow-50/40"
+                >
                   <Td className="font-medium">{row.horizonYears}-year</Td>
                   <Td className="text-right tabular-nums">{fmtMoney2(row.presentValueFcfs)}</Td>
                   <Td className="text-right tabular-nums">
@@ -304,11 +301,7 @@ function Tile({
   tone?: "ok" | "warn";
 }) {
   const valueClass =
-    tone === "warn"
-      ? "text-rose-700"
-      : tone === "ok"
-        ? "text-emerald-700"
-        : "text-zinc-900";
+    tone === "warn" ? "text-rose-700" : tone === "ok" ? "text-emerald-700" : "text-zinc-900";
   return (
     <div className="flex flex-col gap-1 bg-white px-4 py-3">
       <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">

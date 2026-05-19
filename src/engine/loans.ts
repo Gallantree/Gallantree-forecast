@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
-import { money, ZERO, type Money } from "@/utils/money";
 import { periodKey } from "@/constants/periods";
+import { type Money, money, ZERO } from "@/utils/money";
 import type { MonthlyValue } from "./pnl";
 
 export type ProgramType = "CRE_CLO" | "CMBS" | "MIT_FUND" | "WAREHOUSE" | "OTHER";
@@ -38,11 +38,7 @@ export function dateToPeriodKey(d: Date): string {
  * schedule. Year `k` starts at month `12k`. Years beyond the schedule
  * contribute 0% (flat balance).
  */
-function growthFactorAt(
-  monthIndex: number,
-  rates: Money[],
-  prefixProduct: Money[],
-): Money {
+function growthFactorAt(monthIndex: number, rates: Money[], prefixProduct: Money[]): Money {
   const year = Math.floor(monthIndex / 12);
   const monthInYear = monthIndex % 12;
   const yearStart =

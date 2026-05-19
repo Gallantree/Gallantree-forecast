@@ -34,9 +34,7 @@ export default async function UsersPage() {
   await connectToDatabase();
   const [usersRaw, orgsRaw] = await Promise.all([
     User.find({})
-      .select(
-        "firstName lastName name email userType status lastLogin createdAt",
-      )
+      .select("firstName lastName name email userType status lastLogin createdAt")
       .sort({ createdAt: -1 })
       .lean<
         Array<{
@@ -51,15 +49,15 @@ export default async function UsersPage() {
           createdAt?: Date;
         }>
       >(),
-    Organisation.find({}).select("name").sort({ name: 1 }).lean<
-      Array<{ _id: { toString: () => string }; name: string }>
-    >(),
+    Organisation.find({})
+      .select("name")
+      .sort({ name: 1 })
+      .lean<Array<{ _id: { toString: () => string }; name: string }>>(),
   ]);
 
   const users: UserRow[] = usersRaw.map((u) => ({
     _id: u._id.toString(),
-    name:
-      [u.firstName, u.lastName].filter(Boolean).join(" ") || u.name || u.email,
+    name: [u.firstName, u.lastName].filter(Boolean).join(" ") || u.name || u.email,
     email: u.email,
     userType: u.userType,
     status: u.status,
@@ -76,9 +74,7 @@ export default async function UsersPage() {
     <div className="px-8 py-8">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-zinc-900">
-            Users
-          </h1>
+          <h1 className="text-3xl font-bold tracking-tight text-zinc-900">Users</h1>
           <p className="mt-1 text-sm text-zinc-500">All platform users.</p>
         </div>
         <div className="flex items-center gap-4">
@@ -104,10 +100,7 @@ export default async function UsersPage() {
           <tbody>
             {users.length === 0 ? (
               <tr>
-                <td
-                  colSpan={6}
-                  className="px-4 py-12 text-center text-sm text-zinc-500"
-                >
+                <td colSpan={6} className="px-4 py-12 text-center text-sm text-zinc-500">
                   No users yet. Add your first one.
                 </td>
               </tr>
@@ -120,14 +113,10 @@ export default async function UsersPage() {
                   <Td className="font-semibold text-zinc-900">{u.name}</Td>
                   <Td className="text-zinc-700">{u.email}</Td>
                   <Td>
-                    <Badge tone={userTypeTone(u.userType)}>
-                      {u.userType.toUpperCase()}
-                    </Badge>
+                    <Badge tone={userTypeTone(u.userType)}>{u.userType.toUpperCase()}</Badge>
                   </Td>
                   <Td>
-                    <Badge tone={statusTone(u.status)}>
-                      {u.status.toUpperCase()}
-                    </Badge>
+                    <Badge tone={statusTone(u.status)}>{u.status.toUpperCase()}</Badge>
                   </Td>
                   <Td className="text-zinc-500">{fmtDate(u.lastLogin)}</Td>
                   <Td className="text-zinc-500">{fmtDate(u.createdAt)}</Td>
@@ -161,13 +150,7 @@ function Th({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Td({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
+function Td({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <td className={`px-4 py-3 ${className}`}>{children}</td>;
 }
 

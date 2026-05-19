@@ -1,7 +1,6 @@
 import Decimal from "decimal.js";
 import { cleanDecimal, fmtMoney2, fmtNum0 } from "@/utils/format";
 import {
-  addBookGrowthProfile,
   clearLoanTape,
   deleteBookGrowthProfile,
   deleteLoan,
@@ -11,14 +10,11 @@ import {
   updateBookGrowthProfile,
   updateLoan,
 } from "../_actions";
-import { LoanRowActions, type LoanEditInitial } from "./LoanRowActions";
-import { LoanProgramSelect } from "./LoanProgramSelect";
-import {
-  BookGrowthProfileModal,
-  type BookGrowthProfileInitial,
-} from "./BookGrowthProfileModal";
-import { SeedLoansModal } from "./SeedLoansModal";
+import { type BookGrowthProfileInitial, BookGrowthProfileModal } from "./BookGrowthProfileModal";
 import { ClearLoansButton } from "./ClearLoansButton";
+import { LoanProgramSelect } from "./LoanProgramSelect";
+import { type LoanEditInitial, LoanRowActions } from "./LoanRowActions";
+import { SeedLoansModal } from "./SeedLoansModal";
 
 export interface BookGrowthProfileRow {
   _id: string;
@@ -109,9 +105,7 @@ function nimBps(l: LoanRow, baseRateBps: number): number {
 }
 
 function annualisedNim(l: LoanRow, baseRateBps: number): Decimal {
-  return new Decimal(l.balance.toString())
-    .times(nimBps(l, baseRateBps))
-    .div(10000);
+  return new Decimal(l.balance.toString()).times(nimBps(l, baseRateBps)).div(10000);
 }
 
 export function LoansTab({
@@ -148,10 +142,7 @@ export function LoansTab({
     new Decimal(0),
   );
 
-  const byChannel = new Map<
-    ProgramTypeKey,
-    { count: number; balance: Decimal; nim: Decimal }
-  >();
+  const byChannel = new Map<ProgramTypeKey, { count: number; balance: Decimal; nim: Decimal }>();
   for (const l of loans) {
     if (!isIncluded(l)) continue;
     const key: ProgramTypeKey = l.programType ?? "OTHER";
@@ -178,8 +169,8 @@ export function LoansTab({
             {loans.length}
             {excludedCount > 0 ? (
               <span className="ml-2 text-xs font-normal text-zinc-500">
-                <span className="font-semibold text-emerald-700">{includedCount}</span> included
-                · <span className="font-semibold text-rose-600">{excludedCount}</span> excluded
+                <span className="font-semibold text-emerald-700">{includedCount}</span> included ·{" "}
+                <span className="font-semibold text-rose-600">{excludedCount}</span> excluded
               </span>
             ) : null}
           </div>
@@ -340,31 +331,31 @@ export function LoansTab({
                           syn
                         </span>
                       ) : (
-                      <form
-                        action={toggleLoanIncluded.bind(null, scenarioId, l._id, !included)}
-                      >
-                        <button
-                          type="submit"
-                          aria-pressed={included}
-                          aria-label={
-                            included ? "Exclude loan from NIM revenue" : "Include loan in NIM revenue"
-                          }
-                          title={
-                            included
-                              ? "Click to exclude this loan's NIM from revenue"
-                              : "Click to include this loan's NIM in revenue"
-                          }
-                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition ${
-                            included ? "bg-emerald-500" : "bg-zinc-300"
-                          }`}
-                        >
-                          <span
-                            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${
-                              included ? "translate-x-4" : "translate-x-0.5"
+                        <form action={toggleLoanIncluded.bind(null, scenarioId, l._id, !included)}>
+                          <button
+                            type="submit"
+                            aria-pressed={included}
+                            aria-label={
+                              included
+                                ? "Exclude loan from NIM revenue"
+                                : "Include loan in NIM revenue"
+                            }
+                            title={
+                              included
+                                ? "Click to exclude this loan's NIM from revenue"
+                                : "Click to include this loan's NIM in revenue"
+                            }
+                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition ${
+                              included ? "bg-emerald-500" : "bg-zinc-300"
                             }`}
-                          />
-                        </button>
-                      </form>
+                          >
+                            <span
+                              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${
+                                included ? "translate-x-4" : "translate-x-0.5"
+                              }`}
+                            />
+                          </button>
+                        </form>
                       )}
                     </Td>
                     <Td className="font-mono">{l.loanId}</Td>
@@ -383,9 +374,7 @@ export function LoansTab({
                     <Td className="font-mono text-zinc-600">{fmtDate(l.originationDate)}</Td>
                     <Td className="font-mono text-zinc-600">{fmtDate(l.maturityDate)}</Td>
                     <Td className="text-right tabular-nums">{l.termMonths}</Td>
-                    <Td className="text-right tabular-nums">
-                      {fmtMoney2(l.balance.toString())}
-                    </Td>
+                    <Td className="text-right tabular-nums">{fmtMoney2(l.balance.toString())}</Td>
                     <Td className="text-right tabular-nums">
                       {l.lvr ? `${(Number(l.lvr.toString()) * 100).toFixed(1)}%` : "—"}
                     </Td>
@@ -442,7 +431,7 @@ const RISK_LABEL: Record<"low" | "medium" | "high", string> = {
   high: "High risk",
 };
 
-function ProfileCard({
+function _ProfileCard({
   scenarioId,
   fys,
   programs,
@@ -508,9 +497,7 @@ function ProfileCard({
 
 function Th({ children, className = "" }: { children?: React.ReactNode; className?: string }) {
   return (
-    <th
-      className={`border-b border-zinc-200 px-3 py-1.5 text-left font-medium ${className}`}
-    >
+    <th className={`border-b border-zinc-200 px-3 py-1.5 text-left font-medium ${className}`}>
       {children}
     </th>
   );

@@ -1,8 +1,8 @@
-import { NextResponse, type NextRequest } from "next/server";
 import { Types } from "mongoose";
+import { type NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/db";
-import { Loan } from "@/models";
 import { parseLoanTape } from "@/lib/parseLoanTape";
+import { Loan } from "@/models";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

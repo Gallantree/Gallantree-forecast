@@ -1,11 +1,11 @@
-import { NextResponse, type NextRequest } from "next/server";
 import { Types } from "mongoose";
-import { connectToDatabase } from "@/lib/db";
-import { Period, Scenario } from "@/models";
-import { computeStatements, type ScenarioAssumptions } from "@/engine/statements";
+import { type NextRequest, NextResponse } from "next/server";
+import { buildScenarioPeriods } from "@/constants/periods";
 import { loadEngineInputs } from "@/engine/inputs";
 import type { MonthlyValue, PnLSection } from "@/engine/pnl";
-import { buildScenarioPeriods } from "@/constants/periods";
+import { computeStatements, type ScenarioAssumptions } from "@/engine/statements";
+import { connectToDatabase } from "@/lib/db";
+import { Period, Scenario } from "@/models";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -57,19 +57,16 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   if (periods.length === 0) {
     return NextResponse.json({ error: "periods not seeded — run `npm run seed`" }, { status: 412 });
   }
-  const horizon = buildScenarioPeriods(
-    scenario.firstYearLabel ?? 2026,
-    periods.length,
-  ).map((p) => p.key);
+  const horizon = buildScenarioPeriods(scenario.firstYearLabel ?? 2026, periods.length).map(
+    (p) => p.key,
+  );
   const assumptions: ScenarioAssumptions = {
     dsoDays: scenario.dsoDays?.toString(),
     dpoDays: scenario.dpoDays?.toString(),
     taxRatePct: scenario.taxRatePct?.toString(),
     openingCash: scenario.openingCash?.toString(),
     openingEquity: scenario.openingEquity?.toString(),
-    loanBookGrowthPctByYear: (scenario.loanBookGrowthPctByYear ?? []).map((d) =>
-      d.toString(),
-    ),
+    loanBookGrowthPctByYear: (scenario.loanBookGrowthPctByYear ?? []).map((d) => d.toString()),
     baseRateBps: scenario.baseRateBps,
   };
   const s = computeStatements(

@@ -83,9 +83,7 @@ export function AddOrganisationModal() {
               <span className="text-xs font-semibold text-zinc-900">Status</span>
               <select
                 value={status}
-                onChange={(e) =>
-                  setStatus(e.target.value as "active" | "pending" | "archived")
-                }
+                onChange={(e) => setStatus(e.target.value as "active" | "pending" | "archived")}
                 className="rounded-md border border-zinc-300 px-3 py-2"
               >
                 <option value="active">active</option>

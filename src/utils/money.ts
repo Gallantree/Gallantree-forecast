@@ -20,8 +20,7 @@ export function money(value: Decimal.Value | Types.Decimal128): Money {
 export function toDecimal128(value: Money | Decimal.Value): Types.Decimal128 {
   // Strip thousand-separator commas + whitespace from string inputs so values
   // coming from formatted form fields ("1,160,000,000.00") round-trip cleanly.
-  const cleaned =
-    typeof value === "string" ? value.replace(/[,\s]/g, "") : value;
+  const cleaned = typeof value === "string" ? value.replace(/[,\s]/g, "") : value;
   const d = cleaned instanceof Decimal ? cleaned : new Decimal(cleaned);
   return Types.Decimal128.fromString(d.toFixed(8));
 }

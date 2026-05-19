@@ -306,11 +306,12 @@ export function LoanRowActions({
               <span className="font-mono font-semibold">{initial.loanId}</span>
               {initial.borrower ? (
                 <>
-                  {" "}— <span className="italic">{initial.borrower}</span>
+                  {" "}
+                  — <span className="italic">{initial.borrower}</span>
                 </>
               ) : null}
-              . This will remove it from the loan book and stop its NIM contribution
-              to revenue. <span className="font-semibold">This can&apos;t be undone.</span>
+              . This will remove it from the loan book and stop its NIM contribution to revenue.{" "}
+              <span className="font-semibold">This can&apos;t be undone.</span>
             </p>
             <footer className="flex justify-end gap-2 border-t border-zinc-200 pt-3">
               <button

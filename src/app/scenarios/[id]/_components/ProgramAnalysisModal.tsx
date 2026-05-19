@@ -55,19 +55,14 @@ const tooltipStyle = {
   boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
 } as const;
 
-type RechartsValue =
-  | number
-  | string
-  | readonly (number | string)[]
-  | undefined;
-const moneyFmt = (label: string) =>
+type RechartsValue = number | string | readonly (number | string)[] | undefined;
+const moneyFmt =
+  (label: string) =>
   (v: RechartsValue): [string, string] => [fmtMoney2(Number(v)), label];
-const countFmt = (label: string) =>
+const countFmt =
+  (label: string) =>
   (v: RechartsValue): [string, string] => [fmtNum0(Number(v)), label];
-const bpsFmt = (v: RechartsValue): [string, string] => [
-  `${Math.round(Number(v))} bps`,
-  "Spread",
-];
+const bpsFmt = (v: RechartsValue): [string, string] => [`${Math.round(Number(v))} bps`, "Spread"];
 
 export function ProgramAnalysisModal({ data }: { data: ProgramAnalysisData }) {
   const [open, setOpen] = useState(false);
@@ -122,8 +117,7 @@ export function ProgramAnalysisModal({ data }: { data: ProgramAnalysisData }) {
               Capital Programs Analysis
             </h2>
             <p className="text-xs text-zinc-500">
-              Cross-program comparison · year-on-year capital deployment ·
-              funding economics
+              Cross-program comparison · year-on-year capital deployment · funding economics
             </p>
           </div>
           <button
@@ -140,37 +134,22 @@ export function ProgramAnalysisModal({ data }: { data: ProgramAnalysisData }) {
           {data.programCount === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-zinc-500">
               <div>No capital programs yet.</div>
-              <div className="text-xs">
-                Add or seed programs to see the analysis.
-              </div>
+              <div className="text-xs">Add or seed programs to see the analysis.</div>
             </div>
           ) : (
             <>
               {/* Headline tiles */}
               <div className="grid grid-cols-2 gap-px border-b border-zinc-200 bg-zinc-200 sm:grid-cols-3 lg:grid-cols-6">
                 <Tile label="Programs" value={fmtNum0(data.programCount)} />
-                <Tile
-                  label="Total deal size"
-                  value={fmtMoney2(data.totalDealSize)}
-                />
-                <Tile
-                  label="Tranche principal"
-                  value={fmtMoney2(data.totalTranchePrincipal)}
-                />
+                <Tile label="Total deal size" value={fmtMoney2(data.totalDealSize)} />
+                <Tile label="Tranche principal" value={fmtMoney2(data.totalTranchePrincipal)} />
                 <Tile
                   label="Annual interest"
                   value={fmtMoney2(data.totalAnnualInterest)}
                   tone="rose"
                 />
-                <Tile
-                  label="Annual fees"
-                  value={fmtMoney2(data.totalAnnualFees)}
-                  tone="emerald"
-                />
-                <Tile
-                  label="Loan balance backing"
-                  value={fmtMoney2(data.totalLoanBalance)}
-                />
+                <Tile label="Annual fees" value={fmtMoney2(data.totalAnnualFees)} tone="emerald" />
+                <Tile label="Loan balance backing" value={fmtMoney2(data.totalLoanBalance)} />
               </div>
 
               <div className="grid grid-cols-1 gap-4 px-6 py-6 lg:grid-cols-2">
@@ -215,10 +194,7 @@ export function ProgramAnalysisModal({ data }: { data: ProgramAnalysisData }) {
                             : [fmtNum0(Number(value)), "Active programs"]
                         }
                       />
-                      <Legend
-                        wrapperStyle={{ fontSize: 11, color: "#52525b" }}
-                        iconType="circle"
-                      />
+                      <Legend wrapperStyle={{ fontSize: 11, color: "#52525b" }} iconType="circle" />
                       <Bar
                         yAxisId="left"
                         dataKey="value"
@@ -280,10 +256,7 @@ export function ProgramAnalysisModal({ data }: { data: ProgramAnalysisData }) {
                             : [fmtNum0(Number(value)), "New programs"]
                         }
                       />
-                      <Legend
-                        wrapperStyle={{ fontSize: 11, color: "#52525b" }}
-                        iconType="circle"
-                      />
+                      <Legend wrapperStyle={{ fontSize: 11, color: "#52525b" }} iconType="circle" />
                       <Bar
                         yAxisId="left"
                         dataKey="value"
@@ -305,10 +278,7 @@ export function ProgramAnalysisModal({ data }: { data: ProgramAnalysisData }) {
                 </Card>
 
                 {/* 3. Count by program type */}
-                <Card
-                  title="Programs by type"
-                  subtitle="Count of deals by program type"
-                >
+                <Card title="Programs by type" subtitle="Count of deals by program type">
                   <ResponsiveContainer width="100%" height={260}>
                     <BarChart
                       data={data.countByType}
@@ -327,10 +297,7 @@ export function ProgramAnalysisModal({ data }: { data: ProgramAnalysisData }) {
                         tickLine={false}
                         width={40}
                       />
-                      <Tooltip
-                        contentStyle={tooltipStyle}
-                        formatter={countFmt("Programs")}
-                      />
+                      <Tooltip contentStyle={tooltipStyle} formatter={countFmt("Programs")} />
                       <Bar dataKey="value" radius={[6, 6, 0, 0]}>
                         {data.countByType.map((_, i) => (
                           <Cell key={i} fill={palette[i % palette.length]} />
@@ -341,10 +308,7 @@ export function ProgramAnalysisModal({ data }: { data: ProgramAnalysisData }) {
                 </Card>
 
                 {/* 4. Deal size by program type */}
-                <Card
-                  title="Deal size by type"
-                  subtitle="Aggregate $ principal by program type"
-                >
+                <Card title="Deal size by type" subtitle="Aggregate $ principal by program type">
                   <ResponsiveContainer width="100%" height={260}>
                     <BarChart
                       data={data.dealSizeByType}
@@ -364,10 +328,7 @@ export function ProgramAnalysisModal({ data }: { data: ProgramAnalysisData }) {
                         tickLine={false}
                         width={72}
                       />
-                      <Tooltip
-                        contentStyle={tooltipStyle}
-                        formatter={moneyFmt("Deal size")}
-                      />
+                      <Tooltip contentStyle={tooltipStyle} formatter={moneyFmt("Deal size")} />
                       <Bar dataKey="value" radius={[6, 6, 0, 0]}>
                         {data.dealSizeByType.map((_, i) => (
                           <Cell key={i} fill={palette[i % palette.length]} />
@@ -408,11 +369,7 @@ export function ProgramAnalysisModal({ data }: { data: ProgramAnalysisData }) {
                         contentStyle={tooltipStyle}
                         formatter={moneyFmt("Interest expense")}
                       />
-                      <Bar
-                        dataKey="value"
-                        fill={COLORS.rose}
-                        radius={[0, 6, 6, 0]}
-                      />
+                      <Bar dataKey="value" fill={COLORS.rose} radius={[0, 6, 6, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </Card>
@@ -444,16 +401,10 @@ export function ProgramAnalysisModal({ data }: { data: ProgramAnalysisData }) {
                         tickLine={false}
                         width={160}
                       />
-                      <Tooltip
-                        contentStyle={tooltipStyle}
-                        formatter={bpsFmt}
-                      />
+                      <Tooltip contentStyle={tooltipStyle} formatter={bpsFmt} />
                       <Bar dataKey="value" radius={[0, 6, 6, 0]}>
                         {data.nimBpsByProgram.map((row, i) => (
-                          <Cell
-                            key={i}
-                            fill={row.value < 0 ? COLORS.rose : COLORS.emerald}
-                          />
+                          <Cell key={i} fill={row.value < 0 ? COLORS.rose : COLORS.emerald} />
                         ))}
                       </Bar>
                     </BarChart>
@@ -495,10 +446,7 @@ export function ProgramAnalysisModal({ data }: { data: ProgramAnalysisData }) {
                           name as string,
                         ]}
                       />
-                      <Legend
-                        wrapperStyle={{ fontSize: 11, color: "#52525b" }}
-                        iconType="circle"
-                      />
+                      <Legend wrapperStyle={{ fontSize: 11, color: "#52525b" }} iconType="circle" />
                       <Bar
                         dataKey="assetsWas"
                         name="Assets WAS"
@@ -545,10 +493,7 @@ export function ProgramAnalysisModal({ data }: { data: ProgramAnalysisData }) {
                         tickLine={false}
                         width={72}
                       />
-                      <Tooltip
-                        contentStyle={tooltipStyle}
-                        formatter={moneyFmt("Annual fees")}
-                      />
+                      <Tooltip contentStyle={tooltipStyle} formatter={moneyFmt("Annual fees")} />
                       <Bar dataKey="value" radius={[6, 6, 0, 0]}>
                         {data.feesByCategory.map((_, i) => (
                           <Cell key={i} fill={palette[i % palette.length]} />
@@ -558,10 +503,7 @@ export function ProgramAnalysisModal({ data }: { data: ProgramAnalysisData }) {
                   </ResponsiveContainer>
                 </Card>
 
-                <Card
-                  title="Annual fees by program"
-                  subtitle="Top 10 fee earners"
-                >
+                <Card title="Annual fees by program" subtitle="Top 10 fee earners">
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart
                       data={data.feesByProgram}
@@ -584,15 +526,8 @@ export function ProgramAnalysisModal({ data }: { data: ProgramAnalysisData }) {
                         tickLine={false}
                         width={160}
                       />
-                      <Tooltip
-                        contentStyle={tooltipStyle}
-                        formatter={moneyFmt("Annual fees")}
-                      />
-                      <Bar
-                        dataKey="value"
-                        fill={COLORS.emerald}
-                        radius={[0, 6, 6, 0]}
-                      />
+                      <Tooltip contentStyle={tooltipStyle} formatter={moneyFmt("Annual fees")} />
+                      <Bar dataKey="value" fill={COLORS.emerald} radius={[0, 6, 6, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </Card>
@@ -627,19 +562,12 @@ export function ProgramAnalysisModal({ data }: { data: ProgramAnalysisData }) {
                         tickLine={false}
                         width={72}
                       />
-                      <Tooltip
-                        contentStyle={tooltipStyle}
-                        formatter={moneyFmt("Principal")}
-                      />
+                      <Tooltip contentStyle={tooltipStyle} formatter={moneyFmt("Principal")} />
                       <Bar dataKey="value" radius={[6, 6, 0, 0]}>
                         {data.trancheRateMix.map((row, i) => (
                           <Cell
                             key={i}
-                            fill={
-                              row.label === "Variable + base"
-                                ? COLORS.amber
-                                : COLORS.zinc
-                            }
+                            fill={row.label === "Variable + base" ? COLORS.amber : COLORS.zinc}
                           />
                         ))}
                       </Bar>
@@ -670,10 +598,7 @@ export function ProgramAnalysisModal({ data }: { data: ProgramAnalysisData }) {
                         width={40}
                         allowDecimals={false}
                       />
-                      <Tooltip
-                        contentStyle={tooltipStyle}
-                        formatter={countFmt("Tranches")}
-                      />
+                      <Tooltip contentStyle={tooltipStyle} formatter={countFmt("Tranches")} />
                       <Bar dataKey="value" radius={[6, 6, 0, 0]}>
                         {data.trancheBySpreadBucket.map((_, i) => (
                           <Cell key={i} fill={palette[i % palette.length]} />
@@ -710,15 +635,8 @@ export function ProgramAnalysisModal({ data }: { data: ProgramAnalysisData }) {
                         tickLine={false}
                         width={160}
                       />
-                      <Tooltip
-                        contentStyle={tooltipStyle}
-                        formatter={bpsFmt}
-                      />
-                      <Bar
-                        dataKey="value"
-                        fill={COLORS.rose}
-                        radius={[0, 6, 6, 0]}
-                      />
+                      <Tooltip contentStyle={tooltipStyle} formatter={bpsFmt} />
+                      <Bar dataKey="value" fill={COLORS.rose} radius={[0, 6, 6, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </Card>
@@ -731,21 +649,11 @@ export function ProgramAnalysisModal({ data }: { data: ProgramAnalysisData }) {
   );
 }
 
-function SectionHeader({
-  title,
-  subtitle,
-}: {
-  title: string;
-  subtitle?: string;
-}) {
+function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
     <div className="border-y border-zinc-200 bg-white px-6 py-3">
-      <h3 className="text-sm font-semibold tracking-tight text-zinc-900">
-        {title}
-      </h3>
-      {subtitle ? (
-        <p className="mt-0.5 text-[11px] text-zinc-500">{subtitle}</p>
-      ) : null}
+      <h3 className="text-sm font-semibold tracking-tight text-zinc-900">{title}</h3>
+      {subtitle ? <p className="mt-0.5 text-[11px] text-zinc-500">{subtitle}</p> : null}
     </div>
   );
 }
@@ -768,41 +676,23 @@ function Card({
       }`}
     >
       <div className="mb-3">
-        <h3 className="text-sm font-semibold tracking-tight text-zinc-900">
-          {title}
-        </h3>
-        {subtitle ? (
-          <p className="mt-0.5 text-[11px] text-zinc-500">{subtitle}</p>
-        ) : null}
+        <h3 className="text-sm font-semibold tracking-tight text-zinc-900">{title}</h3>
+        {subtitle ? <p className="mt-0.5 text-[11px] text-zinc-500">{subtitle}</p> : null}
       </div>
       {children}
     </div>
   );
 }
 
-function Tile({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: "rose" | "emerald";
-}) {
+function Tile({ label, value, tone }: { label: string; value: string; tone?: "rose" | "emerald" }) {
   const valueClass =
-    tone === "rose"
-      ? "text-rose-700"
-      : tone === "emerald"
-        ? "text-emerald-700"
-        : "text-zinc-900";
+    tone === "rose" ? "text-rose-700" : tone === "emerald" ? "text-emerald-700" : "text-zinc-900";
   return (
     <div className="flex flex-col gap-1 bg-white px-5 py-4">
       <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
         {label}
       </span>
-      <span className={`text-xl font-semibold tabular-nums ${valueClass}`}>
-        {value}
-      </span>
+      <span className={`text-xl font-semibold tabular-nums ${valueClass}`}>{value}</span>
     </div>
   );
 }

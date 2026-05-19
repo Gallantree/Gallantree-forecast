@@ -90,9 +90,7 @@ export function AddLicenseModal({
   const [seatCount, setSeatCount] = useState(
     seed.seatCount !== undefined ? String(seed.seatCount) : "",
   );
-  const [seatGrowthPctAnnual, setSeatGrowthPctAnnual] = useState(
-    seed.seatGrowthPctAnnual ?? "0",
-  );
+  const [seatGrowthPctAnnual, setSeatGrowthPctAnnual] = useState(seed.seatGrowthPctAnnual ?? "0");
   const [billingFrequency, setBillingFrequency] = useState<"monthly" | "annual">(
     seed.billingFrequency ?? "annual",
   );
@@ -166,7 +164,12 @@ export function AddLicenseModal({
   const previewMonthly =
     type === "compliance"
       ? computeCompliancePreview(monthlyFeePerSeat, seatCount, billingFrequency, annualDiscountPct)
-      : computeTrusteeFirstMonth(monthlyFee, configFee, aumByYear[0] ?? "0", feePctOfAumByYear[0] ?? "0");
+      : computeTrusteeFirstMonth(
+          monthlyFee,
+          configFee,
+          aumByYear[0] ?? "0",
+          feePctOfAumByYear[0] ?? "0",
+        );
 
   return (
     <div className="inline-flex">
@@ -293,9 +296,7 @@ export function AddLicenseModal({
                   <Field label="Billing">
                     <select
                       value={billingFrequency}
-                      onChange={(e) =>
-                        setBillingFrequency(e.target.value as "monthly" | "annual")
-                      }
+                      onChange={(e) => setBillingFrequency(e.target.value as "monthly" | "annual")}
                       className="w-full rounded-md border border-zinc-300 px-2 py-1"
                     >
                       <option value="monthly">Monthly</option>
@@ -343,7 +344,10 @@ export function AddLicenseModal({
                   <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
                     AUM ($) and fee % per FY
                   </div>
-                  <div className="grid gap-1 text-[11px]" style={{ gridTemplateColumns: `90px repeat(${horizonYears}, 1fr)` }}>
+                  <div
+                    className="grid gap-1 text-[11px]"
+                    style={{ gridTemplateColumns: `90px repeat(${horizonYears}, 1fr)` }}
+                  >
                     <div />
                     {fys.map((fy) => (
                       <div key={fy} className="text-center font-mono text-zinc-500">

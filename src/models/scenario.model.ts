@@ -104,10 +104,7 @@ scenarioSchema.index({ parentId: 1 });
 scenarioSchema.index({ status: 1, updatedAt: -1 });
 // Sparse partial index so we can ensure at most one base scenario, while
 // allowing many non-base rows (isBase=false / unset).
-scenarioSchema.index(
-  { isBase: 1 },
-  { unique: true, partialFilterExpression: { isBase: true } },
-);
+scenarioSchema.index({ isBase: 1 }, { unique: true, partialFilterExpression: { isBase: true } });
 
 const Scenario = defineModel<IScenario>("Scenario", scenarioSchema);
 

@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/db";
 import { Scenario } from "@/models";
 import { scenarioCreateSchema } from "@/schemas/scenarioSchemas";

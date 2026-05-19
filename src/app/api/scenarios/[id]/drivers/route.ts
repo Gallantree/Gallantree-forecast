@@ -1,9 +1,9 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { Types } from "mongoose";
+import { type NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/db";
 import { Driver } from "@/models";
 import { driverCreateSchema } from "@/schemas/driverSchemas";
 import { toDecimal128 } from "@/utils/money";
-import { Types } from "mongoose";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

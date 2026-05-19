@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 function validEmail(s: string): boolean {
@@ -102,9 +102,7 @@ export function LoginForm({ googleEnabled }: { googleEnabled: boolean }) {
               <div className="w-full border-t border-zinc-200" />
             </div>
             <div className="relative flex justify-center">
-              <span className="bg-zinc-50 px-3 text-xs text-zinc-500">
-                or sign in with email
-              </span>
+              <span className="bg-zinc-50 px-3 text-xs text-zinc-500">or sign in with email</span>
             </div>
           </div>
         </div>
@@ -131,9 +129,7 @@ export function LoginForm({ googleEnabled }: { googleEnabled: boolean }) {
                 : "border-zinc-300 focus:border-indigo-500 focus:ring-indigo-500"
             }`}
           />
-          {emailError ? (
-            <span className="text-xs text-rose-600">{emailError}</span>
-          ) : null}
+          {emailError ? <span className="text-xs text-rose-600">{emailError}</span> : null}
         </label>
         <button
           type="submit"

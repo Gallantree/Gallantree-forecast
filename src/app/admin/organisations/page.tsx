@@ -42,9 +42,7 @@ export default async function OrganisationsPage() {
     <div className="px-8 py-8">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-zinc-900">
-            Organisations
-          </h1>
+          <h1 className="text-3xl font-bold tracking-tight text-zinc-900">Organisations</h1>
           <p className="mt-1 text-sm text-zinc-500">
             Customer / tenant organisations on the platform.
           </p>
@@ -71,10 +69,7 @@ export default async function OrganisationsPage() {
           <tbody>
             {orgs.length === 0 ? (
               <tr>
-                <td
-                  colSpan={5}
-                  className="px-4 py-12 text-center text-sm text-zinc-500"
-                >
+                <td colSpan={5} className="px-4 py-12 text-center text-sm text-zinc-500">
                   No organisations yet.
                 </td>
               </tr>
@@ -88,13 +83,9 @@ export default async function OrganisationsPage() {
                   >
                     <Td className="font-semibold text-zinc-900">{o.name}</Td>
                     <Td>
-                      <Badge tone={statusTone(o.status)}>
-                        {o.status.toUpperCase()}
-                      </Badge>
+                      <Badge tone={statusTone(o.status)}>{o.status.toUpperCase()}</Badge>
                     </Td>
-                    <Td className="tabular-nums text-zinc-700">
-                      {countByOrg.get(id) ?? 0}
-                    </Td>
+                    <Td className="tabular-nums text-zinc-700">{countByOrg.get(id) ?? 0}</Td>
                     <Td className="text-zinc-500">{o.notes || "—"}</Td>
                     <Td className="text-zinc-500">{fmtDate(o.createdAt)}</Td>
                   </tr>
@@ -122,13 +113,7 @@ function Th({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Td({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
+function Td({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <td className={`px-4 py-3 ${className}`}>{children}</td>;
 }
 

@@ -67,8 +67,7 @@ export async function generateStructured<TInput>(opts: {
   });
   const message = await stream.finalMessage();
   const toolUse = message.content.find(
-    (b): b is Anthropic.ToolUseBlock =>
-      b.type === "tool_use" && b.name === opts.tool.name,
+    (b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === opts.tool.name,
   );
   if (!toolUse) {
     throw new Error(

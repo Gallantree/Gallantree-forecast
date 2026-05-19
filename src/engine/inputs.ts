@@ -1,18 +1,13 @@
 import { CapitalProgram, Driver, Headcount, Loan, PlatformLicense } from "@/models";
-import type { DriverInput, HeadcountInput } from "./pnl";
-import {
-  dateToPeriodKey,
-  PROGRAM_TYPE_ACCOUNT,
-  type LoanInput,
-  type ProgramType,
-} from "./loans";
-import type { ProgramFeeInput, FeeCategory } from "./programs";
+import { dateToPeriodKey, type LoanInput, PROGRAM_TYPE_ACCOUNT, type ProgramType } from "./loans";
 import type { PlatformLicenseInput } from "./platformLicenses";
+import type { DriverInput, HeadcountInput } from "./pnl";
 import type {
   LiabilityCalculationMethod,
   LiabilityRateType,
   ProgramLiabilityInput,
 } from "./programLiabilities";
+import type { FeeCategory, ProgramFeeInput } from "./programs";
 
 type D128 = { toString: () => string };
 
@@ -300,14 +295,13 @@ export async function loadEngineInputs(scenarioId: string): Promise<{
   programLiabilities: ProgramLiabilityInput[];
   platformLicenses: PlatformLicenseInput[];
 }> {
-  const [driverDocs, headcountDocs, loanDocs, programDocs, licenseDocs] =
-    await Promise.all([
-      Driver.find({ scenarioId }).lean<DriverDoc[]>(),
-      Headcount.find({ scenarioId }).lean<HeadcountDoc[]>(),
-      Loan.find({ scenarioId }).lean<LoanDoc[]>(),
-      CapitalProgram.find({ scenarioId }).lean<ProgramDoc[]>(),
-      PlatformLicense.find({ scenarioId }).lean<LicenseDoc[]>(),
-    ]);
+  const [driverDocs, headcountDocs, loanDocs, programDocs, licenseDocs] = await Promise.all([
+    Driver.find({ scenarioId }).lean<DriverDoc[]>(),
+    Headcount.find({ scenarioId }).lean<HeadcountDoc[]>(),
+    Loan.find({ scenarioId }).lean<LoanDoc[]>(),
+    CapitalProgram.find({ scenarioId }).lean<ProgramDoc[]>(),
+    PlatformLicense.find({ scenarioId }).lean<LicenseDoc[]>(),
+  ]);
   return {
     drivers: driverDocs.map(toDriverInput),
     headcount: headcountDocs.map(toHeadcountInput),
