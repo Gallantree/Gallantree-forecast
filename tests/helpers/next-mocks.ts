@@ -6,56 +6,56 @@
 //   - `next/navigation` redirect() throws by design (it's a control-flow
 //     mechanism, not a return value)
 //
-// Each helper returns the corresponding spy(s) so tests can assert on them.
+// USAGE — `vi.mock()` is hoisted above all imports by vitest's transform, so
+// these helpers must be CALLED at module top-level (before importing the
+// action under test). The static `import` lines below are then rewritten by
+// vitest to return the mock; `vi.mocked(...)` gives you the spy.
+//
+// Example:
+//
+//   import { mockNextCache } from "../helpers/next-mocks";
+//   mockNextCache();
+//   import { revalidatePath } from "next/cache";
+//   import { createProgram } from "@/app/scenarios/[id]/_actions";
+//
+//   it("revalidates", async () => {
+//     await createProgram(...);
+//     expect(revalidatePath).toHaveBeenCalledWith("/scenarios/...");
+//   });
 
-import { vi, type Mock } from "vitest";
+import { vi } from "vitest";
 
-/**
- * Mocks `next/cache`'s `revalidatePath` and `revalidateTag`. Call once at the
- * top of a test file before importing any server-action module. Returns
- * accessors that resolve to the live spy on each invocation.
- */
-export function mockNextCache(): {
-  revalidatePath: () => Mock;
-  revalidateTag: () => Mock;
-} {
+/** Mock `next/cache` so `revalidatePath` / `revalidateTag` are inert spies. */
+export function mockNextCache(): void {
   vi.mock("next/cache", () => ({
     revalidatePath: vi.fn(),
     revalidateTag: vi.fn(),
   }));
-  return {
-    revalidatePath: () =>
-      (vi.mocked(require("next/cache")).revalidatePath as unknown) as Mock,
-    revalidateTag: () =>
-      (vi.mocked(require("next/cache")).revalidateTag as unknown) as Mock,
-  };
 }
 
 /**
- * Mocks `next/navigation`'s `redirect` so it records the target URL instead
- * of throwing. `redirect()` in production throws a control-flow signal that
- * Next intercepts at the server boundary — under vitest we want to assert
- * which URL the action wanted to send the user to.
+ * Mock `next/navigation` so `redirect()` records its target instead of
+ * throwing the control-flow signal that only a real Next server understands.
  */
-export function mockNextNavigation(): { redirect: () => Mock } {
+export function mockNextNavigation(): void {
   vi.mock("next/navigation", () => ({
     redirect: vi.fn(),
     notFound: vi.fn(),
   }));
-  return {
-    redirect: () =>
-      (vi.mocked(require("next/navigation")).redirect as unknown) as Mock,
-  };
 }
 
 /**
- * Mocks the auth() helper so server actions that check the current user can
- * run under a deterministic identity. Default mock returns a super_admin
- * session; pass your own factory to override per-test.
+ * Mock the `@/lib/auth` module so server actions that check the current
+ * user run under a deterministic identity. The default returns a
+ * super_admin session; pass a factory to override per suite.
  */
 export function mockAuth(
   factory: () => unknown = () => ({
-    user: { id: "test-user-id", email: "test@example.com", userType: "super_admin" },
+    user: {
+      id: "test-user-id",
+      email: "test@example.com",
+      userType: "super_admin",
+    },
   }),
 ): void {
   vi.mock("@/lib/auth", () => ({
