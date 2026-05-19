@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
+import { SessionProviderClient } from "@/app/_components/SessionProviderClient";
+import { SessionExpiryGuard } from "@/app/_components/SessionExpiryGuard";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -48,7 +50,10 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        {children}
+        <SessionProviderClient>
+          {children}
+          <SessionExpiryGuard />
+        </SessionProviderClient>
         <Toaster richColors position="top-right" closeButton />
       </body>
     </html>

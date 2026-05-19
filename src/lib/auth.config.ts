@@ -13,20 +13,37 @@ export const authConfig = {
     verifyRequest: "/login/verify-request",
     error: "/login",
   },
-  // JWT sessions are required for middleware-based gating: the session cookie
-  // is self-contained and edge-decodable, no DB lookup needed per request.
-  // Database sessions would force every middleware hit through the adapter
-  // (which can't run in the Edge runtime).
-  session: { strategy: "jwt", maxAge: 60 * 60 * 24 * 30 }, // 30 days
+  // JWT sessions: Auth.js v5 signs the cookie with jose's SignJWT and verifies
+  // it on every request via jose's jwtVerify — so the "use jose" requirement
+  // is met by the framework itself. We just tune lifetime here.
+  //
+  // maxAge = 2h hard expiry. updateAge = 30min — within that window, an active
+  // session is silently rotated forward, so a user who keeps working doesn't
+  // get kicked out mid-task; but a session that's been idle for 2h is dead.
+  session: {
+    strategy: "jwt",
+    maxAge: 60 * 60 * 2,
+    updateAge: 60 * 30,
+  },
   callbacks: {
     // Runs in middleware to decide whether to let the request through.
-    // Returning `false` triggers a redirect to `pages.signIn`.
+    // Returning `false` triggers a redirect to `pages.signIn` with a
+    // ?callbackUrl=<original-path> appended so the user lands back where they
+    // were after signing in.
+    //
+    // Default: deny. Public allow-list below.
     authorized({ auth, request }) {
       const isLoggedIn = Boolean(auth?.user);
       const path = request.nextUrl.pathname;
-      const isAdminRoute = path.startsWith("/admin");
-      if (isAdminRoute) return isLoggedIn;
-      return true;
+      // Public routes — accessible without a session.
+      if (
+        path === "/login" ||
+        path.startsWith("/login/") ||
+        path.startsWith("/api/auth/")
+      ) {
+        return true;
+      }
+      return isLoggedIn;
     },
     // Map JWT → session object that components see via `await auth()`.
     // The enriching `jwt` callback (in auth.ts) puts userType/status onto the
