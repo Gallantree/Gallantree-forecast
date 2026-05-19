@@ -1398,13 +1398,16 @@ export async function seedLoansByFy(
       });
     }
 
-    // Run the AI slices in parallel with a small concurrency cap so we
-    // don't hammer Anthropic with 20+ simultaneous calls. The previous
-    // serial loop turned 5 programs × 4 active FYs ≈ 20 slices × 5-10s
-    // each into ~2 minutes of wall-clock per seed; with concurrency=5
-    // and Haiku per-slice latency, total drops to ~max(slice) + a small
-    // multiple, comfortably inside Heroku's 30s router timeout.
-    const SLICE_CONCURRENCY = 5;
+    // Run AI slices in parallel. Heroku's router kills any single
+    // request that doesn't return within 30s, so we need total
+    // wall-clock = ceil(slices / concurrency) × max(slice_latency) to
+    // stay under that ceiling. A typical seed is ≤25 slices (5 programs
+    // × 5 FYs); Haiku 4.5 returns a 40-loan batch in ~5-15s. Setting
+    // concurrency = 25 lets us fire every slice in parallel for the
+    // common case, dropping total to ~max(slice) — well inside 30s.
+    // Anthropic's Haiku per-key burst limits comfortably tolerate this
+    // (default tier-1 is 50 RPM with much higher concurrent caps).
+    const SLICE_CONCURRENCY = 25;
     const allDocs: Array<Record<string, unknown>> = [];
     for (let i = 0; i < params.fyAssignments.length; i += SLICE_CONCURRENCY) {
       const batch = params.fyAssignments.slice(i, i + SLICE_CONCURRENCY);
