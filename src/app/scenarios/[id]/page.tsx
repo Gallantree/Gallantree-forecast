@@ -484,6 +484,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
     tab === "balance-sheet" ||
     tab === "cashflow" ||
     tab === "overview" ||
+    tab === "overview-gallantree" ||
     tab === "valuation" ||
     tab === "pnl";
   const statements =
