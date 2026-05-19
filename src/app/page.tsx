@@ -1,6 +1,9 @@
+import Image from "next/image";
 import Link from "next/link";
 import { connectToDatabase } from "@/lib/db";
 import { Scenario, Driver, Headcount, Loan, CapitalProgram } from "@/models";
+import { getCurrentUser } from "@/lib/currentUser";
+import { UserMenu } from "./_components/UserMenu";
 import {
   branchFromBase,
   createScenario,
@@ -37,6 +40,7 @@ function fmtDate(d: string | Date): string {
 
 export default async function Home() {
   await connectToDatabase();
+  const me = await getCurrentUser();
 
   type LeanScenario = {
     _id: { toString: () => string };
@@ -110,15 +114,34 @@ export default async function Home() {
     <div className="min-h-screen bg-zinc-50 font-sans text-zinc-900">
       {/* Header */}
       <header className="border-b border-zinc-200 bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <div className="flex items-baseline gap-3">
-            <h1 className="text-lg font-semibold tracking-tight">Gallantree Forecast</h1>
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-6 py-3">
+          <Link
+            href="/"
+            className="inline-flex items-center"
+            aria-label="Gallantree"
+          >
+            <Image
+              src="/gallantree-logo.png"
+              alt="Gallantree"
+              width={1356}
+              height={216}
+              priority
+              className="h-7 w-auto"
+            />
+          </Link>
+          <div className="hidden flex-1 items-baseline gap-3 sm:flex">
+            <h1 className="text-sm font-semibold tracking-tight text-zinc-800">
+              Gallantree Forecast
+            </h1>
             <span className="text-xs text-zinc-500">
               Driver-based 5-year scenarios
             </span>
           </div>
-          <div className="text-xs text-zinc-500">
-            {rows.length} scenario{rows.length === 1 ? "" : "s"}
+          <div className="flex items-center gap-4">
+            <span className="text-xs text-zinc-500">
+              {rows.length} scenario{rows.length === 1 ? "" : "s"}
+            </span>
+            <UserMenu user={me} />
           </div>
         </div>
       </header>

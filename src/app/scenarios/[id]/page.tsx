@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Types } from "mongoose";
 import { notFound } from "next/navigation";
+import { getCurrentUser } from "@/lib/currentUser";
+import { UserMenu } from "@/app/_components/UserMenu";
 import { connectToDatabase } from "@/lib/db";
 import {
   Scenario,
@@ -31,12 +33,15 @@ import {
   type ProgramOption,
   type ProgramTypeKey,
 } from "./_components/LoansTab";
+import { LoanBookAnalysisTab } from "./_components/LoanBookAnalysisTab";
+import { buildLoanAnalysisData } from "./_components/loanAnalysisData";
 import {
   isFundingTranche,
   ProgramsTab,
   type ProgramRow,
   type ProgramAggregate,
 } from "./_components/ProgramsTab";
+import { buildProgramAnalysisData } from "./_components/programAnalysisData";
 import {
   BalanceSheetTab,
   type BalanceSheetData,
@@ -147,6 +152,8 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
     netDebt?: { toString: () => string };
   }>();
   if (!scenario) notFound();
+
+  const me = await getCurrentUser();
 
   const [
     periods,
@@ -717,7 +724,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
             {scenario.status}
           </span>
         </div>
-        <div className="flex gap-6 text-xs">
+        <div className="flex items-center gap-6 text-xs">
           <span className="text-zinc-500">
             Drivers <span className="font-semibold text-zinc-900">{drivers.length}</span>
           </span>
@@ -748,6 +755,9 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
               {statements ? fmtMoney2(statements.pnl.netIncomeTotal.toFixed(2)) : "—"}
             </span>
           </span>
+          <div className="ml-2 border-l border-zinc-200 pl-4">
+            <UserMenu user={me} />
+          </div>
         </div>
       </header>
 
@@ -778,6 +788,10 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
           />
         )}
 
+        {tab === "loan-book-analysis" && (
+          <LoanBookAnalysisTab data={buildLoanAnalysisData(loanRows)} />
+        )}
+
         {tab === "platform-revenues" && (
           <PlatformRevenuesTab
             scenarioId={id}
@@ -798,6 +812,12 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
               .map((a) => ({ code: a.code, name: a.name }))}
             defaultStartPeriod={firstPeriod}
             seedEnabled={Boolean(process.env.ANTHROPIC_API_KEY)}
+            analysisData={buildProgramAnalysisData(
+              programRows,
+              programAggregates,
+              scenario.baseRateBps ?? 420,
+              fyGroups.map((g) => g.fy),
+            )}
           />
         )}
 
