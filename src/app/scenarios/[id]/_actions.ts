@@ -1398,13 +1398,13 @@ export async function seedLoansByFy(
       });
     }
 
-    // Run the AI slices in parallel with a small concurrency cap so we
-    // don't hammer Anthropic with 20+ simultaneous calls. The previous
-    // serial loop turned 5 programs × 4 active FYs ≈ 20 slices × 5-10s
-    // each into ~2 minutes of wall-clock per seed; with concurrency=5
-    // and Haiku per-slice latency, total drops to ~max(slice) + a small
-    // multiple, comfortably inside Heroku's 30s router timeout.
-    const SLICE_CONCURRENCY = 5;
+    // Run AI slices in parallel. Heroku's router kills any single request
+    // that doesn't return within 30s, so we need total wall-clock =
+    // ceil(slices / concurrency) × max(slice_latency) < 30s. Setting
+    // concurrency = 25 lets a typical seed (≤25 slices) fire every slice
+    // in parallel — total drops to ~max(slice). Anthropic's Haiku per-key
+    // burst caps comfortably tolerate this.
+    const SLICE_CONCURRENCY = 25;
     const allDocs: Array<Record<string, unknown>> = [];
     for (let i = 0; i < params.fyAssignments.length; i += SLICE_CONCURRENCY) {
       const batch = params.fyAssignments.slice(i, i + SLICE_CONCURRENCY);
@@ -1412,11 +1412,48 @@ export async function seedLoansByFy(
       for (const docs of results) allDocs.push(...docs);
     }
 
+    // ── Deduplicate loanIds ─────────────────────────────────────────────
+    // The AI emits loanIds like SEED-27-0001..0NNN inside each slice. With
+    // multiple slices per FY (one per program) all starting at 0001, the
+    // unique index { scenarioId, loanId } silently drops the collisions
+    // and we end up with fewer rows than requested. Re-stamp every loanId
+    // with a per-run nonce + global per-FY sequence so insertMany never
+    // collides — within this run, or against pre-existing seeds in the
+    // same scenario.
+    const runNonce = Date.now().toString(36).slice(-3).toUpperCase();
+    const fyCounters = new Map<string, number>();
+    for (const doc of allDocs) {
+      const od = doc.originationDate as Date;
+      const m = od.getUTCMonth() + 1;
+      const y = od.getUTCFullYear();
+      const fy2 = String(m >= 7 ? y + 1 : y).slice(-2);
+      const next = (fyCounters.get(fy2) ?? 0) + 1;
+      fyCounters.set(fy2, next);
+      doc.loanId = `SEED-${fy2}-${runNonce}-${String(next).padStart(4, "0")}`;
+    }
+
+    // ── Bulk insert and surface the real created count ─────────────────
+    // insertMany with ordered:false continues past duplicate-key errors
+    // but throws a BulkWriteError carrying insertedCount. We catch it so
+    // the caller learns how many rows actually landed (vs the optimistic
+    // allDocs.length we used to return).
+    let createdCount = 0;
     if (allDocs.length > 0) {
-      await Loan.insertMany(allDocs, { ordered: false });
+      try {
+        const inserted = await Loan.insertMany(allDocs, { ordered: false });
+        createdCount = inserted.length;
+      } catch (e) {
+        // Mongoose forwards driver BulkWriteError with insertedDocs[].
+        const err = e as { insertedDocs?: unknown[]; message?: string };
+        if (Array.isArray(err.insertedDocs)) {
+          createdCount = err.insertedDocs.length;
+        } else {
+          throw e;
+        }
+      }
     }
     revalidatePath(`/scenarios/${scenarioId}`);
-    return { ok: true, created: allDocs.length };
+    return { ok: true, created: createdCount };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
