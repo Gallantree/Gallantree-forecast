@@ -38,7 +38,17 @@ export interface ProgramAnalysisData {
   trancheRateMix: BarPoint[]; // fixed vs variable $
   liabsWasByProgram: BarPoint[]; // top-10 bps
   trancheBySpreadBucket: BarPoint[]; // # tranches per spread band
+  // Upfront issuance costs
+  totalUpfrontFees: number;
+  upfrontFeesByCategory: BarPoint[]; // $ per category (underwriter / legal / ratings / other)
 }
+
+const UPFRONT_CATEGORY_LABEL: Record<string, string> = {
+  underwriter: "Credit underwriter",
+  legal: "Legal",
+  credit_rating: "Credit ratings",
+  other: "Other",
+};
 
 const FEE_CATEGORY_LABEL: Record<string, string> = {
   senior_mgmt: "Senior mgmt",
@@ -284,6 +294,23 @@ export function buildProgramAnalysisData(
     value: spreadBucketMap.get(b.label) ?? 0,
   })).filter((b) => b.value > 0);
 
+  // ── Upfront issuance costs ────────────────────────────────────────────────
+  const upfrontCatMap = new Map<string, number>();
+  let totalUpfrontFees = 0;
+  for (const p of programs) {
+    type Upfront = { category: string; amount: { toString: () => string } };
+    const uf = (p as unknown as { upfrontFees?: Upfront[] }).upfrontFees ?? [];
+    for (const u of uf) {
+      const amt = Number(u.amount.toString());
+      if (!Number.isFinite(amt) || amt <= 0) continue;
+      upfrontCatMap.set(u.category, (upfrontCatMap.get(u.category) ?? 0) + amt);
+      totalUpfrontFees += amt;
+    }
+  }
+  const upfrontFeesByCategory: BarPoint[] = Array.from(upfrontCatMap.entries())
+    .map(([k, v]) => ({ label: UPFRONT_CATEGORY_LABEL[k] ?? k, value: v }))
+    .sort((a, b) => b.value - a.value);
+
   return {
     programCount,
     totalDealSize,
@@ -304,5 +331,7 @@ export function buildProgramAnalysisData(
     trancheRateMix,
     liabsWasByProgram,
     trancheBySpreadBucket,
+    totalUpfrontFees,
+    upfrontFeesByCategory,
   };
 }

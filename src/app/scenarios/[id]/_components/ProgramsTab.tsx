@@ -36,6 +36,14 @@ export interface ProgramLiabilityRow {
   accountCode?: string;
 }
 
+export interface ProgramUpfrontFeeRow {
+  _id: string;
+  name: string;
+  category: "underwriter" | "legal" | "credit_rating" | "other";
+  amount: { toString: () => string };
+  accountCode?: string;
+}
+
 export interface ProgramAggregate {
   loanCount: number;
   totalBalance: number;
@@ -63,6 +71,7 @@ export interface ProgramRow {
   notes?: string;
   fees: ProgramFeeRow[];
   liabilities?: ProgramLiabilityRow[];
+  upfrontFees?: ProgramUpfrontFeeRow[];
 }
 
 const TYPE_LABEL: Record<ProgramRow["type"], string> = {
@@ -144,6 +153,20 @@ export function ProgramsTab({
     new Decimal(0),
   );
 
+  // One-off issuance costs (underwriter, legal, ratings) summed across every
+  // program in the scenario. Distinct from the recurring annual fee streams —
+  // these are sunk at the moment each deal prices.
+  const totalUpfrontFees = programs.reduce(
+    (acc, p) =>
+      acc.plus(
+        (p.upfrontFees ?? []).reduce(
+          (a, u) => a.plus(new Decimal(u.amount.toString())),
+          new Decimal(0),
+        ),
+      ),
+    new Decimal(0),
+  );
+
   return (
     <div className="flex h-full flex-col bg-white">
       {/* Toolbar */}
@@ -165,6 +188,14 @@ export function ProgramsTab({
           </div>
           <div>
             <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+              Total upfront fees
+            </div>
+            <div className="text-base font-semibold text-rose-700">
+              {fmtMoney2(totalUpfrontFees.toFixed(2))}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
               Fee streams
             </div>
             <div className="text-base font-semibold text-zinc-900">
@@ -179,23 +210,23 @@ export function ProgramsTab({
             options={[
               {
                 key: "cre-clo",
-                label: "CRE CLO programs",
+                label: "CRE CLO programs (5)",
                 description:
-                  "4 CRE CLOs (FL-1 matches Gallantree's anchor deal; FL-2 through FL-4 spaced 4 months apart, randomized within your spread bands).",
+                  "5 CRE CLOs — one fresh issuance per FY (FY27 through FY31). FL-1 matches Gallantree's anchor deal; the rest randomize dealSize and spreads within the documented bands. Includes upfront issuance costs ($500k underwriter, $900k legal, $300k ratings) per deal.",
                 action: seedCreCloPrograms,
               },
               {
                 key: "cmbs",
-                label: "CMBS + Warehouse",
+                label: "CMBS programs (5)",
                 description:
-                  "4 CMBS deals (tighter spreads, A 120-130, A-S 145-155…) plus 1 warehouse facility.",
+                  "5 CMBS deals — one per FY, tighter spreads (A 120-130, A-S 145-155…). Same upfront-fee stack as CRE CLO ($500k / $900k / $300k).",
                 action: seedCmbsPrograms,
               },
               {
                 key: "loan-book",
                 label: "Loan book (250 loans)",
                 description:
-                  "250 loans across existing CRE CLO / CMBS / Warehouse programs. Run program seeds first.",
+                  "250 loans across existing CRE CLO / CMBS programs. Run program seeds first.",
                 action: seedLoanBook,
               },
             ]}
@@ -229,6 +260,10 @@ export function ProgramsTab({
             {programs.map((p) => {
               const programAnnual = p.fees.reduce(
                 (acc, f) => acc.plus(annualFee(f)),
+                new Decimal(0),
+              );
+              const programUpfront = (p.upfrontFees ?? []).reduce(
+                (acc, u) => acc.plus(new Decimal(u.amount.toString())),
                 new Decimal(0),
               );
               return (
@@ -281,6 +316,14 @@ export function ProgramsTab({
                           {fmtMoney2(programAnnual.toFixed(2))}
                         </span>
                       </span>
+                      {programUpfront.gt(0) ? (
+                        <span className="text-xs text-zinc-500">
+                          Upfront{" "}
+                          <span className="font-semibold text-rose-700">
+                            {fmtMoney2(programUpfront.toFixed(2))}
+                          </span>
+                        </span>
+                      ) : null}
                       <AddProgramModal
                         defaultStartPeriod={defaultStartPeriod}
                         expenseAccountsForOverride={expenseAccounts}
@@ -372,6 +415,7 @@ export function ProgramsTab({
                     faceValuePerNote={Number(p.faceValuePerNote?.toString() ?? "0")}
                     baseRateBps={baseRateBps}
                   />
+                  <UpfrontFeesBlock upfrontFees={p.upfrontFees ?? []} />
                 </section>
               );
             })}
@@ -414,6 +458,65 @@ export function isFundingTranche(name: string | undefined, spreadBps: number): b
   const norm = (name ?? "").trim().toLowerCase();
   if (!norm) return true; // unnamed but positive-spread → assume funding
   return !NON_FUNDING_TRANCHE_NAMES.has(norm);
+}
+
+const UPFRONT_CATEGORY_LABEL: Record<ProgramUpfrontFeeRow["category"], string> = {
+  underwriter: "Credit underwriter",
+  legal: "Legal",
+  credit_rating: "Credit ratings",
+  other: "Other",
+};
+
+const UPFRONT_CATEGORY_COLOR: Record<ProgramUpfrontFeeRow["category"], string> = {
+  underwriter: "bg-indigo-100 text-indigo-800",
+  legal: "bg-violet-100 text-violet-800",
+  credit_rating: "bg-sky-100 text-sky-800",
+  other: "bg-zinc-100 text-zinc-700",
+};
+
+function UpfrontFeesBlock({ upfrontFees }: { upfrontFees: ProgramUpfrontFeeRow[] }) {
+  if (upfrontFees.length === 0) return null;
+  const total = upfrontFees.reduce((acc, u) => acc + Number(u.amount.toString()), 0);
+  return (
+    <div className="border-t border-zinc-100">
+      <div className="flex items-baseline justify-between border-b border-zinc-100 bg-zinc-50 px-4 py-1">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+          Upfront issuance costs · one-off
+        </span>
+        <span className="text-[11px] text-zinc-500">
+          Total <span className="font-semibold text-rose-700">{fmtMoney2(total)}</span>
+        </span>
+      </div>
+      <table className="w-full border-collapse text-xs">
+        <thead className="bg-white text-zinc-500">
+          <tr>
+            <Th>Fee</Th>
+            <Th>Category</Th>
+            <Th className="text-right">Amount</Th>
+            <Th>Account</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {upfrontFees.map((u) => (
+            <tr key={u._id} className="border-t border-zinc-100">
+              <Td className="font-medium">{u.name}</Td>
+              <Td>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${UPFRONT_CATEGORY_COLOR[u.category]}`}
+                >
+                  {UPFRONT_CATEGORY_LABEL[u.category]}
+                </span>
+              </Td>
+              <Td className="text-right font-semibold tabular-nums text-rose-700">
+                {fmtMoney2(u.amount.toString())}
+              </Td>
+              <Td className="font-mono text-[11px] text-zinc-500">{u.accountCode ?? "—"}</Td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 function LiabilitiesBlock({

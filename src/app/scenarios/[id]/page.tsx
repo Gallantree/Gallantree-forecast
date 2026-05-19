@@ -420,6 +420,13 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
         rateType: "fixed" | "variable";
         accountCode?: string;
       }>;
+      upfrontFees?: Array<{
+        _id: { toString: () => string };
+        name: string;
+        category: "underwriter" | "legal" | "credit_rating" | "other";
+        amount: { toString: () => string };
+        accountCode?: string;
+      }>;
     }>
   ).map((p) => ({
     _id: p._id.toString(),
@@ -448,6 +455,13 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
       calculationMethod: l.calculationMethod,
       rateType: l.rateType,
       accountCode: l.accountCode,
+    })),
+    upfrontFees: (p.upfrontFees ?? []).map((u) => ({
+      _id: u._id.toString(),
+      name: u.name,
+      category: u.category,
+      amount: { toString: () => u.amount.toString() },
+      accountCode: u.accountCode,
     })),
   }));
 

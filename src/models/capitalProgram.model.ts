@@ -25,6 +25,22 @@ export interface IProgramLiability {
   accountCode?: string; // interest expense account this tranche posts to
 }
 
+// One-off costs incurred at issuance — credit underwriter retainer, legal
+// counsel, ratings agency presale fees, etc. Distinct from `fees` (the
+// recurring annual mgmt / servicing streams) and from `liabilities` (the
+// note tranches paying ongoing interest). Recorded so the model can amortise
+// or expense them per the user's preference. Typical CRE CLO issuance:
+// ~$500k underwriter, ~$900k legal, ~$300k credit ratings.
+export type UpfrontFeeCategory = "underwriter" | "legal" | "credit_rating" | "other";
+
+export interface IProgramUpfrontFee {
+  _id?: Types.ObjectId;
+  name: string;
+  category: UpfrontFeeCategory;
+  amount: Types.Decimal128;
+  accountCode?: string;
+}
+
 export interface ICapitalProgram {
   scenarioId: Types.ObjectId;
   name: string;
@@ -36,6 +52,7 @@ export interface ICapitalProgram {
   notes?: string;
   fees: IProgramFee[];
   liabilities: IProgramLiability[];
+  upfrontFees: IProgramUpfrontFee[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -53,6 +70,20 @@ const programFeeSchema = new Schema<IProgramFee>(
     basisAmount: { type: Schema.Types.Decimal128, required: true },
     feeBps: { type: Number, required: true, min: 0 },
     accountCode: { type: String, required: true, trim: true },
+  },
+  { _id: true },
+);
+
+const programUpfrontFeeSchema = new Schema<IProgramUpfrontFee>(
+  {
+    name: { type: String, required: true, trim: true },
+    category: {
+      type: String,
+      enum: ["underwriter", "legal", "credit_rating", "other"],
+      required: true,
+    },
+    amount: { type: Schema.Types.Decimal128, required: true },
+    accountCode: { type: String, trim: true },
   },
   { _id: true },
 );
@@ -95,6 +126,7 @@ const capitalProgramSchema = new Schema<ICapitalProgram>(
     notes: { type: String, trim: true },
     fees: { type: [programFeeSchema], default: [] },
     liabilities: { type: [programLiabilitySchema], default: [] },
+    upfrontFees: { type: [programUpfrontFeeSchema], default: [] },
   },
   { timestamps: true },
 );

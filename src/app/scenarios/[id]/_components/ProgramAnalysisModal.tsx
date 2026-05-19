@@ -139,7 +139,7 @@ export function ProgramAnalysisModal({ data }: { data: ProgramAnalysisData }) {
           ) : (
             <>
               {/* Headline tiles */}
-              <div className="grid grid-cols-2 gap-px border-b border-zinc-200 bg-zinc-200 sm:grid-cols-3 lg:grid-cols-6">
+              <div className="grid grid-cols-2 gap-px border-b border-zinc-200 bg-zinc-200 sm:grid-cols-3 lg:grid-cols-7">
                 <Tile label="Programs" value={fmtNum0(data.programCount)} />
                 <Tile label="Total deal size" value={fmtMoney2(data.totalDealSize)} />
                 <Tile label="Tranche principal" value={fmtMoney2(data.totalTranchePrincipal)} />
@@ -149,6 +149,7 @@ export function ProgramAnalysisModal({ data }: { data: ProgramAnalysisData }) {
                   tone="rose"
                 />
                 <Tile label="Annual fees" value={fmtMoney2(data.totalAnnualFees)} tone="emerald" />
+                <Tile label="Upfront fees" value={fmtMoney2(data.totalUpfrontFees)} tone="rose" />
                 <Tile label="Loan balance backing" value={fmtMoney2(data.totalLoanBalance)} />
               </div>
 
@@ -531,6 +532,42 @@ export function ProgramAnalysisModal({ data }: { data: ProgramAnalysisData }) {
                     </BarChart>
                   </ResponsiveContainer>
                 </Card>
+
+                {data.upfrontFeesByCategory.length > 0 ? (
+                  <Card
+                    title="Upfront issuance costs by category"
+                    subtitle="One-off costs across every program · underwriter / legal / ratings / other"
+                    fullWidth
+                  >
+                    <ResponsiveContainer width="100%" height={260}>
+                      <BarChart
+                        data={data.upfrontFeesByCategory}
+                        margin={{ top: 8, right: 16, left: 0, bottom: 4 }}
+                      >
+                        <CartesianGrid stroke="#e4e4e7" vertical={false} />
+                        <XAxis
+                          dataKey="label"
+                          tick={{ fill: "#52525b", fontSize: 11, fontWeight: 600 }}
+                          axisLine={{ stroke: "#d4d4d8" }}
+                          tickLine={false}
+                        />
+                        <YAxis
+                          tickFormatter={(v) => fmtShort(Number(v))}
+                          tick={{ fill: "#52525b", fontSize: 11 }}
+                          axisLine={false}
+                          tickLine={false}
+                          width={72}
+                        />
+                        <Tooltip contentStyle={tooltipStyle} formatter={moneyFmt("Upfront cost")} />
+                        <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                          {data.upfrontFeesByCategory.map((_, i) => (
+                            <Cell key={i} fill={palette[(i + 2) % palette.length]} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </Card>
+                ) : null}
               </div>
 
               {/* ───── Liabilities section ───── */}
