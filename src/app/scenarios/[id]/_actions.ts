@@ -1305,11 +1305,20 @@ export async function seedLoansByFy(
 
     const scenarioOid = new Types.ObjectId(scenarioId);
 
-    let totalCreated = 0;
-    for (const { fy, count, capitalProgramId, riskLevel } of params.fyAssignments) {
-      if (!Number.isFinite(count) || count <= 0) continue;
+    // Per-slice worker: one AI call + doc composition. Returns the Loan
+    // documents ready to insertMany. Kept side-effect-free so we can run
+    // many in parallel without races. Logs upstream errors as a return
+    // value instead of throwing — one bad slice shouldn't sink the rest.
+    async function seedSlice(assignment: {
+      fy: number;
+      count: number;
+      capitalProgramId: string;
+      riskLevel?: 1 | 2 | 3 | 4 | 5;
+    }): Promise<Array<Record<string, unknown>>> {
+      const { fy, count, capitalProgramId, riskLevel } = assignment;
+      if (!Number.isFinite(count) || count <= 0) return [];
       const program = programById.get(capitalProgramId);
-      if (!program) continue;
+      if (!program) return [];
       const cappedCount = Math.min(Math.floor(count), 300); // single-call ceiling
       const monthKeys = monthsForFy(fy);
 
@@ -1331,7 +1340,7 @@ export async function seedLoansByFy(
 
       // Compose full Loan documents — code fills every remaining field so
       // nothing in the schema is blank.
-      const docs = loans.map((l: FySeedLoanRow) => {
+      return loans.map((l: FySeedLoanRow) => {
         const [oy, om] = l.originationPeriod.split("-").map(Number);
         const origination = new Date(Date.UTC(oy, om - 1, 1));
         const maturity = new Date(Date.UTC(oy, om - 1 + l.termMonths, 1));
@@ -1387,14 +1396,27 @@ export async function seedLoansByFy(
           includeInRevenue: true,
         };
       });
+    }
 
-      if (docs.length > 0) {
-        await Loan.insertMany(docs, { ordered: false });
-        totalCreated += docs.length;
-      }
+    // Run the AI slices in parallel with a small concurrency cap so we
+    // don't hammer Anthropic with 20+ simultaneous calls. The previous
+    // serial loop turned 5 programs × 4 active FYs ≈ 20 slices × 5-10s
+    // each into ~2 minutes of wall-clock per seed; with concurrency=5
+    // and Haiku per-slice latency, total drops to ~max(slice) + a small
+    // multiple, comfortably inside Heroku's 30s router timeout.
+    const SLICE_CONCURRENCY = 5;
+    const allDocs: Array<Record<string, unknown>> = [];
+    for (let i = 0; i < params.fyAssignments.length; i += SLICE_CONCURRENCY) {
+      const batch = params.fyAssignments.slice(i, i + SLICE_CONCURRENCY);
+      const results = await Promise.all(batch.map(seedSlice));
+      for (const docs of results) allDocs.push(...docs);
+    }
+
+    if (allDocs.length > 0) {
+      await Loan.insertMany(allDocs, { ordered: false });
     }
     revalidatePath(`/scenarios/${scenarioId}`);
-    return { ok: true, created: totalCreated };
+    return { ok: true, created: allDocs.length };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
