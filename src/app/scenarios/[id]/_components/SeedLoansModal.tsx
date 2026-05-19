@@ -13,17 +13,29 @@ const STYLE_HINTS: Record<Style, string> = {
   CMBS: "~90% Stabilised · spread 90-270 bps · balance $20m-$150m · tenor 60-120 mo · LVR 50-68% · DSCR 1.25-1.80",
 };
 
-// Per-program defaults — a sensibly-sized portfolio for a CRE CLO is
-// ~300-400 loans; CMBS deals are larger-balance and lower-count.
+// Per-program defaults — a typical CRE CLO holds 35-40 loans; CMBS deals
+// are larger-balance with 40-50 loans. Warehouse facilities sit in between.
 const DEFAULT_PER_PROGRAM: Record<string, number> = {
-  CRE_CLO: 300,
-  CMBS: 80,
-  WAREHOUSE: 120,
+  CRE_CLO: 38,
+  CMBS: 45,
+  WAREHOUSE: 40,
 };
+
+type RiskLevel = 1 | 2 | 3 | 4 | 5;
+const RISK_LEVELS: RiskLevel[] = [1, 2, 3, 4, 5];
+const RISK_LABEL: Record<RiskLevel, string> = {
+  1: "Very low",
+  2: "Low",
+  3: "Medium",
+  4: "High",
+  5: "Very high",
+};
+const DEFAULT_RISK: RiskLevel = 3;
 
 interface ProgramRow {
   programId: string;
   count: string;
+  riskLevel: RiskLevel;
 }
 
 // Convert a "YYYY-MM" period key to its Australian fiscal year. Returns null
@@ -95,7 +107,8 @@ export function SeedLoansModal({
   const buildDefaultRows = (list: ProgramOption[]): ProgramRow[] =>
     list.map((p) => ({
       programId: p._id,
-      count: String(DEFAULT_PER_PROGRAM[p.type] ?? 200),
+      count: String(DEFAULT_PER_PROGRAM[p.type] ?? 40),
+      riskLevel: DEFAULT_RISK,
     }));
 
   const [rows, setRows] = useState<ProgramRow[]>(() => buildDefaultRows(matchingPrograms));
@@ -132,7 +145,12 @@ export function SeedLoansModal({
     // Each row → spread its count evenly across the FYs the program covers.
     // Result: a flat list of (fy, count, capitalProgramId) the existing
     // server action consumes without modification.
-    const fyAssignments: Array<{ fy: number; count: number; capitalProgramId: string }> = [];
+    const fyAssignments: Array<{
+      fy: number;
+      count: number;
+      capitalProgramId: string;
+      riskLevel: RiskLevel;
+    }> = [];
     for (const row of rows) {
       const count = Math.floor(Number(row.count) || 0);
       if (count <= 0) continue;
@@ -143,7 +161,12 @@ export function SeedLoansModal({
       const split = distributeEvenly(count, activeFys.length);
       activeFys.forEach((fy, i) => {
         if (split[i] > 0) {
-          fyAssignments.push({ fy, count: split[i], capitalProgramId: row.programId });
+          fyAssignments.push({
+            fy,
+            count: split[i],
+            capitalProgramId: row.programId,
+            riskLevel: row.riskLevel,
+          });
         }
       });
     }
@@ -284,9 +307,10 @@ export function SeedLoansModal({
                   ) : (
                     <div className="flex flex-col gap-1.5">
                       {/* Header row */}
-                      <div className="grid grid-cols-[1fr_180px_96px] items-center gap-3 border-b border-zinc-100 pb-1 text-[10px] font-medium uppercase tracking-wider text-zinc-400">
+                      <div className="grid grid-cols-[1fr_140px_180px_80px] items-center gap-3 border-b border-zinc-100 pb-1 text-[10px] font-medium uppercase tracking-wider text-zinc-400">
                         <span>Capital program</span>
                         <span>Active FYs</span>
+                        <span>Risk profile</span>
                         <span className="text-right">Loans</span>
                       </div>
 
@@ -310,10 +334,11 @@ export function SeedLoansModal({
                                 .map((fy, i) => `FY${String(fy).slice(-2)}=${split[i]}`)
                                 .join(", ")}`
                             : undefined;
+                        const currentRisk = row?.riskLevel ?? DEFAULT_RISK;
                         return (
                           <div
                             key={p._id}
-                            className="grid grid-cols-[1fr_180px_96px] items-center gap-3"
+                            className="grid grid-cols-[1fr_140px_180px_80px] items-center gap-3"
                           >
                             <span className="truncate text-zinc-800" title={p.name}>
                               {p.name}
@@ -329,6 +354,10 @@ export function SeedLoansModal({
                                 </span>
                               ) : null}
                             </span>
+                            <RiskPicker
+                              value={currentRisk}
+                              onChange={(r) => setRow(p._id, { riskLevel: r })}
+                            />
                             <input
                               type="number"
                               min={0}
@@ -345,7 +374,9 @@ export function SeedLoansModal({
 
                   <div className="mt-1.5 text-[10px] text-zinc-400">
                     Loans are distributed evenly across each program's active FYs based on its start
-                    and end periods. The AI call is capped at 300 loans per FY-program slice.
+                    and end periods. Risk profile shifts the LVR / DSCR / spread / grade
+                    distributions for that program's loans. The AI call is capped at 300 loans per
+                    FY-program slice.
                   </div>
                 </div>
 
@@ -380,6 +411,7 @@ export function SeedLoansModal({
         </>
       ) : null}
 
+      {/* RiskPicker is defined below */}
       {toast ? (
         <div
           className={`fixed bottom-4 right-4 z-[120] rounded-md px-4 py-2 text-xs font-medium shadow-lg ${
@@ -392,5 +424,55 @@ export function SeedLoansModal({
         </div>
       ) : null}
     </>
+  );
+}
+
+// 5-tick segmented control. Compact enough to sit in the per-program row
+// without breaking the layout. The selected segment shows in zinc-900;
+// the colour stops grade from emerald (very low) → rose (very high) so a
+// glance at the modal reveals the portfolio's overall risk skew.
+const RISK_TONE: Record<RiskLevel, string> = {
+  1: "bg-emerald-500",
+  2: "bg-emerald-400",
+  3: "bg-amber-400",
+  4: "bg-orange-500",
+  5: "bg-rose-500",
+};
+
+function RiskPicker({
+  value,
+  onChange,
+}: {
+  value: RiskLevel;
+  onChange: (r: RiskLevel) => void;
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      <div className="inline-flex overflow-hidden rounded-md border border-zinc-300">
+        {RISK_LEVELS.map((r) => {
+          const selected = r === value;
+          return (
+            <button
+              key={r}
+              type="button"
+              onClick={() => onChange(r)}
+              title={RISK_LABEL[r]}
+              aria-label={`Risk ${r} of 5 — ${RISK_LABEL[r]}`}
+              aria-pressed={selected}
+              className={`h-6 w-6 text-[10px] font-semibold transition ${
+                selected
+                  ? `${RISK_TONE[r]} text-white`
+                  : "bg-white text-zinc-500 hover:bg-zinc-50"
+              } ${r > 1 ? "border-l border-zinc-300" : ""}`}
+            >
+              {r}
+            </button>
+          );
+        })}
+      </div>
+      <span className="hidden text-[10px] text-zinc-500 md:inline">
+        {RISK_LABEL[value]}
+      </span>
+    </div>
   );
 }

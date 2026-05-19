@@ -551,18 +551,51 @@ export const FY_LOANS_TOOL: ToolDef<{ loans: FySeedLoanRow[] }> = {
   parse: (input) => FyLoansResultSchema.parse(input),
 };
 
+/**
+ * Per-program credit-risk dial on a 1-5 scale.
+ * 1 = lowest risk (tighter underwrites, lower LVR, higher DSCR, narrower spread, better grade)
+ * 5 = highest risk (looser underwrites, higher LVR, lower DSCR, wider spread, weaker grade)
+ * 3 = neutral (use the style band as-is — no shift)
+ */
+export type RiskLevel = 1 | 2 | 3 | 4 | 5;
+
+// Risk-level qualitative hint plus a band-shift direction. The prompt cuts
+// the style's randomization band roughly into thirds and biases the loan
+// distribution toward one of them. Asymmetric risk lives in real CRE
+// portfolios, so we just let the model interpret these directives within
+// each loan's randomization rather than constraining numerically.
+const RISK_LABEL: Record<RiskLevel, string> = {
+  1: "VERY LOW risk — A-grade collateral, conservative sponsors, prime metro locations",
+  2: "LOW risk — strong sponsors and stabilised assets, mild concentration",
+  3: "MEDIUM risk — center of the style band, balanced mix",
+  4: "HIGH risk — transitional / value-add bias, weaker sponsors allowed, secondary locations",
+  5: "VERY HIGH risk — distressed / re-positioning bias, sub-prime sponsors, tertiary locations",
+};
+
+const RISK_BAND_DIRECTIVE: Record<RiskLevel, string> = {
+  1: "Skew underwriting metrics to the SAFE end of the style band: LVR in the LOWER 30% of the range, DSCR in the UPPER 30%, creditSpreadBps in the LOWER 25% of the range, internalScore in the UPPER half of the range. assetClass mix biased to Office / Industrial / Multi-Family. propertyStatus 95%+ Stabilised even on CRE_CLO style.",
+  2: "Skew metrics modestly safer than mid: LVR in the LOWER 40%, DSCR in the UPPER 40%, creditSpreadBps in the LOWER 40%, internalScore biased upward. Mostly Stabilised even on CRE_CLO style (~70% / 30%).",
+  3: "Use the full style band as documented — no shift. Standard mix.",
+  4: "Skew metrics modestly riskier than mid: LVR in the UPPER 40% of the range, DSCR in the LOWER 40%, creditSpreadBps in the UPPER 40%, internalScore biased downward. Heavier Transitional mix even on CMBS style (~30% / 70%). assetClass mix tilts to Retail / Hospitality / Mixed-Use.",
+  5: "Skew metrics to the RISKY end: LVR in the UPPER 30%, DSCR in the LOWER 30%, creditSpreadBps in the UPPER 25%, internalScore in the LOWER half. assetClass tilt to Retail / Hospitality / Self-Storage. propertyStatus 95%+ Transitional even on CMBS style. Sponsor names should sound like emerging / opportunistic capital rather than blue-chip REITs.",
+};
+
 export function buildFyLoansUserMessage(opts: {
   fy: number;
   count: number;
   style: LoanStyle;
   programName: string;
   monthKeys: string[];
+  riskLevel?: RiskLevel;
 }): string {
+  const risk = opts.riskLevel ?? 3;
   return [
     `Generate exactly ${opts.count} loans.`,
     `Fiscal year: FY${String(opts.fy).slice(-2)} (i.e. ${opts.monthKeys[0]} through ${opts.monthKeys[opts.monthKeys.length - 1]})`,
     `Style preset: ${opts.style}`,
     `Capital program (informational, code will assign): "${opts.programName}"`,
+    `Risk profile: ${risk}/5 — ${RISK_LABEL[risk]}`,
+    `Risk band directive: ${RISK_BAND_DIRECTIVE[risk]}`,
     `Valid originationPeriod values (pick one per loan, spread across all 12): ${opts.monthKeys.join(", ")}`,
     `loanId prefix: SEED-${String(opts.fy).slice(-2)}-####`,
   ].join("\n");
