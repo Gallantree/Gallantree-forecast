@@ -317,8 +317,16 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
       _id: { toString: () => string };
       name: string;
       type: string;
+      startPeriodKey?: string;
+      endPeriodKey?: string;
     }>
-  ).map((p) => ({ _id: p._id.toString(), name: p.name, type: p.type }));
+  ).map((p) => ({
+    _id: p._id.toString(),
+    name: p.name,
+    type: p.type,
+    startPeriodKey: p.startPeriodKey,
+    endPeriodKey: p.endPeriodKey,
+  }));
 
   // Per-program weighted-avg DEBT funding spread (bps). Weight by tranche
   // principal (numNotes × face). See isFundingTranche() for what counts:

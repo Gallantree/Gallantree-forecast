@@ -1253,6 +1253,9 @@ export interface SeedLoansByFyParams {
     fy: number;
     count: number;
     capitalProgramId: string;
+    // 1 = very low risk, 5 = very high risk. Defaults to 3 (neutral) when
+    // omitted so older callers keep working.
+    riskLevel?: 1 | 2 | 3 | 4 | 5;
   }>;
 }
 
@@ -1303,7 +1306,7 @@ export async function seedLoansByFy(
     const scenarioOid = new Types.ObjectId(scenarioId);
 
     let totalCreated = 0;
-    for (const { fy, count, capitalProgramId } of params.fyAssignments) {
+    for (const { fy, count, capitalProgramId, riskLevel } of params.fyAssignments) {
       if (!Number.isFinite(count) || count <= 0) continue;
       const program = programById.get(capitalProgramId);
       if (!program) continue;
@@ -1319,6 +1322,7 @@ export async function seedLoansByFy(
           style: params.style,
           programName: program.name,
           monthKeys,
+          riskLevel,
         }),
         maxTokens: 60000,
       });

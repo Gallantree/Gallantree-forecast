@@ -1,9 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk";
 
-// Sonnet 4.6 is a good fit for high-quality structured generation: strong on
-// schema adherence with materially cheaper output tokens than Opus, and 64K
-// output tokens which is plenty for our largest seed (250 loan records).
-export const SEED_MODEL = "claude-sonnet-4-6";
+// Haiku 4.5 handles structured generation for loan / program seeds well —
+// the schemas are tight (tool-use ensures JSON conformance) and individual
+// records are short, so Sonnet's extra reasoning headroom is unnecessary.
+// ~5× cheaper input / ~3× cheaper output than Sonnet 4.6 with comparable
+// schema adherence on this workload. 200K context window is plenty given
+// each seed call returns at most a few hundred loan rows.
+export const SEED_MODEL = "claude-haiku-4-5";
 
 let _client: Anthropic | null = null;
 
