@@ -24,6 +24,7 @@ import {
   PlatformLicense,
   Scenario,
 } from "@/models";
+import type { ArrearsStatus } from "@/models/loan.model";
 import { parseDecimalInput } from "@/utils/format";
 import { toDecimal128 } from "@/utils/money";
 
@@ -51,6 +52,8 @@ export type ProgramPayload = {
   startPeriodKey: string;
   endPeriodKey?: string;
   notes?: string;
+  // Decimal fraction (0.03 = 3%). The UI takes a whole percent and converts.
+  arrearsPctTarget?: string;
   fees: ProgramFeePayload[];
   liabilities?: ProgramLiabilityPayload[];
 };
@@ -318,6 +321,7 @@ export async function createProgram(scenarioId: string, payload: ProgramPayload)
     startPeriodKey: payload.startPeriodKey,
     endPeriodKey: payload.endPeriodKey,
     notes: payload.notes,
+    arrearsPctTarget: payload.arrearsPctTarget ? toDecimal128(payload.arrearsPctTarget) : undefined,
     fees,
     liabilities: sanitiseLiabilities(payload),
   });
@@ -366,6 +370,9 @@ export async function updateProgram(
         startPeriodKey: payload.startPeriodKey,
         endPeriodKey: payload.endPeriodKey,
         notes: payload.notes,
+        arrearsPctTarget: payload.arrearsPctTarget
+          ? toDecimal128(payload.arrearsPctTarget)
+          : undefined,
         fees,
         liabilities: sanitiseLiabilities(payload),
       },
@@ -374,6 +381,7 @@ export async function updateProgram(
         ...(payload.faceValuePerNote ? {} : { faceValuePerNote: "" }),
         ...(payload.endPeriodKey ? {} : { endPeriodKey: "" }),
         ...(payload.notes ? {} : { notes: "" }),
+        ...(payload.arrearsPctTarget ? {} : { arrearsPctTarget: "" }),
       },
     },
   );
@@ -1065,6 +1073,104 @@ export async function clearAllPrograms(scenarioId: string): Promise<void> {
   revalidatePath(`/scenarios/${scenarioId}`);
 }
 
+/**
+ * Sets per-FY target headcount and regenerates the placeholder Headcount
+ * documents (isGrowth: true) that fill the gap between current actual staff
+ * and each FY target.
+ *
+ * targets[i] is the end-of-FY total headcount for forecast year i+1. Each
+ * year's delta is computed against the prior year's running total (current
+ * actual at year 0, previous year's target thereafter). Placeholders are
+ * created with the scenario's average salary + default CPI/super so they
+ * flow through the staffing cost engine like real staff. They land at the
+ * first month of the FY (Jul 1) so the full year's cost is captured.
+ */
+export async function setStaffGrowthTargets(scenarioId: string, targets: number[]): Promise<void> {
+  if (!Types.ObjectId.isValid(scenarioId)) return;
+  if (!Array.isArray(targets) || targets.length === 0) return;
+
+  await connectToDatabase();
+  const scenarioOid = new Types.ObjectId(scenarioId);
+
+  // Save the targets on the scenario for the modal to round-trip later.
+  // Clamp to integers ≥ 0 and persist length-as-given (5 typical).
+  const cleanTargets = targets.map((n) => (Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0));
+  await Scenario.updateOne({ _id: scenarioOid }, { $set: { staffTargetByYear: cleanTargets } });
+
+  // Wipe previously-generated growth placeholders so this is idempotent.
+  await Headcount.deleteMany({ scenarioId: scenarioOid, isGrowth: true });
+
+  // Reference point: today's actual headcount + the scenario's CPI/super/
+  // average salary. We use the average over real staff (isGrowth != true)
+  // for the placeholder salary so the cost line stays believable.
+  const realStaff = await Headcount.find({
+    scenarioId: scenarioOid,
+    isGrowth: { $ne: true },
+  })
+    .select("salaryAnnual superPct onCostPct salaryGrowthPctAnnual ftePct")
+    .lean<
+      Array<{
+        salaryAnnual: { toString: () => string };
+        superPct: { toString: () => string };
+        onCostPct: { toString: () => string };
+        salaryGrowthPctAnnual: { toString: () => string };
+        ftePct: { toString: () => string };
+      }>
+    >();
+  const currentHeadcount = realStaff.length;
+  const avg = (key: keyof (typeof realStaff)[number], fallback: number): number => {
+    if (realStaff.length === 0) return fallback;
+    let sum = 0;
+    for (const r of realStaff) sum += Number(r[key].toString());
+    return sum / realStaff.length;
+  };
+  const avgSalary = avg("salaryAnnual", 200_000);
+  const avgSuper = avg("superPct", 12);
+  const avgOnCost = avg("onCostPct", 15);
+  const avgCpi = avg("salaryGrowthPctAnnual", 3);
+
+  // Need the scenario horizon start to convert year index → period key.
+  const scen = await Scenario.findById(scenarioOid)
+    .select("firstYearLabel")
+    .lean<{ firstYearLabel?: number }>();
+  const firstYearLabel = scen?.firstYearLabel ?? 2026;
+  // Forecast year i (0-indexed) starts at firstYearLabel + i, July.
+  const startKeyForYear = (i: number) => `${firstYearLabel + i}-07` as const;
+
+  // Walk targets in order. Running total starts at today's real headcount.
+  // Each year's delta = max(0, targets[i] - running). We don't shrink staff.
+  const docsToCreate: Record<string, unknown>[] = [];
+  let running = currentHeadcount;
+  for (let yearIdx = 0; yearIdx < cleanTargets.length; yearIdx += 1) {
+    const target = cleanTargets[yearIdx];
+    const delta = Math.max(0, target - running);
+    if (delta === 0) continue;
+    const startPeriodKey = startKeyForYear(yearIdx);
+    for (let k = 1; k <= delta; k += 1) {
+      docsToCreate.push({
+        scenarioId: scenarioOid,
+        personName: undefined,
+        role: `Growth hire #${k} — FY${String(firstYearLabel + yearIdx + 1).slice(-2)}`,
+        accountCode: "6000",
+        employmentType: "full_time",
+        ftePct: toDecimal128("1"),
+        startPeriodKey,
+        salaryAnnual: toDecimal128(avgSalary.toFixed(2)),
+        superPct: toDecimal128(avgSuper.toFixed(2)),
+        onCostPct: toDecimal128(avgOnCost.toFixed(2)),
+        salaryGrowthPctAnnual: toDecimal128(avgCpi.toFixed(2)),
+        isGrowth: true,
+      });
+    }
+    running = target;
+  }
+
+  if (docsToCreate.length > 0) {
+    await Headcount.insertMany(docsToCreate);
+  }
+  revalidatePath(`/scenarios/${scenarioId}`);
+}
+
 export async function deleteStaff(scenarioId: string, headcountId: string): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId) || !Types.ObjectId.isValid(headcountId)) return;
   await connectToDatabase();
@@ -1304,8 +1410,15 @@ export async function seedLoansByFy(
       _id: { $in: uniqueProgramIds.map((id) => new Types.ObjectId(id)) },
       scenarioId,
     })
-      .select("name type")
-      .lean<Array<{ _id: { toString: () => string }; name: string; type: string }>>();
+      .select("name type arrearsPctTarget")
+      .lean<
+        Array<{
+          _id: { toString: () => string };
+          name: string;
+          type: string;
+          arrearsPctTarget?: { toString: () => string };
+        }>
+      >();
     const programById = new Map(programDocs.map((p) => [p._id.toString(), p]));
     if (programById.size !== uniqueProgramIds.length) {
       return {
@@ -1355,6 +1468,24 @@ export async function seedLoansByFy(
 
       const programOid = new Types.ObjectId(capitalProgramId);
 
+      // Per-program arrears target — what % of THIS program's loans should
+      // be in some arrears bucket. Default 3% if the program doesn't have
+      // a configured target. Allocation across the four arrears buckets
+      // is biased toward the lighter end (mostly 30-day) since healthier
+      // portfolios bunch closer to current. Index N is the cumulative
+      // share that lands at or before this bucket.
+      const arrearsRate = program.arrearsPctTarget
+        ? Math.max(0, Math.min(1, Number(program.arrearsPctTarget.toString())))
+        : 0.03;
+      // Within the in-arrears slice, 50% 30-day, 25% 60-day, 15% 90-day, 10% default.
+      const arrearsMixCdf = [0.5, 0.75, 0.9, 1.0];
+      const arrearsMixLabels: Array<"arrears30" | "arrears60" | "arrears90" | "default"> = [
+        "arrears30",
+        "arrears60",
+        "arrears90",
+        "default",
+      ];
+
       // Compose full Loan documents — code fills every remaining field so
       // nothing in the schema is blank.
       return loans.map((l: FySeedLoanRow) => {
@@ -1376,6 +1507,16 @@ export async function seedLoansByFy(
         const isStabilised = l.propertyStatus === "Stabilised";
         const waleYears = isStabilised ? 3 + Math.random() * 4 : 1 + Math.random() * 2;
         const { fitch, moodys } = indicativeRatings(l.internalGrade);
+
+        // Arrears assignment: roll once per loan against the program's
+        // arrears target. If the loan goes into arrears, pick a bucket
+        // from the cumulative mix (mostly 30-day, tail to default).
+        let arrearsStatus: ArrearsStatus = "current";
+        if (Math.random() < arrearsRate) {
+          const r = Math.random();
+          const idx = arrearsMixCdf.findIndex((c) => r <= c);
+          arrearsStatus = arrearsMixLabels[idx === -1 ? 0 : idx];
+        }
 
         return {
           scenarioId: scenarioOid,
@@ -1411,6 +1552,7 @@ export async function seedLoansByFy(
           allInPct: toDecimal128(allInPct.toFixed(6)),
           annualInterest: toDecimal128(annualInterest.toFixed(2)),
           includeInRevenue: true,
+          arrearsStatus,
         };
       });
     }
@@ -1430,7 +1572,7 @@ export async function seedLoansByFy(
     }
 
     // ── Deduplicate loanIds ─────────────────────────────────────────────
-    // The AI emits loanIds like SEED-27-0001..0NNN inside each slice. With
+    // The AI emits loanIds like LOAN-27-0001..0NNN inside each slice. With
     // multiple slices per FY (one per program) all starting at 0001, the
     // unique index { scenarioId, loanId } silently drops the collisions
     // and we end up with fewer rows than requested. Re-stamp every loanId
@@ -1446,7 +1588,7 @@ export async function seedLoansByFy(
       const fy2 = String(m >= 7 ? y + 1 : y).slice(-2);
       const next = (fyCounters.get(fy2) ?? 0) + 1;
       fyCounters.set(fy2, next);
-      doc.loanId = `SEED-${fy2}-${runNonce}-${String(next).padStart(4, "0")}`;
+      doc.loanId = `LOAN-${fy2}-${runNonce}-${String(next).padStart(4, "0")}`;
     }
 
     // ── Bulk insert and surface the real created count ─────────────────

@@ -1,6 +1,20 @@
 import { Schema, type Types } from "mongoose";
 import { defineModel } from "./_define";
 
+// Days-of-arrears bucket. "current" is performing; the rest map to standard
+// CRE servicer reporting bands (30/60/90 day past due), with "default" for
+// loans past the cure window. Drives portfolio status reporting and feeds
+// into the per-program arrears target on CapitalProgram.
+export type ArrearsStatus = "current" | "arrears30" | "arrears60" | "arrears90" | "default";
+
+export const ARREARS_STATUSES: readonly ArrearsStatus[] = [
+  "current",
+  "arrears30",
+  "arrears60",
+  "arrears90",
+  "default",
+] as const;
+
 export interface ILoan {
   scenarioId: Types.ObjectId;
   capitalProgramId?: Types.ObjectId;
@@ -35,6 +49,7 @@ export interface ILoan {
   allInPct?: Types.Decimal128;
   annualInterest?: Types.Decimal128;
   includeInRevenue: boolean;
+  arrearsStatus: ArrearsStatus;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -74,6 +89,12 @@ const loanSchema = new Schema<ILoan>(
     allInPct: { type: Schema.Types.Decimal128 },
     annualInterest: { type: Schema.Types.Decimal128 },
     includeInRevenue: { type: Boolean, default: true, required: true },
+    arrearsStatus: {
+      type: String,
+      enum: ARREARS_STATUSES,
+      required: true,
+      default: "current",
+    },
   },
   { timestamps: true },
 );

@@ -28,6 +28,7 @@ import {
   type SerializedSeries,
 } from "./_components/BalanceSheetTab";
 import { type CashflowData, CashflowTab } from "./_components/CashflowTab";
+import { ConsolidatedModal } from "./_components/ConsolidatedModal";
 import { ControlPanelTab } from "./_components/ControlPanelTab";
 import { LoanBookAnalysisTab } from "./_components/LoanBookAnalysisTab";
 import {
@@ -42,7 +43,7 @@ import { type OpexDriverRow, OpexGeneralTab } from "./_components/OpexGeneralTab
 import { type OverviewData, OverviewTab } from "./_components/OverviewTab";
 import { buildOverviewData, toGallantreeOverview } from "./_components/overviewData";
 import { type PlatformLicenseRow, PlatformRevenuesTab } from "./_components/PlatformRevenuesTab";
-import { buildFYGroups, PnlTable } from "./_components/PnlTable";
+import { buildFYGroups, PnlTable, toGallantreePnl } from "./_components/PnlTable";
 import {
   isFundingTranche,
   type ProgramAggregate,
@@ -132,6 +133,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
     baseRateType?: "BBSW" | "BBSY" | "SOFR";
     baseRateBps?: number;
     firstYearLabel?: number;
+    staffTargetByYear?: number[];
     waccPct?: { toString: () => string };
     terminalGrowthPct?: { toString: () => string };
     evEbitdaMultiple?: { toString: () => string };
@@ -203,6 +205,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
     creditSpreadBps?: number;
     allInPct?: { toString: () => string };
     includeInRevenue?: boolean;
+    arrearsStatus?: "current" | "arrears30" | "arrears60" | "arrears90" | "default";
   };
   const loanRows: LoanRow[] = (loanDocs as unknown as LeanLoan[]).map((l) => {
     const pid = l.capitalProgramId ? l.capitalProgramId.toString() : undefined;
@@ -228,6 +231,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
       creditSpreadBps: l.creditSpreadBps,
       allInPct: l.allInPct ? { toString: () => l.allInPct!.toString() } : undefined,
       includeInRevenue: l.includeInRevenue,
+      arrearsStatus: l.arrearsStatus ?? "current",
     };
   });
 
@@ -427,6 +431,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
         amount: { toString: () => string };
         accountCode?: string;
       }>;
+      arrearsPctTarget?: { toString: () => string };
     }>
   ).map((p) => ({
     _id: p._id.toString(),
@@ -463,6 +468,9 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
       amount: { toString: () => u.amount.toString() },
       accountCode: u.accountCode,
     })),
+    arrearsPctTarget: p.arrearsPctTarget
+      ? { toString: () => p.arrearsPctTarget!.toString() }
+      : undefined,
   }));
 
   // Year 1 calendar year from the Control Panel — drives the horizon across
@@ -502,13 +510,11 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
       : null;
 
   // Compute full statements only when a tab needs them.
-  const needsStatements =
-    tab === "balance-sheet" ||
-    tab === "cashflow" ||
-    tab === "overview" ||
-    tab === "overview-gallantree" ||
-    tab === "valuation" ||
-    tab === "pnl";
+  // Statements feed several tabs AND the header summary tiles + the
+  // Consolidated modal button. Compute them whenever the scenario has any
+  // periods to project against — cheaper than conditional toggling and
+  // keeps the header consistent across tabs.
+  const needsStatements = true;
   const statements =
     needsStatements && horizon.length > 0
       ? computeStatements(
@@ -694,6 +700,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
     superPct: h.superPct ? { toString: () => h.superPct!.toString() } : undefined,
     onCostPct: { toString: () => h.onCostPct.toString() },
     salaryGrowthPctAnnual: { toString: () => h.salaryGrowthPctAnnual.toString() },
+    isGrowth: h.isGrowth ?? false,
   }));
 
   const paybandRows: PaybandRow[] = paybands.map((p) => ({
@@ -748,6 +755,22 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
               {statements ? fmtMoney2(statements.pnl.netIncomeTotal.toFixed(2)) : "—"}
             </span>
           </span>
+          {overviewData ? (
+            <>
+              <ConsolidatedModal
+                data={overviewData}
+                triggerLabel="Profit & Loss — Overall"
+                title="Profit & Loss — Overall"
+                subtitle="Full investor-pass-through view · Year-by-year profit cascade including NIM revenue and capital-program interest expense"
+              />
+              <ConsolidatedModal
+                data={toGallantreeOverview(overviewData)}
+                triggerLabel="Profit & Loss — Gallantree"
+                title="Profit & Loss — Gallantree"
+                subtitle="Gallantree's own operating economics · NIM revenue and capital-program interest expense excluded"
+              />
+            </>
+          ) : null}
           <div className="ml-2 border-l border-zinc-200 pl-4">
             <UserMenu user={me} />
           </div>
@@ -833,6 +856,8 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
             defaultStartPeriod={firstPeriod}
             defaultCpiPct={defaultCpiPct}
             defaultSuperPct={defaultSuperPct}
+            fys={fyGroups.map((g) => g.fy)}
+            staffTargetByYear={scenario.staffTargetByYear ?? undefined}
           />
         )}
 
@@ -865,6 +890,46 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
                     : undefined
                 }
               />
+            )}
+          </div>
+        )}
+
+        {tab === "pnl-gallantree" && (
+          <div className="h-full overflow-auto bg-white">
+            {!pnl ? (
+              <div className="flex h-full items-center justify-center text-sm text-zinc-500">
+                Seed periods first.
+              </div>
+            ) : pnl.revenue.lines.length + pnl.opex.lines.length === 0 ? (
+              <div className="flex h-full items-center justify-center text-sm text-zinc-500">
+                Add a driver or staff to see the P&amp;L.
+              </div>
+            ) : (
+              (() => {
+                // Filter out NIM revenue (accounts 4100-4499) + zero out
+                // capital-program interest expense. Same data shape, same
+                // renderer — just Gallantree's operating economics.
+                const standardCascade = statements
+                  ? {
+                      ebitda: monthlyMap(statements.pnl.ebitda),
+                      depreciation: monthlyMap(statements.pnl.depreciation),
+                      ebit: monthlyMap(statements.pnl.ebit),
+                      interestExpense: monthlyMap(statements.pnl.interestExpense),
+                      pretaxIncome: monthlyMap(statements.pnl.pretaxIncome),
+                      taxExpense: monthlyMap(statements.pnl.taxExpense),
+                      netIncome: monthlyMap(statements.pnl.netIncome),
+                    }
+                  : undefined;
+                const filtered = toGallantreePnl(pnl, standardCascade);
+                return (
+                  <PnlTable
+                    pnl={filtered.pnl}
+                    groups={groups}
+                    accountByCode={accountByCode}
+                    cascade={filtered.cascade}
+                  />
+                );
+              })()
             )}
           </div>
         )}

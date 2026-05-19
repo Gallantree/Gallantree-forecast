@@ -431,7 +431,7 @@ Warehouse loans (short-term / pre-securitisation):
   - internalGrade: matches score
 
 REALISM:
-  - loanId format: "SEED-XXXX" with sequential numbers 0001-0250
+  - loanId format: "LOAN-XXXX" with sequential numbers 0001-0250
   - borrower: realistic Australian sponsor / REIT / fund names (e.g. "Harbour REIT", "Westwind Funds Management", "Concord Estates Trust", "Aurora Realty Capital", "Beacon Property Partners"). Use distinct names per loan, but it's fine to repeat sponsors across multiple loans (~20% repeat rate is realistic).
   - lenderOfRecord: leave blank
   - state distribution: NSW ~35%, VIC ~25%, QLD ~20%, WA ~10%, SA ~5%, others ~5%
@@ -602,7 +602,7 @@ INTERNAL GRADE (derive from internalScore for both styles, Gallantree's 15-tier 
   ≥195 A+ · ≥180 A · ≥165 A · ≥150 A- · ≥135 A- · ≥120 B+ · ≥105 B · ≥90 B- · ≥80 C+ · ≥70 C · ≥60 C- · ≥55 D+ · ≥50 D · ≥45 D- · ≥40 E+ · ≥30 E · else E-
 
 REALISM RULES (apply to every loan):
-  - loanId: format "SEED-{FY2}-{####}" with FY2 = last two digits of the fiscal year and #### = 4-digit zero-padded sequential within this FY (0001, 0002, …)
+  - loanId: format "LOAN-{FY2}-{####}" with FY2 = last two digits of the fiscal year and #### = 4-digit zero-padded sequential within this FY (0001, 0002, …)
   - borrower: realistic Australian sponsor / REIT / trust / fund-manager names (e.g. "Harbour REIT", "Westwind Funds Management", "Concord Estates Trust", "Aurora Realty Capital", "Beacon Property Partners", "Drayton Investments Group", "Ironbark Estates", "Summit Trust", "Parkside Capital", "Riverview Partners", "Northgate Property Trust", "Highland Capital", "Cardinal Estates"). Distinct names per loan but ~20% repeat-sponsor rate is realistic — same sponsor can hold multiple loans.
   - state distribution: NSW ~35%, VIC ~25%, QLD ~20%, WA ~10%, SA ~5%, TAS/ACT/NT ~5%
   - postcode: 4-digit Australian postcode that matches the state (NSW 2xxx, VIC 3xxx, QLD 4xxx, WA 6xxx, SA 5xxx, TAS 7xxx, ACT 26xx, NT 08xx)
@@ -666,7 +666,7 @@ export function buildFyLoansUserMessage(opts: {
     `Risk profile: ${risk}/5 — ${RISK_LABEL[risk]}`,
     `Risk band directive: ${RISK_BAND_DIRECTIVE[risk]}`,
     `Valid originationPeriod values (pick one per loan, spread across all 12): ${opts.monthKeys.join(", ")}`,
-    `loanId prefix: SEED-${String(opts.fy).slice(-2)}-####`,
+    `loanId prefix: LOAN-${String(opts.fy).slice(-2)}-####`,
   ].join("\n");
 }
 
