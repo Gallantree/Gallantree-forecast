@@ -374,10 +374,10 @@ export function SeedLoansModal({
                   )}
 
                   <div className="mt-1.5 text-[10px] text-zinc-400">
-                    Loans are distributed evenly across each program's active FYs based on its start
-                    and end periods. Risk profile shifts the LVR / DSCR / spread / grade
-                    distributions for that program's loans. The AI call is capped at 300 loans per
-                    FY-program slice.
+                    Loans are distributed evenly across each program&apos;s active FYs based on its
+                    start and end periods. Risk profile shifts the LVR / DSCR / spread / grade
+                    distributions for that program&apos;s loans. The AI call is capped at 300 loans
+                    per FY-program slice.
                   </div>
                 </div>
 
