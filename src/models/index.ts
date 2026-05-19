@@ -22,3 +22,15 @@ export {
   type ComplianceTier,
   type BillingFrequency,
 } from "./platformLicense.model";
+export {
+  default as User,
+  type IUser,
+  type UserType,
+  type UserStatus,
+  type MembershipRole,
+} from "./user.model";
+export {
+  default as Organisation,
+  type IOrganisation,
+  type OrganisationStatus,
+} from "./organisation.model";

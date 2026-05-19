@@ -3,6 +3,8 @@ import { fmtMoney2, fmtMoneyInput, fmtNum0 } from "@/utils/format";
 import { cloneProgram, createProgram, deleteProgram, updateProgram } from "../_actions";
 import { AddProgramModal, type ProgramFormInitial } from "./AddProgramModal";
 import { CalibrateProgramButton } from "./CalibrateProgramButton";
+import { ProgramAnalysisModal } from "./ProgramAnalysisModal";
+import type { ProgramAnalysisData } from "./programAnalysisData";
 import { SeedMenu } from "./SeedMenu";
 import {
   seedCmbsPrograms,
@@ -119,6 +121,7 @@ export function ProgramsTab({
   defaultStartPeriod,
   baseRateBps,
   seedEnabled,
+  analysisData,
 }: {
   scenarioId: string;
   programs: ProgramRow[];
@@ -127,6 +130,7 @@ export function ProgramsTab({
   defaultStartPeriod: string;
   baseRateBps: number;
   seedEnabled: boolean;
+  analysisData: ProgramAnalysisData;
 }) {
   const createAction = createProgram.bind(null, scenarioId);
 
@@ -192,6 +196,7 @@ export function ProgramsTab({
               },
             ]}
           />
+          <ProgramAnalysisModal data={analysisData} />
           <AddProgramModal
             defaultStartPeriod={defaultStartPeriod}
             expenseAccountsForOverride={expenseAccounts}
