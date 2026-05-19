@@ -11,6 +11,8 @@ export interface CashflowData {
   changeInAr: SerializedSeries;
   changeInAp: SerializedSeries;
   capexOutflow: SerializedSeries;
+  notesIssuance: SerializedSeries;
+  notesRepayment: SerializedSeries;
   netCashMovement: SerializedSeries;
   endingCash: SerializedSeries;
   openingCash: string;
@@ -55,11 +57,24 @@ export function CashflowTab({ data }: { data: CashflowData }) {
   };
   const totalOperating = data.horizon.reduce((acc, pk) => acc + valueAt(operatingFlow, pk), 0);
   const totalCapex = data.horizon.reduce((acc, pk) => acc + valueAt(data.capexOutflow, pk), 0);
+  const totalFinancing = data.horizon.reduce(
+    (acc, pk) =>
+      acc + valueAt(data.notesIssuance, pk) - valueAt(data.notesRepayment, pk),
+    0,
+  );
+  const financingFlow: SerializedSeries = {
+    monthly: Object.fromEntries(
+      data.horizon.map((pk) => [
+        pk,
+        (valueAt(data.notesIssuance, pk) - valueAt(data.notesRepayment, pk)).toFixed(2),
+      ]),
+    ),
+  };
 
   return (
     <div className="flex h-full flex-col bg-white">
       {/* Headline tiles */}
-      <div className="grid grid-cols-4 gap-px border-b border-zinc-200 bg-zinc-200">
+      <div className="grid grid-cols-5 gap-px border-b border-zinc-200 bg-zinc-200">
         <Tile label="Opening cash" value={fmtMoney2(data.openingCash)} />
         <Tile
           label="Operating cash flow (5y)"
@@ -70,6 +85,11 @@ export function CashflowTab({ data }: { data: CashflowData }) {
           label="Investing cash (5y)"
           value={fmtMoney2(-totalCapex)}
           tone={totalCapex === 0 ? undefined : "warn"}
+        />
+        <Tile
+          label="Financing cash (5y)"
+          value={fmtMoney2(totalFinancing)}
+          tone={totalFinancing === 0 ? undefined : totalFinancing >= 0 ? "ok" : "warn"}
         />
         <Tile
           label="Closing cash"
@@ -161,6 +181,28 @@ export function CashflowTab({ data }: { data: CashflowData }) {
               series={data.capexOutflow}
               groups={groups}
               negate
+            />
+
+            <SectionHeader
+              label="Financing activities"
+              color="bg-sky-50 text-sky-800"
+              colSpan={totalCols(groups)}
+            />
+            <FlowRow
+              label="+ Notes issuance (capital program liabilities)"
+              series={data.notesIssuance}
+              groups={groups}
+            />
+            <FlowRow
+              label="− Notes repayment (capital program liabilities)"
+              series={data.notesRepayment}
+              groups={groups}
+              negate
+            />
+            <SubtotalRow
+              label="Financing cash flow"
+              series={financingFlow}
+              groups={groups}
             />
 
             <SubtotalRow

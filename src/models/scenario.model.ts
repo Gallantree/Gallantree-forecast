@@ -1,6 +1,21 @@
 import { Schema, type Types } from "mongoose";
 import { defineModel } from "./_define";
 
+export type GrowthRiskLevel = "low" | "medium" | "high";
+
+export interface IBookGrowthProfile {
+  _id?: Types.ObjectId;
+  // Target capital program. Synthetic loans inherit this program's id and
+  // route revenue through it.
+  capitalProgramId: Types.ObjectId;
+  // Per-FY growth pct, [k] = growth during FY index k (0-indexed across the
+  // scenario's horizon). Compounded year-on-year against the running baseline.
+  fyGrowthPcts: Types.Decimal128[];
+  avgTenorMonths: number;
+  avgSpreadBps: number;
+  riskLevel: GrowthRiskLevel;
+}
+
 export interface IScenario {
   name: string;
   parentId?: Types.ObjectId;
@@ -15,11 +30,14 @@ export interface IScenario {
   openingEquity?: Types.Decimal128;
   defaultCpiPct?: Types.Decimal128;
   defaultSuperPct?: Types.Decimal128;
-  nimTier?: "default" | "neg_floor" | "hard_floor";
   // Per-FY growth/decline applied to the loan book NIM. Element [k] is the
   // growth rate during forecast year k+1, compounded monthly within the year
   // and onto prior years. Years beyond the array default to 0 (no growth).
   loanBookGrowthPctByYear?: Types.Decimal128[];
+  // Per-channel synthetic loan growth profiles. The engine injects deterministic
+  // synthetic loans each FY according to these profiles, replacing the simpler
+  // loanBookGrowthPctByYear lever.
+  bookGrowthProfiles?: IBookGrowthProfile[];
   // Valuation assumptions
   waccPct?: Types.Decimal128;
   terminalGrowthPct?: Types.Decimal128;
@@ -34,6 +52,23 @@ export interface IScenario {
   createdAt: Date;
   updatedAt: Date;
 }
+
+const bookGrowthProfileSchema = new Schema<IBookGrowthProfile>(
+  {
+    capitalProgramId: {
+      type: Schema.Types.ObjectId,
+      ref: "CapitalProgram",
+      required: true,
+    },
+    // mongoose's nested sub-schema typing trips up on typed Decimal128[] —
+    // declare loosely; the IBookGrowthProfile interface keeps callers honest.
+    fyGrowthPcts: [Schema.Types.Decimal128],
+    avgTenorMonths: { type: Number, required: true, min: 1, max: 600 },
+    avgSpreadBps: { type: Number, required: true, min: 0, max: 10000 },
+    riskLevel: { type: String, enum: ["low", "medium", "high"], required: true },
+  },
+  { _id: true },
+);
 
 const scenarioSchema = new Schema<IScenario>(
   {
@@ -50,12 +85,8 @@ const scenarioSchema = new Schema<IScenario>(
     openingEquity: { type: Schema.Types.Decimal128 },
     defaultCpiPct: { type: Schema.Types.Decimal128 },
     defaultSuperPct: { type: Schema.Types.Decimal128 },
-    nimTier: {
-      type: String,
-      enum: ["default", "neg_floor", "hard_floor"],
-      default: "default",
-    },
     loanBookGrowthPctByYear: { type: [Schema.Types.Decimal128], default: undefined },
+    bookGrowthProfiles: { type: [bookGrowthProfileSchema], default: [] },
     waccPct: { type: Schema.Types.Decimal128 },
     terminalGrowthPct: { type: Schema.Types.Decimal128 },
     evEbitdaMultiple: { type: Schema.Types.Decimal128 },

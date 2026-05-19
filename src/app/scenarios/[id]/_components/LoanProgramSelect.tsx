@@ -4,12 +4,10 @@ import { useEffect, useState, useTransition } from "react";
 
 export function LoanProgramSelect({
   currentProgramId,
-  channelLabel,
   programs,
   saveAction,
 }: {
   currentProgramId?: string;
-  channelLabel: string;
   programs: { _id: string; name: string }[];
   saveAction: (formData: FormData) => Promise<void>;
 }) {
@@ -47,7 +45,7 @@ export function LoanProgramSelect({
           : "border-dashed border-zinc-300 bg-zinc-50 text-zinc-500"
       }`}
     >
-      <option value="">— Unassigned ({channelLabel}) —</option>
+      <option value="">— Unassigned —</option>
       {programs.map((p) => (
         <option key={p._id} value={p._id}>
           {p.name}

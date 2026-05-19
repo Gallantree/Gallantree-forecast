@@ -83,7 +83,6 @@ export async function branchFromBase(formData: FormData): Promise<void> {
     openingEquity: base.openingEquity,
     defaultCpiPct: base.defaultCpiPct,
     defaultSuperPct: base.defaultSuperPct,
-    nimTier: base.nimTier,
   });
   const childId = child._id as Types.ObjectId;
 

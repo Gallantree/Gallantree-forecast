@@ -9,7 +9,7 @@ import {
   type MonthlyValue,
   type PnL,
 } from "./pnl";
-import type { LoanInput, NimTier } from "./loans";
+import type { LoanInput } from "./loans";
 import type { ProgramFeeInput } from "./programs";
 import type { PlatformLicenseInput } from "./platformLicenses";
 import type { ProgramLiabilityInput } from "./programLiabilities";
@@ -20,7 +20,6 @@ export interface ScenarioAssumptions {
   taxRatePct?: Decimal.Value;
   openingCash?: Decimal.Value;
   openingEquity?: Decimal.Value;
-  nimTier?: NimTier;
   loanBookGrowthPctByYear?: Decimal.Value[];
   baseRateBps?: Decimal.Value;
 }
@@ -43,6 +42,7 @@ export interface BalanceSheet {
   accumulatedDepreciation: MonthlyValue[];
   ppeNet: MonthlyValue[];
   cash: MonthlyValue[];
+  notesPayable: MonthlyValue[];
   totalAssets: MonthlyValue[];
   equity: MonthlyValue[];
   totalLiabilitiesAndEquity: MonthlyValue[];
@@ -54,6 +54,8 @@ export interface CashFlow {
   changeInAr: MonthlyValue[];
   changeInAp: MonthlyValue[];
   capexOutflow: MonthlyValue[];
+  notesIssuance: MonthlyValue[];
+  notesRepayment: MonthlyValue[];
   netCashMovement: MonthlyValue[];
   endingCash: MonthlyValue[];
 }
@@ -114,7 +116,6 @@ export function computeStatements(
     headcount,
     horizon,
     loans,
-    assumptions.nimTier ?? "default",
     programFees,
     assumptions.loanBookGrowthPctByYear ?? [],
     platformLicenses,
@@ -141,23 +142,15 @@ export function computeStatements(
     return { periodKey: pk, value };
   });
 
-  // Interest expense = sum of program_liability items inside the OPEX section.
-  // They live in pnl.opex but conceptually sit BELOW operating income, so we
-  // back them out of EBITDA / EBIT and pull them down to the pre-tax line.
-  const interestExpense: MonthlyValue[] = horizon.map((pk, i) => {
-    let acc = ZERO as Money;
-    for (const line of pnl.opex.lines) {
-      for (const item of line.items) {
-        if (item.source === "program_liability") {
-          acc = acc.plus(item.monthly[i].value);
-        }
-      }
-    }
-    return { periodKey: pk, value: acc };
-  });
+  // Interest expense comes from the capital program liabilities section, which
+  // sits below operating income in the cascade.
+  const interestExpense: MonthlyValue[] = pnl.liabilities.totals.map((m) => ({
+    periodKey: m.periodKey,
+    value: m.value,
+  }));
 
   // Proper P&L cascade:
-  //   EBITDA          = revenue − (opex − depreciation − interest)
+  //   EBITDA          = revenue − (opex − depreciation)
   //   EBIT            = EBITDA − depreciation
   //   Pre-tax income  = EBIT − interest expense
   //   Tax             = max(0, pre-tax) × rate
@@ -167,8 +160,7 @@ export function computeStatements(
     periodKey: pk,
     value: pnl.revenue.totals[i].value
       .minus(pnl.opex.totals[i].value)
-      .plus(depreciation[i].value)
-      .plus(interestExpense[i].value),
+      .plus(depreciation[i].value),
   }));
   const ebit: MonthlyValue[] = horizon.map((pk, i) => ({
     periodKey: pk,
@@ -212,6 +204,57 @@ export function computeStatements(
     value: cashOpex[i].value.times(dpo),
   }));
 
+  // Capital program liabilities — bullet schedule.
+  //   notesPayable[t] = sum of principal for tranches active in period t
+  //   issuance[t]     = principal of tranches whose first active period is t
+  //   repayment[t]    = principal of tranches whose last active period was t-1
+  //                     (i.e. the principal is repaid at the start of the
+  //                     period AFTER the tranche matures)
+  // Σ issuance − Σ repayment over the horizon equals the closing notesPayable
+  // balance, keeping the BS balanced through Δcash on the asset side.
+  const notesPayable: MonthlyValue[] = horizon.map((pk) => {
+    let acc = ZERO as Money;
+    for (const l of programLiabilities) {
+      if (pk.localeCompare(l.startPeriodKey) < 0) continue;
+      if (l.endPeriodKey && pk.localeCompare(l.endPeriodKey) > 0) continue;
+      acc = acc.plus(money(l.principal));
+    }
+    return { periodKey: pk, value: acc };
+  });
+  const notesIssuance: MonthlyValue[] = horizon.map((pk, i) => {
+    let acc = ZERO as Money;
+    for (const l of programLiabilities) {
+      // First horizon period in which the tranche is active.
+      const firstActiveIdx = horizon.findIndex(
+        (p) =>
+          p.localeCompare(l.startPeriodKey) >= 0 &&
+          (!l.endPeriodKey || p.localeCompare(l.endPeriodKey) <= 0),
+      );
+      if (firstActiveIdx === i) acc = acc.plus(money(l.principal));
+    }
+    return { periodKey: pk, value: acc };
+  });
+  const notesRepayment: MonthlyValue[] = horizon.map((pk, i) => {
+    let acc = ZERO as Money;
+    for (const l of programLiabilities) {
+      if (!l.endPeriodKey) continue;
+      // Repaid at the period immediately following the last active period.
+      const lastActiveIdx = horizon
+        .map((p, j) => ({ p, j }))
+        .filter(
+          ({ p }) =>
+            p.localeCompare(l.startPeriodKey) >= 0 &&
+            p.localeCompare(l.endPeriodKey!) <= 0,
+        )
+        .map(({ j }) => j)
+        .pop();
+      if (lastActiveIdx !== undefined && lastActiveIdx + 1 === i) {
+        acc = acc.plus(money(l.principal));
+      }
+    }
+    return { periodKey: pk, value: acc };
+  });
+
   // PPE: gross = cumulative capex purchases; accumulated dep = cumulative depreciation.
   const ppeGross = runningSum(capexOutflow, ZERO as Money, horizon);
   const accumulatedDepreciation = runningSum(depreciation, ZERO as Money, horizon);
@@ -232,7 +275,9 @@ export function computeStatements(
       .plus(depreciation[i].value)
       .minus(changeInAr[i].value)
       .plus(changeInAp[i].value)
-      .minus(capexOutflow[i].value),
+      .minus(capexOutflow[i].value)
+      .plus(notesIssuance[i].value)
+      .minus(notesRepayment[i].value),
   }));
 
   const openingCash = money(assumptions.openingCash ?? 0);
@@ -248,7 +293,7 @@ export function computeStatements(
   }));
   const totalLiabilitiesAndEquity: MonthlyValue[] = horizon.map((pk, i) => ({
     periodKey: pk,
-    value: ap[i].value.plus(equity[i].value),
+    value: ap[i].value.plus(notesPayable[i].value).plus(equity[i].value),
   }));
 
   return {
@@ -271,6 +316,7 @@ export function computeStatements(
       accumulatedDepreciation,
       ppeNet,
       cash: endingCash,
+      notesPayable,
       totalAssets,
       equity,
       totalLiabilitiesAndEquity,
@@ -281,6 +327,8 @@ export function computeStatements(
       changeInAr,
       changeInAp,
       capexOutflow,
+      notesIssuance,
+      notesRepayment,
       netCashMovement,
       endingCash,
     },

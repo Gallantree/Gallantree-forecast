@@ -5,6 +5,7 @@ import { Period, Scenario } from "@/models";
 import { computeStatements } from "@/engine/statements";
 import { computeValuation } from "@/engine/valuation";
 import { loadEngineInputs } from "@/engine/inputs";
+import { buildScenarioPeriods } from "@/constants/periods";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,9 +49,9 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
       taxRatePct?: D128Like;
       openingCash?: D128Like;
       openingEquity?: D128Like;
-      nimTier?: "default" | "neg_floor" | "hard_floor";
       loanBookGrowthPctByYear?: Array<{ toString: () => string }>;
       baseRateBps?: number;
+      firstYearLabel?: number;
       waccPct?: D128Like;
       terminalGrowthPct?: D128Like;
       evEbitdaMultiple?: D128Like;
@@ -64,8 +65,12 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   if (periods.length === 0) {
     return NextResponse.json({ error: "periods not seeded — run `npm run seed`" }, { status: 412 });
   }
-  const horizon = periods.map((p) => p.key);
-  const groups = buildFYGroups(periods);
+  const scenarioPeriods = buildScenarioPeriods(
+    scenario.firstYearLabel ?? 2026,
+    periods.length,
+  );
+  const horizon = scenarioPeriods.map((p) => p.key);
+  const groups = buildFYGroups(scenarioPeriods);
 
   const s = computeStatements(
     inputs.drivers,
@@ -77,7 +82,6 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
       taxRatePct: scenario.taxRatePct?.toString(),
       openingCash: scenario.openingCash?.toString(),
       openingEquity: scenario.openingEquity?.toString(),
-      nimTier: scenario.nimTier,
       loanBookGrowthPctByYear: (scenario.loanBookGrowthPctByYear ?? []).map((d) =>
         d.toString(),
       ),

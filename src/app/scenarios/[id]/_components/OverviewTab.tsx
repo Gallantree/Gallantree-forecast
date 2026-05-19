@@ -1,182 +1,34 @@
-import { Fragment } from "react";
+"use client";
+
+import { Fragment, useState } from "react";
 import { fmtMoney2 } from "@/utils/format";
-import type { FYGroup } from "./PnlClientTable";
-
-export interface OverviewLine {
-  accountCode: string;
-  accountName: string;
-  fyTotals: number[]; // one per FY in order
-  total: number;
-}
-
-export interface OverviewLiabilityLine {
-  accountCode: string;
-  accountName: string;
-  trancheLabel: string; // e.g. "Gallantree CRE CLO 2026 FL-1 · AAA"
-  fyTotals: number[];
-  total: number;
-}
-
-export interface OverviewData {
-  fys: number[]; // e.g. [2027, 2028, 2029, 2030, 2031]
-  revenueLines: OverviewLine[];
-  opexLines: OverviewLine[];
-  liabilityLines: OverviewLiabilityLine[];
-  liabilityTotalsByYear: number[];
-  liabilityTotal: number;
-  totals: {
-    revenue: number[];
-    opex: number[];
-    depreciation: number[];
-    interestExpense: number[];
-    ebitda: number[];
-    ebit: number[];
-    pretaxIncome: number[];
-    tax: number[];
-    netIncome: number[];
-  };
-  fiveYear: {
-    revenue: number;
-    opex: number;
-    depreciation: number;
-    interestExpense: number;
-    ebitda: number;
-    ebit: number;
-    pretaxIncome: number;
-    tax: number;
-    netIncome: number;
-  };
-}
-
-interface OverviewMonthlyItem {
-  id: string;
-  label: string;
-  source: string;
-  monthly: { periodKey: string; value: { toFixed: (n: number) => string } }[];
-}
-
-export function buildOverviewData(
-  groups: FYGroup[],
-  revenueLines: { accountCode: string; monthly: { periodKey: string; value: { toFixed: (n: number) => string } }[] }[],
-  opexLines: { accountCode: string; items: OverviewMonthlyItem[]; monthly: { periodKey: string; value: { toFixed: (n: number) => string } }[] }[],
-  pnlExt: {
-    revenue: { totals: { periodKey: string; value: { toFixed: (n: number) => string } }[] };
-    opex: { totals: { periodKey: string; value: { toFixed: (n: number) => string } }[] };
-    depreciation: { periodKey: string; value: { toFixed: (n: number) => string } }[];
-    interestExpense: { periodKey: string; value: { toFixed: (n: number) => string } }[];
-    ebitda: { periodKey: string; value: { toFixed: (n: number) => string } }[];
-    ebit: { periodKey: string; value: { toFixed: (n: number) => string } }[];
-    pretaxIncome: { periodKey: string; value: { toFixed: (n: number) => string } }[];
-    taxExpense: { periodKey: string; value: { toFixed: (n: number) => string } }[];
-    netIncome: { periodKey: string; value: { toFixed: (n: number) => string } }[];
-  },
-  accountByCode: Map<string, string>,
-): OverviewData {
-  const fyMonths = (fy: FYGroup) => new Set(fy.months);
-  const sumByFy = (
-    series: { periodKey: string; value: { toFixed: (n: number) => string } }[],
-  ): number[] =>
-    groups.map((g) => {
-      const months = fyMonths(g);
-      let s = 0;
-      for (const m of series) if (months.has(m.periodKey)) s += Number(m.value.toFixed(2));
-      return s;
-    });
-
-  const lineToOverview = (l: {
-    accountCode: string;
-    monthly: { periodKey: string; value: { toFixed: (n: number) => string } }[];
-  }): OverviewLine => {
-    const fyTotals = sumByFy(l.monthly);
-    return {
-      accountCode: l.accountCode,
-      accountName: accountByCode.get(l.accountCode) ?? "",
-      fyTotals,
-      total: fyTotals.reduce((a, b) => a + b, 0),
-    };
-  };
-
-  // Liability tranches: each program_liability item gets its own row so the
-  // user can see the AAA / Mezz / etc. breakdown rather than just a single
-  // 6800 roll-up.
-  const liabilityLines: OverviewLiabilityLine[] = [];
-  for (const line of opexLines) {
-    for (const item of line.items ?? []) {
-      if (item.source !== "program_liability") continue;
-      const fyTotals = sumByFy(item.monthly);
-      liabilityLines.push({
-        accountCode: line.accountCode,
-        accountName: accountByCode.get(line.accountCode) ?? "",
-        trancheLabel: item.label,
-        fyTotals,
-        total: fyTotals.reduce((a, b) => a + b, 0),
-      });
-    }
-  }
-  liabilityLines.sort((a, b) => {
-    const byAccount = a.accountCode.localeCompare(b.accountCode);
-    return byAccount !== 0 ? byAccount : a.trancheLabel.localeCompare(b.trancheLabel);
-  });
-  const liabilityTotalsByYear = groups.map((_, i) =>
-    liabilityLines.reduce((acc, l) => acc + l.fyTotals[i], 0),
-  );
-  const liabilityTotal = liabilityTotalsByYear.reduce((a, b) => a + b, 0);
-
-  const revenue = sumByFy(pnlExt.revenue.totals);
-  const opex = sumByFy(pnlExt.opex.totals);
-  const depreciation = sumByFy(pnlExt.depreciation);
-  const interestExpenseTotals = sumByFy(pnlExt.interestExpense);
-  const ebitda = sumByFy(pnlExt.ebitda);
-  const ebit = sumByFy(pnlExt.ebit);
-  const pretaxIncome = sumByFy(pnlExt.pretaxIncome);
-  const tax = sumByFy(pnlExt.taxExpense);
-  const netIncome = sumByFy(pnlExt.netIncome);
-
-  const sum = (a: number[]) => a.reduce((x, y) => x + y, 0);
-
-  return {
-    fys: groups.map((g) => g.fy),
-    revenueLines: revenueLines.map(lineToOverview).sort((a, b) =>
-      a.accountCode.localeCompare(b.accountCode),
-    ),
-    opexLines: opexLines.map(lineToOverview).sort((a, b) =>
-      a.accountCode.localeCompare(b.accountCode),
-    ),
-    liabilityLines,
-    liabilityTotalsByYear,
-    liabilityTotal,
-    totals: {
-      revenue,
-      opex,
-      depreciation,
-      interestExpense: interestExpenseTotals,
-      ebitda,
-      ebit,
-      pretaxIncome,
-      tax,
-      netIncome,
-    },
-    fiveYear: {
-      revenue: sum(revenue),
-      opex: sum(opex),
-      depreciation: sum(depreciation),
-      interestExpense: sum(interestExpenseTotals),
-      ebitda: sum(ebitda),
-      ebit: sum(ebit),
-      pretaxIncome: sum(pretaxIncome),
-      tax: sum(tax),
-      netIncome: sum(netIncome),
-    },
-  };
-}
+import type {
+  OverviewData,
+  OverviewLine,
+  OverviewLiabilityLine,
+} from "./overviewData";
+// Re-export so existing imports from this file keep working. The runtime
+// builder (`buildOverviewData`) is intentionally NOT re-exported — pages
+// that need it should import from "./overviewData" so the server bundle
+// doesn't get the "use client" treatment.
+export type { OverviewData, OverviewLine, OverviewLiabilityLine };
 
 function pct(numer: number, denom: number): string {
   if (denom === 0) return "—";
   return `${((numer / denom) * 100).toFixed(1)}%`;
 }
 
+type SectionKey = "revenue" | "opex" | "interest";
+
 export function OverviewTab({ data }: { data: OverviewData }) {
   const { fys, fiveYear } = data;
+  const [collapsed, setCollapsed] = useState<Record<SectionKey, boolean>>({
+    revenue: false,
+    opex: false,
+    interest: false,
+  });
+  const toggle = (key: SectionKey) =>
+    setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
 
   return (
     <div className="flex h-full flex-col bg-white">
@@ -220,10 +72,18 @@ export function OverviewTab({ data }: { data: OverviewData }) {
           </thead>
           <tbody>
             {/* Revenue */}
-            <SectionHeader label="Revenue" color="bg-emerald-50 text-emerald-800" cols={fys.length + 1} />
-            {data.revenueLines.map((l) => (
-              <DetailRow key={l.accountCode} line={l} />
-            ))}
+            <SectionHeader
+              label="Revenue"
+              color="bg-emerald-50 text-emerald-800"
+              cols={fys.length + 1}
+              collapsed={collapsed.revenue}
+              onToggle={() => toggle("revenue")}
+              detailCount={data.revenueLines.length}
+            />
+            {!collapsed.revenue &&
+              data.revenueLines.map((l) => (
+                <DetailRow key={l.accountCode} line={l} />
+              ))}
             <TotalRow
               label="Total revenue"
               perFy={data.totals.revenue}
@@ -231,28 +91,43 @@ export function OverviewTab({ data }: { data: OverviewData }) {
             />
 
             {/* OPEX */}
-            <SectionHeader label="Operating expenses" color="bg-rose-50 text-rose-800" cols={fys.length + 1} />
-            {data.opexLines.map((l) => (
-              <DetailRow key={l.accountCode} line={l} />
-            ))}
+            <SectionHeader
+              label="Operating expenses"
+              color="bg-rose-50 text-rose-800"
+              cols={fys.length + 1}
+              collapsed={collapsed.opex}
+              onToggle={() => toggle("opex")}
+              detailCount={data.opexLines.length}
+            />
+            {!collapsed.opex &&
+              data.opexLines.map((l) => (
+                <DetailRow key={l.accountCode} line={l} />
+              ))}
             <TotalRow
-              label="Total OPEX (incl. dep + interest)"
+              label="Total OPEX (incl. dep)"
               perFy={data.totals.opex}
               total={fiveYear.opex}
             />
 
-            {/* Capital program liabilities — already included in Total OPEX
-                above, surfaced here for transparency. */}
+            {/* Capital program liabilities — interest expense, reported below
+                operating income (not part of OPEX). */}
             {data.liabilityLines.length > 0 ? (
               <>
                 <SectionHeader
-                  label="Capital program liabilities · interest expense (memo)"
+                  label="Capital program liabilities · interest expense"
                   color="bg-amber-50 text-amber-800"
                   cols={fys.length + 1}
+                  collapsed={collapsed.interest}
+                  onToggle={() => toggle("interest")}
+                  detailCount={data.liabilityLines.length}
                 />
-                {data.liabilityLines.map((l) => (
-                  <LiabilityRow key={`${l.accountCode}-${l.trancheLabel}`} line={l} />
-                ))}
+                {!collapsed.interest &&
+                  data.liabilityLines.map((l) => (
+                    <LiabilityRow
+                      key={`${l.accountCode}-${l.trancheLabel}`}
+                      line={l}
+                    />
+                  ))}
                 <TotalRow
                   label="Total interest expense"
                   perFy={data.liabilityTotalsByYear}
@@ -332,18 +207,46 @@ function SectionHeader({
   label,
   color,
   cols,
+  collapsed,
+  onToggle,
+  detailCount,
 }: {
   label: string;
   color: string;
   cols: number;
+  // Optional collapse controls. When omitted, header renders as a plain label.
+  collapsed?: boolean;
+  onToggle?: () => void;
+  detailCount?: number;
 }) {
+  const interactive = typeof onToggle === "function";
   return (
     <tr>
       <td
         colSpan={cols + 1}
-        className={`border-b border-t-2 border-zinc-400 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider ${color}`}
+        onClick={interactive ? onToggle : undefined}
+        className={`border-b border-t-2 border-zinc-400 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider ${color} ${
+          interactive ? "cursor-pointer select-none hover:brightness-95" : ""
+        }`}
       >
-        {label}
+        {interactive ? (
+          <span className="inline-flex items-center gap-2">
+            <span
+              aria-hidden="true"
+              className="inline-block w-3 text-[11px] leading-none"
+            >
+              {collapsed ? "▸" : "▾"}
+            </span>
+            <span>{label}</span>
+            {detailCount !== undefined && collapsed ? (
+              <span className="ml-1 rounded-full bg-white/60 px-1.5 py-0.5 text-[9px] font-normal normal-case tracking-normal">
+                {detailCount} row{detailCount === 1 ? "" : "s"} hidden
+              </span>
+            ) : null}
+          </span>
+        ) : (
+          label
+        )}
       </td>
     </tr>
   );

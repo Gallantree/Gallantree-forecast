@@ -4,7 +4,7 @@ import { connectToDatabase } from "@/lib/db";
 import { Period, Scenario } from "@/models";
 import { computePnL, type PnLSection } from "@/engine/pnl";
 import { loadEngineInputs } from "@/engine/inputs";
-import type { NimTier } from "@/engine/loans";
+import { buildScenarioPeriods } from "@/constants/periods";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,24 +33,26 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   const [periods, scenario, inputs] = await Promise.all([
     Period.find({}).sort({ index: 1 }).lean(),
     Scenario.findById(id)
-      .select("nimTier loanBookGrowthPctByYear baseRateBps")
+      .select("loanBookGrowthPctByYear baseRateBps firstYearLabel")
       .lean<{
-        nimTier?: NimTier;
         loanBookGrowthPctByYear?: Array<{ toString: () => string }>;
         baseRateBps?: number;
+        firstYearLabel?: number;
       }>(),
     loadEngineInputs(id),
   ]);
   if (periods.length === 0) {
     return NextResponse.json({ error: "periods not seeded — run `npm run seed`" }, { status: 412 });
   }
-  const horizon = periods.map((p) => p.key);
+  const horizon = buildScenarioPeriods(
+    scenario?.firstYearLabel ?? 2026,
+    periods.length,
+  ).map((p) => p.key);
   const pnl = computePnL(
     inputs.drivers,
     inputs.headcount,
     horizon,
     inputs.loans,
-    scenario?.nimTier ?? "default",
     inputs.programFees,
     (scenario?.loanBookGrowthPctByYear ?? []).map((d) => d.toString()),
     inputs.platformLicenses,

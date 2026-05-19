@@ -1,6 +1,11 @@
 import { CapitalProgram, Driver, Headcount, Loan, PlatformLicense } from "@/models";
 import type { DriverInput, HeadcountInput } from "./pnl";
-import { dateToPeriodKey, type LoanInput } from "./loans";
+import {
+  dateToPeriodKey,
+  PROGRAM_TYPE_ACCOUNT,
+  type LoanInput,
+  type ProgramType,
+} from "./loans";
 import type { ProgramFeeInput, FeeCategory } from "./programs";
 import type { PlatformLicenseInput } from "./platformLicenses";
 import type {
@@ -140,27 +145,24 @@ function toHeadcountInput(h: HeadcountDoc): HeadcountInput {
 interface LoanDoc {
   _id: unknown;
   loanId: string;
-  channel: "CRE_CLO" | "CMBS" | "Warehouse" | "Non-Conforming";
+  capitalProgramId?: unknown;
   balance: D128;
   originationDate: Date;
   maturityDate: Date;
-  nimDefaultBps?: number;
-  nimNegFloorBps?: number;
-  nimHardFloorBps?: number;
+  creditSpreadBps?: number;
   includeInRevenue?: boolean;
 }
 
-function toLoanInput(l: LoanDoc): LoanInput {
+function toLoanInput(l: LoanDoc, accountCode: string): LoanInput {
   return {
     id: String(l._id),
     loanId: l.loanId,
-    channel: l.channel,
+    capitalProgramId: String(l.capitalProgramId),
+    accountCode,
     balance: l.balance.toString(),
     originationPeriodKey: dateToPeriodKey(new Date(l.originationDate)),
     maturityPeriodKey: dateToPeriodKey(new Date(l.maturityDate)),
-    nimDefaultBps: l.nimDefaultBps,
-    nimNegFloorBps: l.nimNegFloorBps,
-    nimHardFloorBps: l.nimHardFloorBps,
+    creditSpreadBps: l.creditSpreadBps ?? 0,
   };
 }
 
@@ -309,9 +311,23 @@ export async function loadEngineInputs(scenarioId: string): Promise<{
   return {
     drivers: driverDocs.map(toDriverInput),
     headcount: headcountDocs.map(toHeadcountInput),
-    // Treat missing flag (legacy rows) as included. Only rows explicitly set to
-    // false are excluded from revenue projection.
-    loans: loanDocs.filter((l) => l.includeInRevenue !== false).map(toLoanInput),
+    // Loans contribute to revenue only when they're (a) explicitly included and
+    // (b) assigned to a capital program. Account code is resolved from the
+    // program's type.
+    loans: (() => {
+      const programAccount = new Map<string, string>();
+      for (const p of programDocs) {
+        const t = p.type as ProgramType;
+        programAccount.set(String(p._id), PROGRAM_TYPE_ACCOUNT[t] ?? "4400");
+      }
+      return loanDocs
+        .filter((l) => l.includeInRevenue !== false)
+        .filter((l) => l.capitalProgramId)
+        .map((l) => {
+          const acct = programAccount.get(String(l.capitalProgramId)) ?? "4400";
+          return toLoanInput(l, acct);
+        });
+    })(),
     programFees: flattenProgramFees(programDocs),
     programLiabilities: flattenProgramLiabilities(programDocs),
     platformLicenses: licenseDocs.map(toLicenseInput),

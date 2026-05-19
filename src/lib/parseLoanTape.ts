@@ -1,7 +1,6 @@
 import ExcelJS from "exceljs";
 import { Types } from "mongoose";
 import { toDecimal128 } from "@/utils/money";
-import type { LoanChannel } from "@/models";
 
 export interface ParsedLoan {
   scenarioId: Types.ObjectId;
@@ -13,7 +12,6 @@ export interface ParsedLoan {
   assetClass?: string;
   propertyStatus?: string;
   location?: string;
-  channel: LoanChannel;
   originationDate: Date;
   maturityDate: Date;
   termMonths: number;
@@ -31,9 +29,6 @@ export interface ParsedLoan {
   moodysIndicative?: string;
   binding?: string;
   creditSpreadBps?: number;
-  nimDefaultBps?: number;
-  nimNegFloorBps?: number;
-  nimHardFloorBps?: number;
   marginBps?: number;
   bbsw1mBps?: number;
   allInBps?: number;
@@ -50,7 +45,6 @@ const HEADER_ALIASES: Record<string, string> = {
   "Asset Class": "assetClass",
   "Property Status": "propertyStatus",
   Location: "location",
-  Channel: "channel",
   "Origination Date": "originationDate",
   "Maturity Date": "maturityDate",
   "Term (months)": "termMonths",
@@ -68,22 +62,12 @@ const HEADER_ALIASES: Record<string, string> = {
   "Moody's Indicative": "moodysIndicative",
   Binding: "binding",
   "Credit Spread": "creditSpreadBps",
-  "NIM Default": "nimDefaultBps",
-  "NIM Neg Floor": "nimNegFloorBps",
-  "NIM Hard Floor": "nimHardFloorBps",
   "Margin / BBSW": "marginBps",
   "BBSW 1M": "bbsw1mBps",
   "All-In (bps)": "allInBps",
   "All-In (%)": "allInPct",
   "Annual Interest": "annualInterest",
 };
-
-const ALLOWED_CHANNELS = new Set<LoanChannel>([
-  "CRE_CLO",
-  "CMBS",
-  "Warehouse",
-  "Non-Conforming",
-]);
 
 function asString(v: unknown): string | undefined {
   if (v === null || v === undefined) return undefined;
@@ -148,9 +132,6 @@ export async function parseLoanTape(
     });
     if (!asString(raw.loanId)) return;
 
-    const channel = asString(raw.channel);
-    if (!channel || !ALLOWED_CHANNELS.has(channel as LoanChannel)) return;
-
     const origination = asDate(raw.originationDate);
     const maturity = asDate(raw.maturityDate);
     const balance = asDecimal(raw.balance);
@@ -167,7 +148,6 @@ export async function parseLoanTape(
       assetClass: asString(raw.assetClass),
       propertyStatus: asString(raw.propertyStatus),
       location: asString(raw.location),
-      channel: channel as LoanChannel,
       originationDate: origination,
       maturityDate: maturity,
       termMonths,
@@ -185,9 +165,6 @@ export async function parseLoanTape(
       moodysIndicative: asString(raw.moodysIndicative),
       binding: asString(raw.binding),
       creditSpreadBps: asNumber(raw.creditSpreadBps),
-      nimDefaultBps: asNumber(raw.nimDefaultBps),
-      nimNegFloorBps: asNumber(raw.nimNegFloorBps),
-      nimHardFloorBps: asNumber(raw.nimHardFloorBps),
       marginBps: asNumber(raw.marginBps),
       bbsw1mBps: asNumber(raw.bbsw1mBps),
       allInBps: asNumber(raw.allInBps),
