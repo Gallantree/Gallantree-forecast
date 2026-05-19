@@ -1,6 +1,7 @@
 import Decimal from "decimal.js";
 import { fmtMoney2, fmtMoneyInput, fmtNum0 } from "@/utils/format";
 import {
+  clearAllPrograms,
   cloneProgram,
   createProgram,
   deleteProgram,
@@ -11,6 +12,7 @@ import {
 } from "../_actions";
 import { AddProgramModal, type ProgramFormInitial } from "./AddProgramModal";
 import { CalibrateProgramButton } from "./CalibrateProgramButton";
+import { ClearProgramsButton } from "./ClearProgramsButton";
 import { ProgramAnalysisModal } from "./ProgramAnalysisModal";
 import type { ProgramAnalysisData } from "./programAnalysisData";
 import { SeedMenu } from "./SeedMenu";
@@ -199,6 +201,10 @@ export function ProgramsTab({
             ]}
           />
           <ProgramAnalysisModal data={analysisData} />
+          <ClearProgramsButton
+            programCount={programs.length}
+            clearAction={clearAllPrograms.bind(null, scenarioId)}
+          />
           <AddProgramModal
             defaultStartPeriod={defaultStartPeriod}
             expenseAccountsForOverride={expenseAccounts}
