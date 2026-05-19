@@ -53,6 +53,12 @@ export interface ICapitalProgram {
   fees: IProgramFee[];
   liabilities: IProgramLiability[];
   upfrontFees: IProgramUpfrontFee[];
+  // Expected portfolio-level arrears rate for this program — what % of the
+  // loans booked into this program we expect to be in any arrears bucket
+  // (30/60/90/default) at any given time. Stored as a decimal fraction
+  // (0.05 = 5%). Used by the loan-book seed to bias status assignments and
+  // by the toolbar ARREARS tile to show actual vs target.
+  arrearsPctTarget?: Types.Decimal128;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -127,6 +133,7 @@ const capitalProgramSchema = new Schema<ICapitalProgram>(
     fees: { type: [programFeeSchema], default: [] },
     liabilities: { type: [programLiabilitySchema], default: [] },
     upfrontFees: { type: [programUpfrontFeeSchema], default: [] },
+    arrearsPctTarget: { type: Schema.Types.Decimal128 },
   },
   { timestamps: true },
 );

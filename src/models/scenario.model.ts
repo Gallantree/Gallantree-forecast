@@ -49,6 +49,12 @@ export interface IScenario {
   baseRateType?: "BBSW" | "BBSY" | "SOFR";
   baseRateBps?: number;
   firstYearLabel?: number; // calendar year shown for Year 1 columns
+  // Target end-of-FY total headcount, one entry per forecast year. Drives the
+  // "Plan growth" modal: deltas vs. the actual + previously-planned headcount
+  // become placeholder Headcount documents flagged isGrowth that flow through
+  // the staffing cost projection. Length matches the 5-year horizon; missing
+  // entries are treated as "no target" (zero delta).
+  staffTargetByYear?: number[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -96,6 +102,7 @@ const scenarioSchema = new Schema<IScenario>(
     baseRateType: { type: String, enum: ["BBSW", "BBSY", "SOFR"] },
     baseRateBps: { type: Number, min: 0 },
     firstYearLabel: { type: Number, min: 2000, max: 2100 },
+    staffTargetByYear: { type: [Number], default: undefined },
   },
   { timestamps: true },
 );

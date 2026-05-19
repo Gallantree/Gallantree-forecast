@@ -51,7 +51,26 @@ export interface LoanRow {
   allInPct?: { toString: () => string };
   includeInRevenue?: boolean;
   synthetic?: boolean;
+  arrearsStatus?: "current" | "arrears30" | "arrears60" | "arrears90" | "default";
 }
+
+export type ArrearsBucket = NonNullable<LoanRow["arrearsStatus"]>;
+
+const ARREARS_LABEL: Record<ArrearsBucket, string> = {
+  current: "Current",
+  arrears30: "30d",
+  arrears60: "60d",
+  arrears90: "90d",
+  default: "Default",
+};
+
+const ARREARS_COLOR: Record<ArrearsBucket, string> = {
+  current: "bg-emerald-100 text-emerald-800",
+  arrears30: "bg-amber-100 text-amber-800",
+  arrears60: "bg-orange-100 text-orange-800",
+  arrears90: "bg-rose-100 text-rose-800",
+  default: "bg-rose-200 text-rose-900",
+};
 
 export interface ProgramOption {
   _id: string;
@@ -254,33 +273,76 @@ export function LoansTab({
           location) to be useful. Profile data on the scenario is preserved on
           the model so this can be re-enabled later. */}
 
-      {/* Program-type summary */}
-      {loans.length > 0 && (
-        <div className="grid grid-cols-5 gap-px border-b border-zinc-200 bg-zinc-200">
-          {(["CRE_CLO", "CMBS", "WAREHOUSE", "MIT_FUND", "OTHER"] as const).map((ch) => {
-            const b = byChannel.get(ch);
-            return (
-              <div key={ch} className="flex flex-col gap-1 bg-white px-4 py-3">
+      {/* Program-type summary + arrears tile */}
+      {loans.length > 0 &&
+        (() => {
+          // Tally arrears across the full book. The tile after OTHER shows
+          // the headline pct + a four-bucket micro-breakdown.
+          let arrearsCount = 0;
+          const arrearsByBucket: Record<ArrearsBucket, number> = {
+            current: 0,
+            arrears30: 0,
+            arrears60: 0,
+            arrears90: 0,
+            default: 0,
+          };
+          for (const l of loans) {
+            const s = l.arrearsStatus ?? "current";
+            arrearsByBucket[s] += 1;
+            if (s !== "current") arrearsCount += 1;
+          }
+          const arrearsPct = loans.length > 0 ? arrearsCount / loans.length : 0;
+          return (
+            <div className="grid grid-cols-3 gap-px border-b border-zinc-200 bg-zinc-200 sm:grid-cols-6">
+              {(["CRE_CLO", "CMBS", "WAREHOUSE", "MIT_FUND", "OTHER"] as const).map((ch) => {
+                const b = byChannel.get(ch);
+                return (
+                  <div key={ch} className="flex flex-col gap-1 bg-white px-4 py-3">
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                      {PROGRAM_TYPE_LABEL[ch]}
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-lg font-semibold tabular-nums">
+                        {fmtNum0(b?.count ?? 0)}
+                      </span>
+                      <span className="text-xs text-zinc-500">loans</span>
+                    </div>
+                    <div className="text-xs tabular-nums text-zinc-700">
+                      {fmtMoney2((b?.balance ?? new Decimal(0)).toFixed(2))} balance
+                    </div>
+                    <div className="text-xs tabular-nums text-emerald-700">
+                      {fmtMoney2((b?.nim ?? new Decimal(0)).toFixed(2))} NIM / yr
+                    </div>
+                  </div>
+                );
+              })}
+              {/* Arrears tile — sits after OTHER */}
+              <div className="flex flex-col gap-1 bg-white px-4 py-3">
                 <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
-                  {PROGRAM_TYPE_LABEL[ch]}
+                  Arrears
                 </div>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-lg font-semibold tabular-nums">
-                    {fmtNum0(b?.count ?? 0)}
+                  <span
+                    className={`text-lg font-semibold tabular-nums ${
+                      arrearsCount === 0 ? "text-emerald-700" : "text-rose-700"
+                    }`}
+                  >
+                    {fmtNum0(arrearsCount)}
                   </span>
-                  <span className="text-xs text-zinc-500">loans</span>
+                  <span className="text-xs text-zinc-500">
+                    of {fmtNum0(loans.length)} ({(arrearsPct * 100).toFixed(1)}%)
+                  </span>
                 </div>
-                <div className="text-xs tabular-nums text-zinc-700">
-                  {fmtMoney2((b?.balance ?? new Decimal(0)).toFixed(2))} balance
-                </div>
-                <div className="text-xs tabular-nums text-emerald-700">
-                  {fmtMoney2((b?.nim ?? new Decimal(0)).toFixed(2))} NIM / yr
+                <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] tabular-nums text-zinc-600">
+                  <span>30d {fmtNum0(arrearsByBucket.arrears30)}</span>
+                  <span>60d {fmtNum0(arrearsByBucket.arrears60)}</span>
+                  <span>90d {fmtNum0(arrearsByBucket.arrears90)}</span>
+                  <span className="text-rose-700">Def {fmtNum0(arrearsByBucket.default)}</span>
                 </div>
               </div>
-            );
-          })}
-        </div>
-      )}
+            </div>
+          );
+        })()}
 
       {/* Loan list */}
       <div className="flex-1 overflow-auto">
@@ -301,6 +363,7 @@ export function LoansTab({
                 <Th>Asset</Th>
                 <Th>State</Th>
                 <Th>Status</Th>
+                <Th>Arrears</Th>
                 <Th>Origin</Th>
                 <Th>Maturity</Th>
                 <Th className="text-right">Term (m)</Th>
@@ -376,6 +439,18 @@ export function LoansTab({
                     <Td>{l.assetClass ?? "—"}</Td>
                     <Td>{l.state ?? "—"}</Td>
                     <Td>{l.propertyStatus ?? "—"}</Td>
+                    <Td>
+                      {(() => {
+                        const s = l.arrearsStatus ?? "current";
+                        return (
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${ARREARS_COLOR[s]}`}
+                          >
+                            {ARREARS_LABEL[s]}
+                          </span>
+                        );
+                      })()}
+                    </Td>
                     <Td className="font-mono text-zinc-600">{fmtDate(l.originationDate)}</Td>
                     <Td className="font-mono text-zinc-600">{fmtDate(l.maturityDate)}</Td>
                     <Td className="text-right tabular-nums">{l.termMonths}</Td>

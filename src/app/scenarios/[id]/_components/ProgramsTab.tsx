@@ -72,6 +72,8 @@ export interface ProgramRow {
   fees: ProgramFeeRow[];
   liabilities?: ProgramLiabilityRow[];
   upfrontFees?: ProgramUpfrontFeeRow[];
+  // Decimal fraction (0.03 = 3%). Default 3% inside the seed loop when absent.
+  arrearsPctTarget?: { toString: () => string };
 }
 
 const TYPE_LABEL: Record<ProgramRow["type"], string> = {
@@ -109,6 +111,10 @@ function toFormInitial(p: ProgramRow): ProgramFormInitial {
     startPeriodKey: p.startPeriodKey,
     endPeriodKey: p.endPeriodKey ?? "",
     notes: p.notes ?? "",
+    // Decimal fraction → whole-percent string for the form input.
+    arrearsPctTarget: p.arrearsPctTarget
+      ? (Number(p.arrearsPctTarget.toString()) * 100).toString()
+      : "",
     fees: p.fees.map((f) => ({
       name: f.name,
       category: f.category,
@@ -321,6 +327,17 @@ export function ProgramsTab({
                           Upfront{" "}
                           <span className="font-semibold text-rose-700">
                             {fmtMoney2(programUpfront.toFixed(2))}
+                          </span>
+                        </span>
+                      ) : null}
+                      {p.arrearsPctTarget ? (
+                        <span
+                          className="text-xs text-zinc-500"
+                          title="Expected % of loans in arrears (seed target)"
+                        >
+                          Arrears tgt{" "}
+                          <span className="font-semibold text-amber-700">
+                            {(Number(p.arrearsPctTarget.toString()) * 100).toFixed(1)}%
                           </span>
                         </span>
                       ) : null}

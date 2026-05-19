@@ -82,6 +82,10 @@ export type ProgramFormInitial = {
   startPeriodKey: string;
   endPeriodKey?: string;
   notes?: string;
+  // Expected arrears rate for loans booked into this program. String form so
+  // the input renders cleanly ("3" → 3%); stored as a decimal fraction
+  // (0.03 = 3%) after parsing.
+  arrearsPctTarget?: string;
   fees: ProgramFeePayload[];
   liabilities?: ProgramLiabilityPayload[];
 };
@@ -142,6 +146,9 @@ export function AddProgramModal({
   const [startPeriodKey, setStartPeriodKey] = useState(seed.startPeriodKey);
   const [endPeriodKey, setEndPeriodKey] = useState(seed.endPeriodKey ?? "");
   const [notes, setNotes] = useState(seed.notes ?? "");
+  // Stored on the form as percent (e.g. "3" = 3%) so the user types whole
+  // numbers. Converted to a decimal fraction in handleSubmit.
+  const [arrearsPctTarget, setArrearsPctTarget] = useState(seed.arrearsPctTarget ?? "");
   const [fees, setFees] = useState<FeeRow[]>(
     initial ? initial.fees.map((f) => ({ rowKey: crypto.randomUUID(), ...f })) : defaultFeeRows(),
   );
@@ -160,6 +167,7 @@ export function AddProgramModal({
     setStartPeriodKey(s.startPeriodKey);
     setEndPeriodKey(s.endPeriodKey ?? "");
     setNotes(s.notes ?? "");
+    setArrearsPctTarget(s.arrearsPctTarget ?? "");
     setFees(
       initial ? s.fees.map((f) => ({ rowKey: crypto.randomUUID(), ...f })) : defaultFeeRows(),
     );
@@ -202,6 +210,16 @@ export function AddProgramModal({
 
   function handleSubmit() {
     if (!name.trim()) return;
+    // The user enters a percent (e.g. "3"); persist as the decimal
+    // fraction the model + seed loop expect (0.03). Blank → undefined.
+    const arrearsTrimmed = arrearsPctTarget.trim();
+    let arrearsAsFraction: string | undefined;
+    if (arrearsTrimmed) {
+      const pct = Number(arrearsTrimmed);
+      if (Number.isFinite(pct) && pct >= 0 && pct <= 100) {
+        arrearsAsFraction = (pct / 100).toString();
+      }
+    }
     const payload: ProgramPayload = {
       name: name.trim(),
       type,
@@ -210,6 +228,7 @@ export function AddProgramModal({
       startPeriodKey,
       endPeriodKey: endPeriodKey.trim() || undefined,
       notes: notes.trim() || undefined,
+      arrearsPctTarget: arrearsAsFraction,
       fees: fees.map(({ rowKey: _rk, ...f }) => {
         void _rk;
         return f;
@@ -316,6 +335,18 @@ export function AddProgramModal({
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   className="rounded-md border border-zinc-300 px-2 py-1"
+                />
+              </Field>
+              <Field label="Arrears target %" hint="expected % of loans in arrears">
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step="0.1"
+                  value={arrearsPctTarget}
+                  onChange={(e) => setArrearsPctTarget(e.target.value)}
+                  placeholder="3"
+                  className="rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
                 />
               </Field>
             </section>

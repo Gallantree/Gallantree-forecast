@@ -11,6 +11,7 @@ export type TabKey =
   | "opex-general"
   | "opex-staffing"
   | "pnl"
+  | "pnl-gallantree"
   | "balance-sheet"
   | "cashflow"
   | "valuation"
@@ -27,6 +28,7 @@ export const TABS: { key: TabKey; label: string }[] = [
   { key: "opex-general", label: "OPEX — General" },
   { key: "opex-staffing", label: "OPEX — Staffing" },
   { key: "pnl", label: "Profit & Loss" },
+  { key: "pnl-gallantree", label: "Profit & Loss — Gallantree" },
   { key: "balance-sheet", label: "Balance Sheet" },
   { key: "cashflow", label: "Cashflow" },
   { key: "valuation", label: "Valuation" },
