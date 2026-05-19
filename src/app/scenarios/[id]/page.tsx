@@ -40,7 +40,7 @@ import {
 import { buildLoanAnalysisData } from "./_components/loanAnalysisData";
 import { type OpexDriverRow, OpexGeneralTab } from "./_components/OpexGeneralTab";
 import { type OverviewData, OverviewTab } from "./_components/OverviewTab";
-import { buildOverviewData } from "./_components/overviewData";
+import { buildOverviewData, toGallantreeOverview } from "./_components/overviewData";
 import { type PlatformLicenseRow, PlatformRevenuesTab } from "./_components/PlatformRevenuesTab";
 import { buildFYGroups, PnlTable } from "./_components/PnlTable";
 import {
@@ -744,6 +744,16 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
             <OverviewTab data={overviewData} />
           ) : (
             <Stub title="Overview" message="Seed periods first — run `npm run seed`." />
+          ))}
+
+        {tab === "overview-gallantree" &&
+          (overviewData ? (
+            <OverviewTab data={toGallantreeOverview(overviewData)} />
+          ) : (
+            <Stub
+              title="Overview — Gallantree"
+              message="Seed periods first — run `npm run seed`."
+            />
           ))}
 
         {tab === "loan-book" && (

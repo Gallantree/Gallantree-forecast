@@ -185,3 +185,92 @@ export function buildOverviewData(
     },
   };
 }
+
+// ── Gallantree-specific variant ────────────────────────────────────────────
+//
+// The standard Overview rolls up everything that flows through Gallantree's
+// chart of accounts — including the NIM income on the warehoused / securitised
+// CRE book (account codes 4100-4499) AND the interest expense Gallantree is
+// modelling on the tranches it issues to capital-stack investors.
+//
+// For the *Gallantree Overview*, we want to see the platform's operating
+// economics in isolation: management + servicing fees, platform-licence
+// revenue, OPEX, and the resulting profit cascade. The book interest
+// (NIM revenue) and the matching liability interest are an investor-pass-
+// through view — informative on the program tabs, but noise here.
+//
+// This variant takes the same builder output and strips:
+//   * Revenue lines coded 4100-4499 (NIM revenue buckets — CRE CLO / CMBS /
+//     Warehouse / Non-Conforming)
+//   * The entire `liabilityLines` section (capital-program tranche interest)
+//   * `interestExpense` from every total / cascade (EBIT == Pre-tax income)
+//
+// Revenue / EBITDA / Net income totals are recomputed so margins stay honest.
+
+const NIM_REVENUE_PATTERN = /^4[1-4]\d\d$/;
+
+function isNimRevenueLine(line: OverviewLine): boolean {
+  return NIM_REVENUE_PATTERN.test(line.accountCode);
+}
+
+export function toGallantreeOverview(data: OverviewData): OverviewData {
+  const revenueLines = data.revenueLines.filter((l) => !isNimRevenueLine(l));
+
+  // Re-sum revenue per FY without the NIM lines so totals & margins reflect
+  // only the lines actually displayed.
+  const revenue = data.fys.map((_, i) =>
+    revenueLines.reduce((acc, l) => acc + (l.fyTotals[i] ?? 0), 0),
+  );
+
+  // EBITDA / EBIT / pre-tax all need to back out (a) the NIM revenue we just
+  // removed and (b) the interest expense we're hiding. Since net income is
+  // pre-tax minus tax, and we're not changing tax behaviour here, we
+  // recompute the cascade by deltas from the original totals.
+  const revenueDelta = data.totals.revenue.map((v, i) => revenue[i] - v); // ≤ 0
+  const ebitda = data.totals.ebitda.map((v, i) => v + revenueDelta[i]);
+  const ebit = data.totals.ebit.map((v, i) => v + revenueDelta[i]);
+  // Without liability interest, EBIT == pre-tax income.
+  const pretaxIncome = ebit.slice();
+  // Tax & net income recompute against the new pre-tax. Re-derive the
+  // effective tax rate per FY from the original cascade so the implied
+  // assumption stays consistent.
+  const tax = data.totals.tax.map((origTax, i) => {
+    const origPre = data.totals.pretaxIncome[i] ?? 0;
+    if (origPre === 0) return 0;
+    const rate = origTax / origPre;
+    return pretaxIncome[i] * rate;
+  });
+  const netIncome = pretaxIncome.map((v, i) => v - tax[i]);
+
+  const sum = (a: number[]) => a.reduce((x, y) => x + y, 0);
+
+  return {
+    ...data,
+    revenueLines,
+    liabilityLines: [],
+    liabilityTotalsByYear: data.fys.map(() => 0),
+    liabilityTotal: 0,
+    totals: {
+      revenue,
+      opex: data.totals.opex,
+      depreciation: data.totals.depreciation,
+      interestExpense: data.fys.map(() => 0),
+      ebitda,
+      ebit,
+      pretaxIncome,
+      tax,
+      netIncome,
+    },
+    fiveYear: {
+      revenue: sum(revenue),
+      opex: data.fiveYear.opex,
+      depreciation: data.fiveYear.depreciation,
+      interestExpense: 0,
+      ebitda: sum(ebitda),
+      ebit: sum(ebit),
+      pretaxIncome: sum(pretaxIncome),
+      tax: sum(tax),
+      netIncome: sum(netIncome),
+    },
+  };
+}

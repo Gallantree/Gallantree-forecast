@@ -2,6 +2,7 @@ import Link from "next/link";
 
 export type TabKey =
   | "overview"
+  | "overview-gallantree"
   | "revenue"
   | "loan-book"
   | "loan-book-analysis"
@@ -17,6 +18,7 @@ export type TabKey =
 
 export const TABS: { key: TabKey; label: string }[] = [
   { key: "overview", label: "Overview" },
+  { key: "overview-gallantree", label: "Overview — Gallantree" },
   { key: "revenue", label: "Revenue" },
   { key: "loan-book", label: "Loan Book" },
   { key: "loan-book-analysis", label: "Loan Book Analysis" },
