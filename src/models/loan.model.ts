@@ -1,8 +1,6 @@
 import { Schema, type Types } from "mongoose";
 import { defineModel } from "./_define";
 
-export type LoanChannel = "CRE_CLO" | "CMBS" | "Warehouse" | "Non-Conforming";
-
 export interface ILoan {
   scenarioId: Types.ObjectId;
   capitalProgramId?: Types.ObjectId;
@@ -14,7 +12,6 @@ export interface ILoan {
   assetClass?: string;
   propertyStatus?: string;
   location?: string;
-  channel: LoanChannel;
   originationDate: Date;
   maturityDate: Date;
   termMonths: number;
@@ -32,9 +29,6 @@ export interface ILoan {
   moodysIndicative?: string;
   binding?: string;
   creditSpreadBps?: number;
-  nimDefaultBps?: number;
-  nimNegFloorBps?: number;
-  nimHardFloorBps?: number;
   marginBps?: number;
   bbsw1mBps?: number;
   allInBps?: number;
@@ -57,11 +51,6 @@ const loanSchema = new Schema<ILoan>(
     assetClass: { type: String, trim: true },
     propertyStatus: { type: String, trim: true },
     location: { type: String, trim: true },
-    channel: {
-      type: String,
-      enum: ["CRE_CLO", "CMBS", "Warehouse", "Non-Conforming"],
-      required: true,
-    },
     originationDate: { type: Date, required: true },
     maturityDate: { type: Date, required: true },
     termMonths: { type: Number, required: true, min: 1 },
@@ -79,9 +68,6 @@ const loanSchema = new Schema<ILoan>(
     moodysIndicative: { type: String, trim: true },
     binding: { type: String, trim: true },
     creditSpreadBps: { type: Number },
-    nimDefaultBps: { type: Number },
-    nimNegFloorBps: { type: Number },
-    nimHardFloorBps: { type: Number },
     marginBps: { type: Number },
     bbsw1mBps: { type: Number },
     allInBps: { type: Number },
@@ -92,7 +78,6 @@ const loanSchema = new Schema<ILoan>(
   { timestamps: true },
 );
 
-loanSchema.index({ scenarioId: 1, channel: 1 });
 loanSchema.index({ scenarioId: 1, loanId: 1 }, { unique: true });
 loanSchema.index({ scenarioId: 1, capitalProgramId: 1 });
 

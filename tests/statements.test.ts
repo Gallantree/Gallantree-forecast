@@ -136,6 +136,52 @@ describe("computeStatements — interest expense cascade", () => {
   });
 });
 
+describe("computeStatements — capital program liabilities on BS/CF", () => {
+  it("notes payable balance = active principal; issuance at start, repayment after maturity; BS balances", () => {
+    // Tranche active 2026-07 .. 2027-01 (7 months) within a 12-month horizon.
+    // Principal $1m, 24bps fixed -> $200/mo interest.
+    const s = computeStatements(
+      [rev(), opex()],
+      [],
+      HORIZON,
+      { taxRatePct: "0", openingCash: "0", openingEquity: "0" },
+      [],
+      [],
+      [],
+      [
+        {
+          id: "L1",
+          programId: "P1",
+          programName: "Test",
+          trancheName: "AAA",
+          principal: "1000000",
+          returnProfileBps: 24,
+          rateType: "fixed",
+          calculationMethod: "monthly",
+          accountCode: "6800",
+          startPeriodKey: "2026-07",
+          endPeriodKey: "2027-01",
+        },
+      ],
+    );
+    // Issuance in month 0, repayment in month 7 (after 7 active months 0..6).
+    expect(s.cf.notesIssuance[0].value.toFixed(2)).toBe("1000000.00");
+    expect(s.cf.notesIssuance[1].value.toFixed(2)).toBe("0.00");
+    expect(s.cf.notesRepayment[6].value.toFixed(2)).toBe("0.00");
+    expect(s.cf.notesRepayment[7].value.toFixed(2)).toBe("1000000.00");
+    // Balance: $1m through month 6, $0 from month 7.
+    expect(s.bs.notesPayable[0].value.toFixed(2)).toBe("1000000.00");
+    expect(s.bs.notesPayable[6].value.toFixed(2)).toBe("1000000.00");
+    expect(s.bs.notesPayable[7].value.toFixed(2)).toBe("0.00");
+    // BS balances every month.
+    for (let i = 0; i < HORIZON.length; i++) {
+      expect(s.bs.totalAssets[i].value.toFixed(2)).toBe(
+        s.bs.totalLiabilitiesAndEquity[i].value.toFixed(2),
+      );
+    }
+  });
+});
+
 describe("computeStatements — Cashflow & BS balance", () => {
   it("indirect CF reconciles to ending cash", () => {
     const s = computeStatements([rev(), opex(), capex()], [], HORIZON, {

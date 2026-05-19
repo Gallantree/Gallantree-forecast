@@ -7,6 +7,7 @@ import { Period, Scenario } from "@/models";
 import { computeStatements, type ScenarioAssumptions } from "@/engine/statements";
 import { loadEngineInputs } from "@/engine/inputs";
 import type { MonthlyValue } from "@/engine/pnl";
+import { buildScenarioPeriods } from "@/constants/periods";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -47,9 +48,9 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
       taxRatePct?: D128Like;
       openingCash?: D128Like;
       openingEquity?: D128Like;
-      nimTier?: "default" | "neg_floor" | "hard_floor";
       loanBookGrowthPctByYear?: Array<{ toString: () => string }>;
       baseRateBps?: number;
+      firstYearLabel?: number;
     }>(),
     loadEngineInputs(id),
   ]);
@@ -57,14 +58,16 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   if (periods.length === 0) {
     return NextResponse.json({ error: "periods not seeded — run `npm run seed`" }, { status: 412 });
   }
-  const horizon = periods.map((p) => p.key);
+  const horizon = buildScenarioPeriods(
+    scenario.firstYearLabel ?? 2026,
+    periods.length,
+  ).map((p) => p.key);
   const assumptions: ScenarioAssumptions = {
     dsoDays: scenario.dsoDays?.toString(),
     dpoDays: scenario.dpoDays?.toString(),
     taxRatePct: scenario.taxRatePct?.toString(),
     openingCash: scenario.openingCash?.toString(),
     openingEquity: scenario.openingEquity?.toString(),
-    nimTier: scenario.nimTier,
     loanBookGrowthPctByYear: (scenario.loanBookGrowthPctByYear ?? []).map((d) =>
       d.toString(),
     ),

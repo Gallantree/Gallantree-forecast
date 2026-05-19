@@ -1,12 +1,7 @@
 import Decimal from "decimal.js";
 import { money, ZERO, type Money } from "@/utils/money";
 import { periodKey } from "@/constants/periods";
-import {
-  CHANNEL_ACCOUNT,
-  projectLoanRevenue,
-  type LoanInput,
-  type NimTier,
-} from "./loans";
+import { projectLoanRevenue, type LoanInput } from "./loans";
 import { projectProgramFee, type ProgramFeeInput } from "./programs";
 import {
   licenseAccount,
@@ -126,6 +121,9 @@ export interface PnL {
   horizon: string[];
   revenue: PnLSection;
   opex: PnLSection;
+  // Capital program liabilities (interest expense). Reported below operating
+  // income — not part of OPEX and not part of gross profit.
+  liabilities: PnLSection;
   grossProfit: MonthlyValue[];
   grossProfitTotal: Money;
 }
@@ -353,7 +351,6 @@ export function computePnL(
   headcount: HeadcountInput[],
   horizon: string[],
   loans: LoanInput[] = [],
-  nimTier: NimTier = "default",
   programFees: ProgramFeeInput[] = [],
   loanBookGrowthPctByYear: Decimal.Value[] = [],
   platformLicenses: PlatformLicenseInput[] = [],
@@ -398,8 +395,8 @@ export function computePnL(
         id: l.id,
         label: l.loanId,
         source: "loan",
-        accountCode: CHANNEL_ACCOUNT[l.channel],
-        monthly: projectLoanRevenue(l, horizon, nimTier, loanBookGrowthPctByYear),
+        accountCode: l.accountCode,
+        monthly: projectLoanRevenue(l, horizon, baseRateBps, loanBookGrowthPctByYear),
       }),
     ),
     ...programFees.map(
@@ -459,11 +456,13 @@ export function computePnL(
       ...perFteProjected,
       ...depreciationProjected,
       ...headcountProjected,
-      ...liabilityProjected,
     ],
     horizon,
   );
   const opex = sectionFromLines(opexLines, horizon);
+
+  const liabilityLines = groupByAccount(liabilityProjected, horizon);
+  const liabilities = sectionFromLines(liabilityLines, horizon);
 
   const grossProfit: MonthlyValue[] = horizon.map((pk, i) => ({
     periodKey: pk,
@@ -471,5 +470,5 @@ export function computePnL(
   }));
   const grossProfitTotal = grossProfit.reduce((acc, m) => acc.plus(m.value), ZERO as Money);
 
-  return { horizon, revenue, opex, grossProfit, grossProfitTotal };
+  return { horizon, revenue, opex, liabilities, grossProfit, grossProfitTotal };
 }

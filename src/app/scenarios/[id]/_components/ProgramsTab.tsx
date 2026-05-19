@@ -1,7 +1,14 @@
 import Decimal from "decimal.js";
 import { fmtMoney2, fmtMoneyInput, fmtNum0 } from "@/utils/format";
-import { createProgram, deleteProgram, updateProgram } from "../_actions";
+import { cloneProgram, createProgram, deleteProgram, updateProgram } from "../_actions";
 import { AddProgramModal, type ProgramFormInitial } from "./AddProgramModal";
+import { CalibrateProgramButton } from "./CalibrateProgramButton";
+import { SeedMenu } from "./SeedMenu";
+import {
+  seedCmbsPrograms,
+  seedCreCloPrograms,
+  seedLoanBook,
+} from "../_actions";
 
 export interface ProgramFeeRow {
   _id: string;
@@ -33,6 +40,9 @@ export interface ProgramAggregate {
   weightBalanceForLvr: number;
   weightBalanceForDscr: number;
   weightBalanceForSpread: number;
+  // Funding-side assessment: WAS of debt tranches in this program (excl equity),
+  // weighted by principal. Used to compute program NIM = loan WAS − funding WAS.
+  fundingWasBps: number;
 }
 
 export interface ProgramRow {
@@ -108,6 +118,7 @@ export function ProgramsTab({
   expenseAccounts,
   defaultStartPeriod,
   baseRateBps,
+  seedEnabled,
 }: {
   scenarioId: string;
   programs: ProgramRow[];
@@ -115,6 +126,7 @@ export function ProgramsTab({
   expenseAccounts: { code: string; name: string }[];
   defaultStartPeriod: string;
   baseRateBps: number;
+  seedEnabled: boolean;
 }) {
   const createAction = createProgram.bind(null, scenarioId);
 
@@ -152,12 +164,41 @@ export function ProgramsTab({
             </div>
           </div>
         </div>
-        <AddProgramModal
-          defaultStartPeriod={defaultStartPeriod}
-          expenseAccountsForOverride={expenseAccounts}
-          createAction={createAction}
-          baseRateBps={baseRateBps}
-        />
+        <div className="flex items-end gap-2">
+          <SeedMenu
+            scenarioId={scenarioId}
+            enabled={seedEnabled}
+            options={[
+              {
+                key: "cre-clo",
+                label: "CRE CLO programs",
+                description:
+                  "4 CRE CLOs (FL-1 matches Gallantree's anchor deal; FL-2 through FL-4 spaced 4 months apart, randomized within your spread bands).",
+                action: seedCreCloPrograms,
+              },
+              {
+                key: "cmbs",
+                label: "CMBS + Warehouse",
+                description:
+                  "4 CMBS deals (tighter spreads, A 120-130, A-S 145-155…) plus 1 warehouse facility.",
+                action: seedCmbsPrograms,
+              },
+              {
+                key: "loan-book",
+                label: "Loan book (250 loans)",
+                description:
+                  "250 loans across existing CRE CLO / CMBS / Warehouse programs. Run program seeds first.",
+                action: seedLoanBook,
+              },
+            ]}
+          />
+          <AddProgramModal
+            defaultStartPeriod={defaultStartPeriod}
+            expenseAccountsForOverride={expenseAccounts}
+            createAction={createAction}
+            baseRateBps={baseRateBps}
+          />
+        </div>
       </div>
 
       {/* Program list */}
@@ -234,6 +275,18 @@ export function ProgramsTab({
                         triggerClassName="rounded px-2 py-0.5 text-xs text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
                         baseRateBps={baseRateBps}
                       />
+                      <CalibrateProgramButton
+                        scenarioId={scenarioId}
+                        programId={p._id}
+                      />
+                      <form action={cloneProgram.bind(null, scenarioId, p._id)}>
+                        <button
+                          type="submit"
+                          className="rounded px-2 py-0.5 text-xs text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+                        >
+                          Clone
+                        </button>
+                      </form>
                       <form action={deleteProgram.bind(null, scenarioId, p._id)}>
                         <button
                           type="submit"
@@ -333,6 +386,29 @@ function trancheRateBps(l: ProgramLiabilityRow, baseRateBps: number): number {
     : l.returnProfileBps;
 }
 
+// A tranche is "funding" if it represents principal-paying debt (A–G in CRE
+// CLO / CMBS conventions). Excludes equity/residual + structural control
+// classes (X, Class X, IO) + zero/negative-spread tranches. Used by the WAS
+// calc so the funding cost reflects real debt, not structure.
+const NON_FUNDING_TRANCHE_NAMES = new Set([
+  "equity",
+  "x",
+  "class x",
+  "io",
+  "interest only",
+  "interest-only",
+]);
+
+export function isFundingTranche(
+  name: string | undefined,
+  spreadBps: number,
+): boolean {
+  if (spreadBps <= 0) return false;
+  const norm = (name ?? "").trim().toLowerCase();
+  if (!norm) return true; // unnamed but positive-spread → assume funding
+  return !NON_FUNDING_TRANCHE_NAMES.has(norm);
+}
+
 function LiabilitiesBlock({
   liabilities,
   faceValuePerNote,
@@ -348,16 +424,40 @@ function LiabilitiesBlock({
       acc + (tranchePrincipal(l, faceValuePerNote) * trancheRateBps(l, baseRateBps)) / 10000,
     0,
   );
+  // Liability WAS: weighted-avg spread across the principal-paying debt
+  // tranches (A through G in CRE CLO / CMBS conventions). Excludes:
+  //   - Equity / residual tranches
+  //   - Control / IO classes (X, Class X, IO) — these are structural, not funding
+  //   - Any tranche with zero or negative spread
+  let wasNum = 0;
+  let wasDen = 0;
+  for (const l of liabilities) {
+    if (!isFundingTranche(l.name, l.returnProfileBps)) continue;
+    const principal = tranchePrincipal(l, faceValuePerNote);
+    if (principal <= 0) continue;
+    wasNum += principal * l.returnProfileBps;
+    wasDen += principal;
+  }
+  const liabWasBps = wasDen > 0 ? Math.round(wasNum / wasDen) : null;
   return (
     <div className="border-t border-zinc-100">
       <div className="flex items-baseline justify-between border-b border-zinc-100 bg-zinc-50 px-4 py-1">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
           Liability streams · notes issued
         </span>
-        <span className="text-[11px] text-zinc-500">
-          Annual interest{" "}
-          <span className="font-semibold text-rose-700">
-            {fmtMoney2(totalAnnual)}
+        <span className="flex items-baseline gap-4 text-[11px] text-zinc-500">
+          <span>
+            WAS{" "}
+            <span className="font-semibold text-zinc-700">
+              {liabWasBps !== null ? `${liabWasBps} bps` : "—"}
+            </span>
+            <span className="ml-1 text-zinc-400">· debt tranches</span>
+          </span>
+          <span>
+            Annual interest{" "}
+            <span className="font-semibold text-rose-700">
+              {fmtMoney2(totalAnnual)}
+            </span>
           </span>
         </span>
       </div>
@@ -442,39 +542,93 @@ function ProgramAggregateStrip({ agg }: { agg: ProgramAggregate | undefined }) {
       ? agg.weightSumSpreadBps / agg.weightBalanceForSpread
       : null;
 
+  // Program NIM = (loan WAS) − (funding WAS), expressed as a spread.
+  // NIM $/yr applies that spread to the aggregate loan balance.
+  const nimBps =
+    waSpreadBps !== null ? Math.round(waSpreadBps) - agg.fundingWasBps : null;
+  const nimAnnual =
+    nimBps !== null ? (agg.totalBalance * nimBps) / 10000 : null;
+
   return (
-    <div className="grid grid-cols-2 gap-px border-b border-zinc-200 bg-zinc-200 sm:grid-cols-6">
-      <Mini label="Loans" value={fmtNum0(agg.loanCount)} />
-      <Mini label="Aggregate balance" value={fmtMoney2(agg.totalBalance)} />
-      <Mini
-        label="WA score"
-        value={waScore !== null ? waScore.toFixed(1) : "—"}
-        sub="balance-weighted"
-      />
-      <Mini
-        label="WA LVR"
-        value={waLvr !== null ? `${(waLvr * 100).toFixed(1)}%` : "—"}
-      />
-      <Mini
-        label="WA DSCR"
-        value={waDscr !== null ? `${waDscr.toFixed(2)}x` : "—"}
-      />
-      <Mini
-        label="WA spread"
-        value={waSpreadBps !== null ? `${Math.round(waSpreadBps)} bps` : "—"}
-      />
-    </div>
+    <>
+      <div className="grid grid-cols-2 gap-px border-b border-zinc-200 bg-zinc-200 sm:grid-cols-6">
+        <Mini label="Loans" value={fmtNum0(agg.loanCount)} />
+        <Mini label="Aggregate balance" value={fmtMoney2(agg.totalBalance)} />
+        <Mini
+          label="WA score"
+          value={waScore !== null ? waScore.toFixed(1) : "—"}
+          sub="balance-weighted"
+        />
+        <Mini
+          label="WA LVR"
+          value={waLvr !== null ? `${(waLvr * 100).toFixed(1)}%` : "—"}
+        />
+        <Mini
+          label="WA DSCR"
+          value={waDscr !== null ? `${waDscr.toFixed(2)}x` : "—"}
+        />
+        <Mini
+          label="WA spread"
+          value={waSpreadBps !== null ? `${Math.round(waSpreadBps)} bps` : "—"}
+          sub="loans"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-px border-b border-zinc-200 bg-zinc-200 sm:grid-cols-4">
+        <Mini
+          label="Liabilities WAS"
+          value={agg.fundingWasBps > 0 ? `${agg.fundingWasBps} bps` : "—"}
+          sub="debt tranches, ex equity"
+        />
+        <Mini
+          label="Assets WAS"
+          value={waSpreadBps !== null ? `${Math.round(waSpreadBps)} bps` : "—"}
+          sub="loans, balance-weighted"
+        />
+        <Mini
+          label="Program NIM"
+          value={nimBps !== null ? `${nimBps} bps` : "—"}
+          tone={nimBps !== null && nimBps < 0 ? "warn" : nimBps !== null ? "ok" : undefined}
+        />
+        <Mini
+          label="Program NIM $/yr"
+          value={nimAnnual !== null ? fmtMoney2(nimAnnual) : "—"}
+          tone={
+            nimAnnual !== null && nimAnnual < 0
+              ? "warn"
+              : nimAnnual !== null
+                ? "ok"
+                : undefined
+          }
+        />
+      </div>
+    </>
   );
 }
 
-function Mini({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function Mini({
+  label,
+  value,
+  sub,
+  tone,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  tone?: "ok" | "warn";
+}) {
+  const valueClass =
+    tone === "warn"
+      ? "text-rose-700"
+      : tone === "ok"
+        ? "text-emerald-700"
+        : "text-zinc-900";
   return (
     <div className="flex flex-col gap-0.5 bg-white px-3 py-1.5">
       <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
         {label}
         {sub ? <span className="ml-1 font-normal lowercase text-zinc-400">· {sub}</span> : null}
       </span>
-      <span className="text-sm font-semibold tabular-nums text-zinc-900">{value}</span>
+      <span className={`text-sm font-semibold tabular-nums ${valueClass}`}>{value}</span>
     </div>
   );
 }

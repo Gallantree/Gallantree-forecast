@@ -18,6 +18,7 @@ export interface BalanceSheetData {
   totalAssets: SerializedSeries;
   // L&E
   ap: SerializedSeries;
+  notesPayable: SerializedSeries;
   equity: SerializedSeries;
   totalLiabilitiesAndEquity: SerializedSeries;
   // Headline
@@ -153,6 +154,11 @@ export function BalanceSheetTab({ data }: { data: BalanceSheetData }) {
               color="bg-rose-50 text-rose-800"
             />
             <Row label="Accounts payable" series={data.ap} groups={groups} />
+            <Row
+              label="Notes payable (capital program liabilities)"
+              series={data.notesPayable}
+              groups={groups}
+            />
             <Row label="Equity (retained earnings + opening)" series={data.equity} groups={groups} />
             <TotalRow
               label="Total liabilities & equity"

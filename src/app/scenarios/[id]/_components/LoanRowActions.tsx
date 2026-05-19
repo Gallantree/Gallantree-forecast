@@ -9,28 +9,17 @@ export interface LoanEditInitial {
   loanId: string;
   borrower?: string;
   lenderOfRecord?: string;
-  channel: "CRE_CLO" | "CMBS" | "Warehouse" | "Non-Conforming";
   capitalProgramId?: string;
   balance: string; // raw decimal string from server
   originationDate: string; // YYYY-MM-DD
   maturityDate: string;
   termMonths: number;
-  nimDefaultBps?: number;
-  nimNegFloorBps?: number;
-  nimHardFloorBps?: number;
   creditSpreadBps?: number;
   internalScore?: number;
   internalGrade?: string;
   lvr?: string;
   dscr?: string;
 }
-
-const CHANNELS: { value: LoanEditInitial["channel"]; label: string }[] = [
-  { value: "CRE_CLO", label: "CRE CLO" },
-  { value: "CMBS", label: "CMBS" },
-  { value: "Warehouse", label: "Warehouse" },
-  { value: "Non-Conforming", label: "Non-Conforming" },
-];
 
 export function LoanRowActions({
   initial,
@@ -54,21 +43,11 @@ export function LoanRowActions({
   const [loanId, setLoanId] = useState(initial.loanId);
   const [borrower, setBorrower] = useState(initial.borrower ?? "");
   const [lenderOfRecord, setLenderOfRecord] = useState(initial.lenderOfRecord ?? "");
-  const [channel, setChannel] = useState<LoanEditInitial["channel"]>(initial.channel);
   const [capitalProgramId, setCapitalProgramId] = useState(initial.capitalProgramId ?? "");
   const [balance, setBalance] = useState(fmtMoneyInput(initial.balance));
   const [originationDate, setOriginationDate] = useState(initial.originationDate);
   const [maturityDate, setMaturityDate] = useState(initial.maturityDate);
   const [termMonths, setTermMonths] = useState(String(initial.termMonths));
-  const [nimDefaultBps, setNimDefaultBps] = useState(
-    initial.nimDefaultBps !== undefined ? String(initial.nimDefaultBps) : "",
-  );
-  const [nimNegFloorBps, setNimNegFloorBps] = useState(
-    initial.nimNegFloorBps !== undefined ? String(initial.nimNegFloorBps) : "",
-  );
-  const [nimHardFloorBps, setNimHardFloorBps] = useState(
-    initial.nimHardFloorBps !== undefined ? String(initial.nimHardFloorBps) : "",
-  );
   const [creditSpreadBps, setCreditSpreadBps] = useState(
     initial.creditSpreadBps !== undefined ? String(initial.creditSpreadBps) : "",
   );
@@ -103,15 +82,11 @@ export function LoanRowActions({
       loanId: loanId.trim(),
       borrower: borrower.trim() || undefined,
       lenderOfRecord: lenderOfRecord.trim() || undefined,
-      channel,
       capitalProgramId: capitalProgramId || undefined,
       balance: parseDecimalInput(balance),
       originationDate,
       maturityDate,
       termMonths: Number(termMonths) || 0,
-      nimDefaultBps: nimDefaultBps ? Number(nimDefaultBps) : undefined,
-      nimNegFloorBps: nimNegFloorBps ? Number(nimNegFloorBps) : undefined,
-      nimHardFloorBps: nimHardFloorBps ? Number(nimHardFloorBps) : undefined,
       creditSpreadBps: creditSpreadBps ? Number(creditSpreadBps) : undefined,
       internalScore: internalScore ? Number(internalScore) : undefined,
       internalGrade: internalGrade.trim() || undefined,
@@ -201,20 +176,7 @@ export function LoanRowActions({
                 />
               </Field>
 
-              <Field label="Channel" hint="routes NIM revenue account">
-                <select
-                  value={channel}
-                  onChange={(e) => setChannel(e.target.value as LoanEditInitial["channel"])}
-                  className="rounded-md border border-zinc-300 px-2 py-1"
-                >
-                  {CHANNELS.map((c) => (
-                    <option key={c.value} value={c.value}>
-                      {c.label}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Capital program" hint="optional alignment">
+              <Field label="Capital program" hint="routes NIM revenue account">
                 <select
                   value={capitalProgramId}
                   onChange={(e) => setCapitalProgramId(e.target.value)}
@@ -264,32 +226,7 @@ export function LoanRowActions({
                 />
               </Field>
 
-              <Field label="NIM Default (bps)">
-                <input
-                  value={nimDefaultBps}
-                  onChange={(e) => setNimDefaultBps(e.target.value)}
-                  inputMode="decimal"
-                  className="rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
-                />
-              </Field>
-              <Field label="NIM Neg Floor (bps)">
-                <input
-                  value={nimNegFloorBps}
-                  onChange={(e) => setNimNegFloorBps(e.target.value)}
-                  inputMode="decimal"
-                  className="rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
-                />
-              </Field>
-              <Field label="NIM Hard Floor (bps)">
-                <input
-                  value={nimHardFloorBps}
-                  onChange={(e) => setNimHardFloorBps(e.target.value)}
-                  inputMode="decimal"
-                  className="rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
-                />
-              </Field>
-
-              <Field label="Credit spread (bps)">
+              <Field label="Credit spread (bps)" hint="over scenario base rate">
                 <input
                   value={creditSpreadBps}
                   onChange={(e) => setCreditSpreadBps(e.target.value)}

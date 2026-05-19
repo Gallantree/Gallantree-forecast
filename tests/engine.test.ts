@@ -280,8 +280,8 @@ describe("computePnL", () => {
     expect(series[36].value.toString()).toBe("0");
   });
 
-  it("loans contribute revenue to channel accounts at the selected NIM tier", async () => {
-    const { CHANNEL_ACCOUNT } = await import("../src/engine/loans");
+  it("loans contribute revenue to the program-type account at the selected NIM tier", async () => {
+    const { PROGRAM_TYPE_ACCOUNT } = await import("../src/engine/loans");
     const pnl = computePnL(
       [],
       [],
@@ -290,18 +290,16 @@ describe("computePnL", () => {
         {
           id: "L1",
           loanId: "GTL-0001",
-          channel: "CRE_CLO",
+          capitalProgramId: "P1",
+          accountCode: "4100",
           balance: "10000000", // $10m
           originationPeriodKey: "2026-07",
           maturityPeriodKey: "2031-06",
-          nimDefaultBps: 60, // 60 bps = $60k/yr -> $5k/mo
-          nimNegFloorBps: 40,
-          nimHardFloorBps: 20,
+          creditSpreadBps: 60,
         },
       ],
-      "default",
     );
-    const cre = pnl.revenue.lines.find((l) => l.accountCode === CHANNEL_ACCOUNT.CRE_CLO);
+    const cre = pnl.revenue.lines.find((l) => l.accountCode === PROGRAM_TYPE_ACCOUNT.CRE_CLO);
     expect(cre).toBeTruthy();
     expect(cre!.monthly[0].value.toFixed(2)).toBe("5000.00");
   });
@@ -315,14 +313,14 @@ describe("computePnL", () => {
         {
           id: "L1",
           loanId: "GTL-0001",
-          channel: "CRE_CLO",
+          capitalProgramId: "P1",
+          accountCode: "4100",
           balance: "10000000", // $10m
           originationPeriodKey: "2026-07",
           maturityPeriodKey: "2031-06",
-          nimDefaultBps: 60, // base $5,000/mo at t=0
+          creditSpreadBps: 60,
         },
       ],
-      "default",
       [],
       [10, 10, 10, 10, 10], // +10% every FY
     );
@@ -344,14 +342,14 @@ describe("computePnL", () => {
         {
           id: "L1",
           loanId: "GTL-0001",
-          channel: "CRE_CLO",
+          capitalProgramId: "P1",
+          accountCode: "4100",
           balance: "10000000",
           originationPeriodKey: "2026-07",
           maturityPeriodKey: "2031-06",
-          nimDefaultBps: 60,
+          creditSpreadBps: 60,
         },
       ],
-      "default",
       [],
       [12, 8, 5, 3, 2],
     );
@@ -377,14 +375,14 @@ describe("computePnL", () => {
         {
           id: "L1",
           loanId: "GTL-0001",
-          channel: "CRE_CLO",
+          capitalProgramId: "P1",
+          accountCode: "4100",
           balance: "10000000",
           originationPeriodKey: "2026-07",
           maturityPeriodKey: "2031-06",
-          nimDefaultBps: 60,
+          creditSpreadBps: 60,
         },
       ],
-      "default",
       [],
       [-5, -5, -5, -5, -5], // -5% runoff every FY
     );
@@ -394,7 +392,8 @@ describe("computePnL", () => {
     expect(cre.monthly[12].value.toFixed(2)).toBe("4750.00");
   });
 
-  it("loans on neg_floor tier use the lower NIM", async () => {
+  it("loan revenue scales with scenario base rate (base + spread)", async () => {
+    // $10m × (300bps base + 60bps spread) = 360bps = $360,000/yr = $30,000/mo
     const pnl = computePnL(
       [],
       [],
@@ -403,19 +402,22 @@ describe("computePnL", () => {
         {
           id: "L1",
           loanId: "GTL-0001",
-          channel: "CRE_CLO",
+          capitalProgramId: "P1",
+          accountCode: "4100",
           balance: "10000000",
           originationPeriodKey: "2026-07",
           maturityPeriodKey: "2031-06",
-          nimDefaultBps: 60,
-          nimNegFloorBps: 40,
-          nimHardFloorBps: 20,
+          creditSpreadBps: 60,
         },
       ],
-      "neg_floor",
+      [], // programFees
+      [], // bookGrowthPctByYear
+      [], // licenses
+      [], // liabilities
+      300, // baseRateBps
     );
     const cre = pnl.revenue.lines.find((l) => l.accountCode === "4100");
-    expect(cre!.monthly[0].value.toFixed(2)).toBe("3333.33");
+    expect(cre!.monthly[0].value.toFixed(2)).toBe("30000.00");
   });
 
   it("program fees post to their account at basis × bps / 12", () => {
@@ -425,7 +427,6 @@ describe("computePnL", () => {
       [],
       HORIZON,
       [],
-      "default",
       [
         {
           id: "F1",
@@ -454,7 +455,6 @@ describe("computePnL", () => {
       [],
       HORIZON,
       [],
-      "default",
       [],
       [],
       [
@@ -481,7 +481,6 @@ describe("computePnL", () => {
       [],
       HORIZON,
       [],
-      "default",
       [],
       [],
       [
@@ -506,7 +505,7 @@ describe("computePnL", () => {
     expect(line.monthly[12].value.toFixed(2)).toBe("13333.33");
   });
 
-  it("program liabilities post interest expense to OPEX at all-in rate", async () => {
+  it("program liabilities post interest expense to liabilities section at all-in rate", async () => {
     // Variable tranche: 700,000 notes × $1,000 face = $700m principal,
     // 170 bps spread + 420 bps BBSW = 590 bps all-in = $41.3m/yr ≈ $3,441,667/mo
     const pnl = computePnL(
@@ -514,7 +513,6 @@ describe("computePnL", () => {
       [],
       HORIZON,
       [],
-      "default",
       [],
       [],
       [],
@@ -534,7 +532,7 @@ describe("computePnL", () => {
       ],
       420,
     );
-    const opexLine = pnl.opex.lines.find((l) => l.accountCode === "6800")!;
+    const opexLine = pnl.liabilities.lines.find((l) => l.accountCode === "6800")!;
     expect(opexLine).toBeTruthy();
     // monthly = 700,000,000 × 590 / 10000 / 12 = 3,441,666.666...
     expect(opexLine.monthly[0].value.toFixed(2)).toBe("3441666.67");
@@ -547,7 +545,6 @@ describe("computePnL", () => {
       [],
       HORIZON,
       [],
-      "default",
       [],
       [],
       [],
@@ -567,7 +564,7 @@ describe("computePnL", () => {
       ],
       420, // base rate ignored for fixed
     );
-    const opexLine = pnl.opex.lines.find((l) => l.accountCode === "6800")!;
+    const opexLine = pnl.liabilities.lines.find((l) => l.accountCode === "6800")!;
     // monthly = 145,000,000 × 225 / 10000 / 12 = 271,875
     expect(opexLine.monthly[0].value.toFixed(2)).toBe("271875.00");
   });

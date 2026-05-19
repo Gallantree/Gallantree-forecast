@@ -1,16 +1,35 @@
 import Decimal from "decimal.js";
 import { cleanDecimal, fmtMoney2, fmtNum0 } from "@/utils/format";
 import {
+  addBookGrowthProfile,
   clearLoanTape,
+  deleteBookGrowthProfile,
   deleteLoan,
   importLoanTape,
   setLoanProgram,
   toggleLoanIncluded,
+  updateBookGrowthProfile,
   updateLoan,
-  updateLoanBookGrowth,
 } from "../_actions";
 import { LoanRowActions, type LoanEditInitial } from "./LoanRowActions";
 import { LoanProgramSelect } from "./LoanProgramSelect";
+import {
+  BookGrowthProfileModal,
+  type BookGrowthProfileInitial,
+} from "./BookGrowthProfileModal";
+import { SeedLoansModal } from "./SeedLoansModal";
+import { ClearLoansButton } from "./ClearLoansButton";
+
+export interface BookGrowthProfileRow {
+  _id: string;
+  capitalProgramId: string;
+  fyGrowthPcts: string[];
+  avgTenorMonths: number;
+  avgSpreadBps: number;
+  riskLevel: "low" | "medium" | "high";
+}
+
+export type ProgramTypeKey = "CRE_CLO" | "CMBS" | "MIT_FUND" | "WAREHOUSE" | "OTHER";
 
 export interface LoanRow {
   _id: string;
@@ -21,8 +40,9 @@ export interface LoanRow {
   assetClass?: string;
   propertyStatus?: string;
   location?: string;
-  channel: "CRE_CLO" | "CMBS" | "Warehouse" | "Non-Conforming";
   capitalProgramId?: string;
+  // Program type of the assigned capital program, used for grouping/tiles.
+  programType?: ProgramTypeKey;
   originationDate: Date | string;
   maturityDate: Date | string;
   termMonths: number;
@@ -32,11 +52,9 @@ export interface LoanRow {
   internalScore?: number;
   internalGrade?: string;
   creditSpreadBps?: number;
-  nimDefaultBps?: number;
-  nimNegFloorBps?: number;
-  nimHardFloorBps?: number;
   allInPct?: { toString: () => string };
   includeInRevenue?: boolean;
+  synthetic?: boolean;
 }
 
 export interface ProgramOption {
@@ -45,17 +63,12 @@ export interface ProgramOption {
   type: string;
 }
 
-const CHANNEL_LABEL: Record<LoanRow["channel"], string> = {
+const PROGRAM_TYPE_LABEL: Record<ProgramTypeKey, string> = {
   CRE_CLO: "CRE CLO",
   CMBS: "CMBS",
-  Warehouse: "Warehouse",
-  "Non-Conforming": "Non-Conforming",
-};
-
-const TIER_LABEL: Record<string, string> = {
-  default: "Default",
-  neg_floor: "Negative Floor",
-  hard_floor: "Hard Floor",
+  WAREHOUSE: "Warehouse",
+  MIT_FUND: "MIT Fund",
+  OTHER: "Other",
 };
 
 function fmtDate(d: Date | string): string {
@@ -77,15 +90,11 @@ function toLoanEditInitial(l: LoanRow): LoanEditInitial {
     loanId: l.loanId,
     borrower: l.borrower,
     lenderOfRecord: l.lenderOfRecord,
-    channel: l.channel,
     capitalProgramId: l.capitalProgramId,
     balance: l.balance.toString(),
     originationDate: toIsoDate(l.originationDate),
     maturityDate: toIsoDate(l.maturityDate),
     termMonths: l.termMonths,
-    nimDefaultBps: l.nimDefaultBps,
-    nimNegFloorBps: l.nimNegFloorBps,
-    nimHardFloorBps: l.nimHardFloorBps,
     creditSpreadBps: l.creditSpreadBps,
     internalScore: l.internalScore,
     internalGrade: l.internalGrade,
@@ -94,79 +103,67 @@ function toLoanEditInitial(l: LoanRow): LoanEditInitial {
   };
 }
 
-function activeNimBps(
-  l: LoanRow,
-  tier: "default" | "neg_floor" | "hard_floor",
-): number {
-  if (tier === "default") return l.nimDefaultBps ?? 0;
-  if (tier === "neg_floor") return l.nimNegFloorBps ?? l.nimDefaultBps ?? 0;
-  return l.nimHardFloorBps ?? l.nimNegFloorBps ?? l.nimDefaultBps ?? 0;
+// Loan-level NIM rate = scenario base rate + loan's credit spread (all-in).
+function nimBps(l: LoanRow, baseRateBps: number): number {
+  return baseRateBps + (l.creditSpreadBps ?? 0);
 }
 
-function annualisedNim(l: LoanRow, tier: "default" | "neg_floor" | "hard_floor"): Decimal {
-  const bps = activeNimBps(l, tier);
-  return new Decimal(l.balance.toString()).times(bps).div(10000);
+function annualisedNim(l: LoanRow, baseRateBps: number): Decimal {
+  return new Decimal(l.balance.toString())
+    .times(nimBps(l, baseRateBps))
+    .div(10000);
 }
 
 export function LoansTab({
   scenarioId,
   loans,
-  nimTier,
+  baseRateBps,
   fys,
-  bookGrowthPctByYear,
+  growthProfiles,
   programs,
+  seedEnabled,
 }: {
   scenarioId: string;
   loans: LoanRow[];
-  nimTier: "default" | "neg_floor" | "hard_floor";
+  baseRateBps: number;
   fys: number[];
-  bookGrowthPctByYear: string[];
+  growthProfiles: BookGrowthProfileRow[];
   programs: ProgramOption[];
+  seedEnabled: boolean;
 }) {
   const importAction = importLoanTape.bind(null, scenarioId);
-  const growthAction = updateLoanBookGrowth.bind(null, scenarioId);
-
-  // Compute the cumulative book size at end of year N as % of today, for the
-  // tiny preview shown next to the inputs.
-  const growthRates = fys.map((_, i) =>
-    Number(cleanDecimal(bookGrowthPctByYear[i]) || "0"),
-  );
-  const cumulativeMultiplier = growthRates.reduce(
-    (acc, r) => acc * (1 + r / 100),
-    1,
-  );
-  const anyNonZero = growthRates.some((r) => r !== 0);
   const clearAction = clearLoanTape.bind(null, scenarioId);
 
   const isIncluded = (l: LoanRow) => l.includeInRevenue !== false;
   const includedCount = loans.filter(isIncluded).length;
   const excludedCount = loans.length - includedCount;
 
-  // Aggregates — only included loans contribute to balance + NIM totals.
+  // Aggregates — only included loans contribute.
   const totalBalance = loans.reduce(
     (acc, l) => (isIncluded(l) ? acc.plus(new Decimal(l.balance.toString())) : acc),
     new Decimal(0),
   );
   const totalAnnualNim = loans.reduce(
-    (acc, l) => (isIncluded(l) ? acc.plus(annualisedNim(l, nimTier)) : acc),
+    (acc, l) => (isIncluded(l) ? acc.plus(annualisedNim(l, baseRateBps)) : acc),
     new Decimal(0),
   );
 
   const byChannel = new Map<
-    LoanRow["channel"],
+    ProgramTypeKey,
     { count: number; balance: Decimal; nim: Decimal }
   >();
   for (const l of loans) {
     if (!isIncluded(l)) continue;
-    const bucket = byChannel.get(l.channel) ?? {
+    const key: ProgramTypeKey = l.programType ?? "OTHER";
+    const bucket = byChannel.get(key) ?? {
       count: 0,
       balance: new Decimal(0),
       nim: new Decimal(0),
     };
     bucket.count += 1;
     bucket.balance = bucket.balance.plus(new Decimal(l.balance.toString()));
-    bucket.nim = bucket.nim.plus(annualisedNim(l, nimTier));
-    byChannel.set(l.channel, bucket);
+    bucket.nim = bucket.nim.plus(annualisedNim(l, baseRateBps));
+    byChannel.set(key, bucket);
   }
 
   return (
@@ -197,65 +194,26 @@ export function LoansTab({
         </div>
         <div>
           <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
-            NIM tier · {TIER_LABEL[nimTier]}
+            NIM $/yr
           </div>
           <div className="text-base font-semibold text-zinc-900">
             {fmtMoney2(totalAnnualNim.toFixed(2))}
-            <span className="ml-2 text-xs font-normal text-zinc-500">/ yr at t=0</span>
+            <span className="ml-2 text-xs font-normal text-zinc-500">
+              / yr · base {baseRateBps}bps + spread
+            </span>
           </div>
         </div>
 
-        <form action={growthAction} className="flex items-end gap-2">
-          <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
-              Book growth % per FY
-              <span className="ml-1 font-normal lowercase text-zinc-400">
-                · compounded forward
-              </span>
-            </span>
-            <div className="flex items-center gap-2">
-              {fys.map((fy, i) => (
-                <label key={fy} className="flex flex-col items-center gap-0.5">
-                  <span className="text-[9px] font-mono text-zinc-500">
-                    FY{String(fy).slice(-2)}
-                  </span>
-                  <input
-                    name={`loanBookGrowthPctY${i}`}
-                    defaultValue={cleanDecimal(bookGrowthPctByYear[i]) || ""}
-                    inputMode="decimal"
-                    placeholder="0"
-                    className="w-16 rounded-md border border-zinc-300 px-2 py-1 text-right text-xs tabular-nums"
-                  />
-                </label>
-              ))}
-            </div>
-          </div>
-          <button
-            type="submit"
-            className="rounded-md border border-zinc-300 bg-white px-3 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
-          >
-            Save
-          </button>
-          {anyNonZero ? (
-            <span
-              className={`self-center text-[11px] ${
-                cumulativeMultiplier > 1
-                  ? "text-emerald-700"
-                  : cumulativeMultiplier < 1
-                    ? "text-rose-700"
-                    : "text-zinc-500"
-              }`}
-            >
-              End-of-FY{String(fys[fys.length - 1] ?? 0).slice(-2)} book ≈{" "}
-              <span className="font-semibold">
-                {(cumulativeMultiplier * 100).toFixed(0)}%
-              </span>{" "}
-              of today
-            </span>
-          ) : null}
-        </form>
+        <div className="ml-auto self-end">
+          <SeedLoansModal
+            scenarioId={scenarioId}
+            enabled={seedEnabled}
+            fys={fys}
+            programs={programs}
+          />
+        </div>
 
-        <form action={importAction} className="ml-auto flex items-end gap-2">
+        <form action={importAction} className="flex items-end gap-2">
           <label className="flex flex-col gap-1">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
               Upload .xlsx tape
@@ -290,26 +248,25 @@ export function LoansTab({
         </form>
 
         {loans.length > 0 && (
-          <form action={clearAction}>
-            <button
-              type="submit"
-              className="rounded-md border border-zinc-300 px-3 py-1.5 text-zinc-600 hover:bg-rose-50 hover:text-rose-700"
-            >
-              Clear all
-            </button>
-          </form>
+          <ClearLoansButton loanCount={loans.length} clearAction={clearAction} />
         )}
       </div>
 
-      {/* Channel summary */}
+      {/* Book growth profiles — disabled. The AI-driven "Seed loans" modal is
+          the supported path for adding loans across years; the synthetic
+          generator didn't populate enough fields (borrower / state / asset /
+          location) to be useful. Profile data on the scenario is preserved on
+          the model so this can be re-enabled later. */}
+
+      {/* Program-type summary */}
       {loans.length > 0 && (
-        <div className="grid grid-cols-4 gap-px border-b border-zinc-200 bg-zinc-200">
-          {(["CRE_CLO", "CMBS", "Warehouse", "Non-Conforming"] as const).map((ch) => {
+        <div className="grid grid-cols-5 gap-px border-b border-zinc-200 bg-zinc-200">
+          {(["CRE_CLO", "CMBS", "WAREHOUSE", "MIT_FUND", "OTHER"] as const).map((ch) => {
             const b = byChannel.get(ch);
             return (
               <div key={ch} className="flex flex-col gap-1 bg-white px-4 py-3">
                 <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
-                  {CHANNEL_LABEL[ch]}
+                  {PROGRAM_TYPE_LABEL[ch]}
                 </div>
                 <div className="flex items-baseline gap-2">
                   <span className="text-lg font-semibold tabular-nums">
@@ -357,7 +314,7 @@ export function LoansTab({
                 <Th className="text-right">Score</Th>
                 <Th>Grade</Th>
                 <Th className="text-right">Spread (bps)</Th>
-                <Th className="text-right">NIM ({TIER_LABEL[nimTier]}) bps</Th>
+                <Th className="text-right">NIM (bps)</Th>
                 <Th className="text-right">NIM $/yr</Th>
                 <Th className="text-center">Actions</Th>
               </tr>
@@ -365,16 +322,24 @@ export function LoansTab({
             <tbody>
               {loans.map((l) => {
                 const included = isIncluded(l);
-                const nimBps = activeNimBps(l, nimTier);
-                const nimDollars = annualisedNim(l, nimTier);
+                const loanNim = nimBps(l, baseRateBps);
+                const nimDollars = annualisedNim(l, baseRateBps);
                 return (
                   <tr
                     key={l._id}
                     className={`border-b border-zinc-100 hover:bg-yellow-50/40 ${
-                      included ? "" : "bg-zinc-50/60 text-zinc-400"
-                    }`}
+                      l.synthetic ? "bg-sky-50/40" : ""
+                    } ${included ? "" : "bg-zinc-50/60 text-zinc-400"}`}
                   >
                     <Td className="text-center">
+                      {l.synthetic ? (
+                        <span
+                          title="Synthetic loan from growth profile"
+                          className="inline-flex h-5 w-9 items-center justify-center rounded-full bg-sky-100 text-[9px] font-semibold uppercase text-sky-700"
+                        >
+                          syn
+                        </span>
+                      ) : (
                       <form
                         action={toggleLoanIncluded.bind(null, scenarioId, l._id, !included)}
                       >
@@ -400,6 +365,7 @@ export function LoansTab({
                           />
                         </button>
                       </form>
+                      )}
                     </Td>
                     <Td className="font-mono">{l.loanId}</Td>
                     <Td>{l.borrower ?? "—"}</Td>
@@ -407,7 +373,6 @@ export function LoansTab({
                     <Td>
                       <LoanProgramSelect
                         currentProgramId={l.capitalProgramId}
-                        channelLabel={CHANNEL_LABEL[l.channel]}
                         programs={programs}
                         saveAction={setLoanProgram.bind(null, scenarioId, l._id)}
                       />
@@ -430,17 +395,21 @@ export function LoansTab({
                     <Td className="text-right tabular-nums">{l.internalScore ?? "—"}</Td>
                     <Td>{l.internalGrade ?? "—"}</Td>
                     <Td className="text-right tabular-nums">{l.creditSpreadBps ?? "—"}</Td>
-                    <Td className="text-right tabular-nums">{nimBps}</Td>
+                    <Td className="text-right tabular-nums">{loanNim}</Td>
                     <Td className="text-right font-semibold tabular-nums text-emerald-700">
                       {fmtMoney2(nimDollars.toFixed(2))}
                     </Td>
                     <Td className="text-center">
-                      <LoanRowActions
-                        initial={toLoanEditInitial(l)}
-                        programs={programs}
-                        updateAction={updateLoan.bind(null, scenarioId, l._id)}
-                        deleteAction={deleteLoan.bind(null, scenarioId, l._id)}
-                      />
+                      {l.synthetic ? (
+                        <span className="text-[10px] italic text-zinc-400">—</span>
+                      ) : (
+                        <LoanRowActions
+                          initial={toLoanEditInitial(l)}
+                          programs={programs}
+                          updateAction={updateLoan.bind(null, scenarioId, l._id)}
+                          deleteAction={deleteLoan.bind(null, scenarioId, l._id)}
+                        />
+                      )}
                     </Td>
                   </tr>
                 );
@@ -462,6 +431,76 @@ export function LoansTab({
             </tfoot>
           </table>
         )}
+      </div>
+    </div>
+  );
+}
+
+const RISK_LABEL: Record<"low" | "medium" | "high", string> = {
+  low: "Low risk",
+  medium: "Med risk",
+  high: "High risk",
+};
+
+function ProfileCard({
+  scenarioId,
+  fys,
+  programs,
+  profile,
+}: {
+  scenarioId: string;
+  fys: number[];
+  programs: ProgramOption[];
+  profile: BookGrowthProfileRow;
+}) {
+  const program = programs.find((p) => p._id === profile.capitalProgramId);
+  const summaryYears = fys
+    .map((fy, i) => {
+      const pct = Number(cleanDecimal(profile.fyGrowthPcts[i] ?? "0") || "0");
+      return pct > 0 ? `FY${String(fy).slice(-2)} ${pct}%` : null;
+    })
+    .filter(Boolean)
+    .join(" · ");
+  const initial: BookGrowthProfileInitial = {
+    capitalProgramId: profile.capitalProgramId,
+    fyGrowthPcts: profile.fyGrowthPcts.map((p) => cleanDecimal(p) || ""),
+    avgTenorMonths: profile.avgTenorMonths,
+    avgSpreadBps: profile.avgSpreadBps,
+    riskLevel: profile.riskLevel,
+  };
+  return (
+    <div className="flex min-w-[220px] flex-col gap-1 rounded-md border border-zinc-200 bg-white px-3 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-semibold text-zinc-900">
+          {program?.name ?? "Unknown program"}
+        </span>
+        <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-zinc-600">
+          {RISK_LABEL[profile.riskLevel]}
+        </span>
+      </div>
+      <div className="text-[11px] text-zinc-500">
+        {profile.avgTenorMonths}mo tenor · {profile.avgSpreadBps}bps spread
+      </div>
+      <div className="text-[11px] tabular-nums text-zinc-700">
+        {summaryYears || <span className="italic text-zinc-400">no growth set</span>}
+      </div>
+      <div className="mt-1 flex items-center gap-1">
+        <BookGrowthProfileModal
+          fys={fys}
+          programs={programs}
+          initial={initial}
+          triggerLabel="Edit"
+          triggerClassName="rounded px-2 py-0.5 text-[11px] text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+          saveAction={updateBookGrowthProfile.bind(null, scenarioId, profile._id)}
+        />
+        <form action={deleteBookGrowthProfile.bind(null, scenarioId, profile._id)}>
+          <button
+            type="submit"
+            className="rounded px-2 py-0.5 text-[11px] text-zinc-400 hover:bg-rose-50 hover:text-rose-600"
+          >
+            Delete
+          </button>
+        </form>
       </div>
     </div>
   );
