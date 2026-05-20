@@ -10,6 +10,7 @@ export interface ControlPanelInitial {
   baseRateType?: "BBSW" | "BBSY" | "SOFR";
   baseRateBps?: number;
   firstYearLabel?: number;
+  taxRatePct?: string;
 }
 
 const STATUS_OPTIONS: {
@@ -57,12 +58,16 @@ export function ControlPanelTab({
   const [firstYearLabel, setFirstYearLabel] = useState(
     initial.firstYearLabel !== undefined ? String(initial.firstYearLabel) : "2026",
   );
+  const [taxRatePct, setTaxRatePct] = useState(
+    initial.taxRatePct !== undefined ? initial.taxRatePct : "30",
+  );
 
   function onSave() {
     const payload: ControlPanelPayload = {
       baseRateType,
       baseRateBps: baseRateBps ? Number(baseRateBps) : undefined,
       firstYearLabel: firstYearLabel ? Number(firstYearLabel) : undefined,
+      taxRatePct: taxRatePct === "" ? undefined : Number(taxRatePct),
     };
     startTransition(async () => {
       await updateControlPanel(scenarioId, payload);
@@ -198,6 +203,29 @@ export function ControlPanelTab({
                   </span>
                 </span>
               </div>
+            </Field>
+          </div>
+        </section>
+
+        {/* Tax */}
+        <section className="rounded-md border border-zinc-200 bg-white">
+          <header className="border-b border-zinc-100 bg-zinc-50 px-4 py-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-700">
+              Tax
+            </h3>
+            <p className="mt-0.5 text-[11px] text-zinc-500">
+              Corporate tax rate applied to pre-tax profit in the P&amp;L. AU company rate is 30%
+              (25% for base-rate entities).
+            </p>
+          </header>
+          <div className="p-4 text-xs">
+            <Field label="Corporate tax rate (%)" hint="e.g. 30">
+              <input
+                value={taxRatePct}
+                onChange={(e) => setTaxRatePct(e.target.value)}
+                inputMode="decimal"
+                className="w-32 rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
+              />
             </Field>
           </div>
         </section>

@@ -86,6 +86,9 @@ export type ProgramFormInitial = {
   // the input renders cleanly ("3" → 3%); stored as a decimal fraction
   // (0.03 = 3%) after parsing.
   arrearsPctTarget?: string;
+  // Whole-percent string (e.g. "33" = 33%); persisted as a decimal fraction
+  // (0.33). Applied only to servicing-category fees by the engine.
+  gallantreeSharePct?: string;
   fees: ProgramFeePayload[];
   liabilities?: ProgramLiabilityPayload[];
 };
@@ -149,6 +152,7 @@ export function AddProgramModal({
   // Stored on the form as percent (e.g. "3" = 3%) so the user types whole
   // numbers. Converted to a decimal fraction in handleSubmit.
   const [arrearsPctTarget, setArrearsPctTarget] = useState(seed.arrearsPctTarget ?? "");
+  const [gallantreeSharePct, setGallantreeSharePct] = useState(seed.gallantreeSharePct ?? "33");
   const [fees, setFees] = useState<FeeRow[]>(
     initial ? initial.fees.map((f) => ({ rowKey: crypto.randomUUID(), ...f })) : defaultFeeRows(),
   );
@@ -168,6 +172,7 @@ export function AddProgramModal({
     setEndPeriodKey(s.endPeriodKey ?? "");
     setNotes(s.notes ?? "");
     setArrearsPctTarget(s.arrearsPctTarget ?? "");
+    setGallantreeSharePct(s.gallantreeSharePct ?? "33");
     setFees(
       initial ? s.fees.map((f) => ({ rowKey: crypto.randomUUID(), ...f })) : defaultFeeRows(),
     );
@@ -220,6 +225,14 @@ export function AddProgramModal({
         arrearsAsFraction = (pct / 100).toString();
       }
     }
+    const shareTrimmed = gallantreeSharePct.trim();
+    let shareAsFraction: string | undefined;
+    if (shareTrimmed) {
+      const pct = Number(shareTrimmed);
+      if (Number.isFinite(pct) && pct >= 0 && pct <= 100) {
+        shareAsFraction = (pct / 100).toString();
+      }
+    }
     const payload: ProgramPayload = {
       name: name.trim(),
       type,
@@ -229,6 +242,7 @@ export function AddProgramModal({
       endPeriodKey: endPeriodKey.trim() || undefined,
       notes: notes.trim() || undefined,
       arrearsPctTarget: arrearsAsFraction,
+      gallantreeSharePct: shareAsFraction,
       fees: fees.map(({ rowKey: _rk, ...f }) => {
         void _rk;
         return f;
@@ -346,6 +360,21 @@ export function AddProgramModal({
                   value={arrearsPctTarget}
                   onChange={(e) => setArrearsPctTarget(e.target.value)}
                   placeholder="3"
+                  className="rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
+                />
+              </Field>
+              <Field
+                label="Gallantree share %"
+                hint="of servicing fees; rest passes through to originator/trustee"
+              >
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step="0.1"
+                  value={gallantreeSharePct}
+                  onChange={(e) => setGallantreeSharePct(e.target.value)}
+                  placeholder="33"
                   className="rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
                 />
               </Field>

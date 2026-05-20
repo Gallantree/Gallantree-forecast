@@ -432,6 +432,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
         accountCode?: string;
       }>;
       arrearsPctTarget?: { toString: () => string };
+      gallantreeSharePct?: { toString: () => string };
     }>
   ).map((p) => ({
     _id: p._id.toString(),
@@ -470,6 +471,9 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
     })),
     arrearsPctTarget: p.arrearsPctTarget
       ? { toString: () => p.arrearsPctTarget!.toString() }
+      : undefined,
+    gallantreeSharePct: p.gallantreeSharePct
+      ? { toString: () => p.gallantreeSharePct!.toString() }
       : undefined,
   }));
 
@@ -1057,6 +1061,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
               baseRateType: scenario.baseRateType,
               baseRateBps: scenario.baseRateBps,
               firstYearLabel: scenario.firstYearLabel,
+              taxRatePct: scenario.taxRatePct?.toString(),
             }}
             horizonYears={buildFYGroups(scenarioPeriods).length}
           />

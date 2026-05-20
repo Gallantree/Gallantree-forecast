@@ -59,6 +59,12 @@ export interface ICapitalProgram {
   // (0.05 = 5%). Used by the loan-book seed to bias status assignments and
   // by the toolbar ARREARS tile to show actual vs target.
   arrearsPctTarget?: Types.Decimal128;
+  // Share of servicing-fee revenue that Gallantree retains for this program.
+  // Stored as a decimal fraction (0.33 = 33%). The rest is a pass-through to
+  // the loan originator or trustee and is excluded from Gallantree's P&L.
+  // Applied in the engine only to fees with category === "servicing"; absent
+  // → defaults to 0.33 at projection time.
+  gallantreeSharePct?: Types.Decimal128;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -134,6 +140,7 @@ const capitalProgramSchema = new Schema<ICapitalProgram>(
     liabilities: { type: [programLiabilitySchema], default: [] },
     upfrontFees: { type: [programUpfrontFeeSchema], default: [] },
     arrearsPctTarget: { type: Schema.Types.Decimal128 },
+    gallantreeSharePct: { type: Schema.Types.Decimal128 },
   },
   { timestamps: true },
 );

@@ -74,6 +74,8 @@ export interface ProgramRow {
   upfrontFees?: ProgramUpfrontFeeRow[];
   // Decimal fraction (0.03 = 3%). Default 3% inside the seed loop when absent.
   arrearsPctTarget?: { toString: () => string };
+  // Decimal fraction (0.33 = 33%). Applied to servicing fees only.
+  gallantreeSharePct?: { toString: () => string };
 }
 
 const TYPE_LABEL: Record<ProgramRow["type"], string> = {
@@ -115,6 +117,9 @@ function toFormInitial(p: ProgramRow): ProgramFormInitial {
     arrearsPctTarget: p.arrearsPctTarget
       ? (Number(p.arrearsPctTarget.toString()) * 100).toString()
       : "",
+    gallantreeSharePct: p.gallantreeSharePct
+      ? (Number(p.gallantreeSharePct.toString()) * 100).toString()
+      : "33",
     fees: p.fees.map((f) => ({
       name: f.name,
       category: f.category,
