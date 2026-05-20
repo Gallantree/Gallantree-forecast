@@ -776,51 +776,13 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
           </span>
         </div>
         <div className="flex items-center gap-6 text-xs">
-          <span className="text-zinc-500">
-            Drivers <span className="font-semibold text-zinc-900">{drivers.length}</span>
-          </span>
-          <span className="text-zinc-500">
-            Staff <span className="font-semibold text-zinc-900">{headcountDocs.length}</span>
-          </span>
-          <span className="text-zinc-500">
-            Revenue 5y{" "}
-            <span className="font-semibold text-zinc-900">
-              {pnl ? fmtMoney2(pnl.revenue.total.toFixed(2)) : "—"}
-            </span>
-          </span>
-          <span className="text-zinc-500">
-            OPEX 5y{" "}
-            <span className="font-semibold text-zinc-900">
-              {pnl ? fmtMoney2(pnl.opex.total.toFixed(2)) : "—"}
-            </span>
-          </span>
-          <span className="text-zinc-500">
-            Net income 5y{" "}
-            <span
-              className={`font-semibold ${
-                statements && Number(statements.pnl.netIncomeTotal.toFixed(2)) >= 0
-                  ? "text-emerald-700"
-                  : "text-rose-700"
-              }`}
-            >
-              {statements ? fmtMoney2(statements.pnl.netIncomeTotal.toFixed(2)) : "—"}
-            </span>
-          </span>
           {overviewData ? (
-            <>
-              <ConsolidatedModal
-                data={overviewData}
-                triggerLabel="Profit & Loss — Overall"
-                title="Profit & Loss — Overall"
-                subtitle="Full investor-pass-through view · Year-by-year profit cascade including NIM revenue and capital-program interest expense"
-              />
-              <ConsolidatedModal
-                data={toGallantreeOverview(overviewData)}
-                triggerLabel="Profit & Loss — Gallantree"
-                title="Profit & Loss — Gallantree"
-                subtitle="Gallantree's own operating economics · NIM revenue and capital-program interest expense excluded"
-              />
-            </>
+            <ConsolidatedModal
+              data={toGallantreeOverview(overviewData)}
+              triggerLabel="Profit & Loss — Gallantree"
+              title="Profit & Loss — Gallantree"
+              subtitle="Gallantree's own operating economics · NIM revenue and capital-program interest expense excluded"
+            />
           ) : null}
           <div className="ml-2 border-l border-zinc-200 pl-4">
             <UserMenu user={me} />
