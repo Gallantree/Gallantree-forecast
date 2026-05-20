@@ -210,9 +210,7 @@ export function ControlPanelTab({
         {/* Tax */}
         <section className="rounded-md border border-zinc-200 bg-white">
           <header className="border-b border-zinc-100 bg-zinc-50 px-4 py-2">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-700">
-              Tax
-            </h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-700">Tax</h3>
             <p className="mt-0.5 text-[11px] text-zinc-500">
               Corporate tax rate applied to pre-tax profit in the P&amp;L. AU company rate is 30%
               (25% for base-rate entities).
