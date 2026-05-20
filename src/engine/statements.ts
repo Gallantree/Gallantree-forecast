@@ -1,5 +1,10 @@
 import Decimal from "decimal.js";
 import { type Money, money, ZERO } from "@/utils/money";
+import {
+  type CapitalRaiseInput,
+  projectConvertibleProceeds,
+  projectEquityProceeds,
+} from "./capitalRaises";
 import type { LoanInput } from "./loans";
 import type { PlatformLicenseInput } from "./platformLicenses";
 import {
@@ -56,6 +61,8 @@ export interface CashFlow {
   capexOutflow: MonthlyValue[];
   notesIssuance: MonthlyValue[];
   notesRepayment: MonthlyValue[];
+  equityProceeds: MonthlyValue[];
+  convertibleProceeds: MonthlyValue[];
   netCashMovement: MonthlyValue[];
   endingCash: MonthlyValue[];
 }
@@ -106,6 +113,7 @@ export function computeStatements(
   programFees: ProgramFeeInput[] = [],
   platformLicenses: PlatformLicenseInput[] = [],
   programLiabilities: ProgramLiabilityInput[] = [],
+  capitalRaises: CapitalRaiseInput[] = [],
 ): Statements {
   const pnl = computePnL(
     drivers,
@@ -257,6 +265,13 @@ export function computeStatements(
   const changeInAr = diffSeries(ar, openingAr, horizon);
   const changeInAp = diffSeries(ap, openingAp, horizon);
 
+  // Capital-raise proceeds: cash inflows on each funded investor's date.
+  // Equity proceeds roll into the equity line on the BS; convertible-note
+  // proceeds roll into notesPayable. Withdrawn investors are excluded inside
+  // projectKind, so committed + funded both count toward the forecast.
+  const equityProceeds = projectEquityProceeds(capitalRaises, horizon);
+  const convertibleProceeds = projectConvertibleProceeds(capitalRaises, horizon);
+
   const netCashMovement: MonthlyValue[] = horizon.map((pk, i) => ({
     periodKey: pk,
     value: netIncome[i].value
@@ -265,15 +280,30 @@ export function computeStatements(
       .plus(changeInAp[i].value)
       .minus(capexOutflow[i].value)
       .plus(notesIssuance[i].value)
-      .minus(notesRepayment[i].value),
+      .minus(notesRepayment[i].value)
+      .plus(equityProceeds[i].value)
+      .plus(convertibleProceeds[i].value),
   }));
 
   const openingCash = money(assumptions.openingCash ?? 0);
   const endingCash = runningSum(netCashMovement, openingCash, horizon);
 
-  // Equity = opening + cumulative net income (no dividends modelled).
+  // Equity = opening + cumulative net income + cumulative equity proceeds.
   const openingEquity = money(assumptions.openingEquity ?? 0);
-  const equity = runningSum(netIncome, openingEquity, horizon);
+  const cumulativeEquityProceeds = runningSum(equityProceeds, ZERO as Money, horizon);
+  const cumulativeNetIncome = runningSum(netIncome, ZERO as Money, horizon);
+  const equity: MonthlyValue[] = horizon.map((pk, i) => ({
+    periodKey: pk,
+    value: openingEquity.plus(cumulativeNetIncome[i].value).plus(cumulativeEquityProceeds[i].value),
+  }));
+
+  // Convertible notes outstanding add to notesPayable (program-tranche
+  // principal already accumulated above).
+  const cumulativeConvertibleProceeds = runningSum(convertibleProceeds, ZERO as Money, horizon);
+  const notesPayableWithConvertibles: MonthlyValue[] = horizon.map((pk, i) => ({
+    periodKey: pk,
+    value: notesPayable[i].value.plus(cumulativeConvertibleProceeds[i].value),
+  }));
 
   const totalAssets: MonthlyValue[] = horizon.map((pk, i) => ({
     periodKey: pk,
@@ -281,7 +311,7 @@ export function computeStatements(
   }));
   const totalLiabilitiesAndEquity: MonthlyValue[] = horizon.map((pk, i) => ({
     periodKey: pk,
-    value: ap[i].value.plus(notesPayable[i].value).plus(equity[i].value),
+    value: ap[i].value.plus(notesPayableWithConvertibles[i].value).plus(equity[i].value),
   }));
 
   return {
@@ -304,7 +334,7 @@ export function computeStatements(
       accumulatedDepreciation,
       ppeNet,
       cash: endingCash,
-      notesPayable,
+      notesPayable: notesPayableWithConvertibles,
       totalAssets,
       equity,
       totalLiabilitiesAndEquity,
@@ -317,6 +347,8 @@ export function computeStatements(
       capexOutflow,
       notesIssuance,
       notesRepayment,
+      equityProceeds,
+      convertibleProceeds,
       netCashMovement,
       endingCash,
     },

@@ -17,6 +17,7 @@ import {
 } from "@/lib/seedSpecs";
 import {
   CapitalProgram,
+  CapitalRaise,
   Driver,
   Headcount,
   Loan,
@@ -1633,6 +1634,443 @@ export async function seedLoansByFy(
     }
     revalidatePath(`/scenarios/${scenarioId}`);
     return { ok: true, created: createdCount };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+// ── Capital Raises ──────────────────────────────────────────────────────────
+// Each raise is a top-level document with embedded investors. Mirrors the
+// CapitalProgram/embedded-children pattern. Investor commitments flow into
+// cashflow on the funding date — equity into equity, convertibles into
+// notes payable. No P&L impact (cash-only model).
+
+export type CapitalRaiseType = "equity" | "convertible_note";
+export type InvestorStatus = "committed" | "funded" | "withdrawn";
+
+export type InvestorPayload = {
+  name: string;
+  commitment: string;
+  fundingDate: string; // YYYY-MM-DD
+  numNotes?: number;
+  status: InvestorStatus;
+  notes?: string;
+};
+
+export type CapitalRaisePayload = {
+  name: string;
+  type: CapitalRaiseType;
+  raiseDate: string; // YYYY-MM-DD
+  targetSize: string;
+  discountPct?: string; // fraction (0.20 = 20%)
+  valuationCap?: string;
+  pricePerUnit?: string;
+};
+
+const RAISE_TYPES = new Set(["equity", "convertible_note"]);
+const INVESTOR_STATUSES = new Set(["committed", "funded", "withdrawn"]);
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function parseDate(s: string): Date | null {
+  if (!DATE_RE.test(s)) return null;
+  const d = new Date(`${s}T00:00:00Z`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+export async function createCapitalRaise(
+  scenarioId: string,
+  payload: CapitalRaisePayload,
+): Promise<void> {
+  if (!Types.ObjectId.isValid(scenarioId)) return;
+  if (!payload.name?.trim() || !RAISE_TYPES.has(payload.type)) return;
+  const raiseDate = parseDate(payload.raiseDate);
+  if (!raiseDate) return;
+  if (!/^-?\d+(\.\d+)?$/.test(parseDecimalInput(payload.targetSize))) return;
+
+  await connectToDatabase();
+  await CapitalRaise.create({
+    scenarioId: new Types.ObjectId(scenarioId),
+    name: payload.name.trim(),
+    type: payload.type,
+    raiseDate,
+    targetSize: toDecimal128(payload.targetSize),
+    discountPct: payload.discountPct ? toDecimal128(payload.discountPct) : undefined,
+    valuationCap: payload.valuationCap ? toDecimal128(payload.valuationCap) : undefined,
+    pricePerUnit: payload.pricePerUnit ? toDecimal128(payload.pricePerUnit) : undefined,
+    investors: [],
+  });
+  revalidatePath(`/scenarios/${scenarioId}`);
+}
+
+export async function updateCapitalRaise(
+  scenarioId: string,
+  raiseId: string,
+  payload: CapitalRaisePayload,
+): Promise<void> {
+  if (!Types.ObjectId.isValid(scenarioId) || !Types.ObjectId.isValid(raiseId)) return;
+  if (!payload.name?.trim() || !RAISE_TYPES.has(payload.type)) return;
+  const raiseDate = parseDate(payload.raiseDate);
+  if (!raiseDate) return;
+  if (!/^-?\d+(\.\d+)?$/.test(parseDecimalInput(payload.targetSize))) return;
+
+  await connectToDatabase();
+  await CapitalRaise.updateOne(
+    { _id: raiseId, scenarioId },
+    {
+      $set: {
+        name: payload.name.trim(),
+        type: payload.type,
+        raiseDate,
+        targetSize: toDecimal128(payload.targetSize),
+        discountPct: payload.discountPct ? toDecimal128(payload.discountPct) : undefined,
+        valuationCap: payload.valuationCap ? toDecimal128(payload.valuationCap) : undefined,
+        pricePerUnit: payload.pricePerUnit ? toDecimal128(payload.pricePerUnit) : undefined,
+      },
+      $unset: {
+        ...(payload.discountPct ? {} : { discountPct: "" }),
+        ...(payload.valuationCap ? {} : { valuationCap: "" }),
+        ...(payload.pricePerUnit ? {} : { pricePerUnit: "" }),
+      },
+    },
+  );
+  revalidatePath(`/scenarios/${scenarioId}`);
+}
+
+export async function deleteCapitalRaise(scenarioId: string, raiseId: string): Promise<void> {
+  if (!Types.ObjectId.isValid(scenarioId) || !Types.ObjectId.isValid(raiseId)) return;
+  await connectToDatabase();
+  await CapitalRaise.deleteOne({ _id: raiseId, scenarioId });
+  revalidatePath(`/scenarios/${scenarioId}`);
+}
+
+export async function addInvestor(
+  scenarioId: string,
+  raiseId: string,
+  payload: InvestorPayload,
+): Promise<void> {
+  if (!Types.ObjectId.isValid(scenarioId) || !Types.ObjectId.isValid(raiseId)) return;
+  if (!payload.name?.trim()) return;
+  if (!INVESTOR_STATUSES.has(payload.status)) return;
+  const fundingDate = parseDate(payload.fundingDate);
+  if (!fundingDate) return;
+  if (!/^-?\d+(\.\d+)?$/.test(parseDecimalInput(payload.commitment))) return;
+
+  await connectToDatabase();
+  await CapitalRaise.updateOne(
+    { _id: raiseId, scenarioId },
+    {
+      $push: {
+        investors: {
+          name: payload.name.trim(),
+          commitment: toDecimal128(payload.commitment),
+          fundingDate,
+          numNotes: Number.isFinite(payload.numNotes) ? payload.numNotes : undefined,
+          status: payload.status,
+          notes: payload.notes?.trim() || undefined,
+        },
+      },
+    },
+  );
+  revalidatePath(`/scenarios/${scenarioId}`);
+}
+
+export async function updateInvestor(
+  scenarioId: string,
+  raiseId: string,
+  investorId: string,
+  payload: InvestorPayload,
+): Promise<void> {
+  if (
+    !Types.ObjectId.isValid(scenarioId) ||
+    !Types.ObjectId.isValid(raiseId) ||
+    !Types.ObjectId.isValid(investorId)
+  )
+    return;
+  if (!payload.name?.trim() || !INVESTOR_STATUSES.has(payload.status)) return;
+  const fundingDate = parseDate(payload.fundingDate);
+  if (!fundingDate) return;
+  if (!/^-?\d+(\.\d+)?$/.test(parseDecimalInput(payload.commitment))) return;
+
+  await connectToDatabase();
+  await CapitalRaise.updateOne(
+    { _id: raiseId, scenarioId, "investors._id": investorId },
+    {
+      $set: {
+        "investors.$.name": payload.name.trim(),
+        "investors.$.commitment": toDecimal128(payload.commitment),
+        "investors.$.fundingDate": fundingDate,
+        "investors.$.numNotes": Number.isFinite(payload.numNotes) ? payload.numNotes : undefined,
+        "investors.$.status": payload.status,
+        "investors.$.notes": payload.notes?.trim() || undefined,
+      },
+    },
+  );
+  revalidatePath(`/scenarios/${scenarioId}`);
+}
+
+export async function deleteInvestor(
+  scenarioId: string,
+  raiseId: string,
+  investorId: string,
+): Promise<void> {
+  if (
+    !Types.ObjectId.isValid(scenarioId) ||
+    !Types.ObjectId.isValid(raiseId) ||
+    !Types.ObjectId.isValid(investorId)
+  )
+    return;
+  await connectToDatabase();
+  await CapitalRaise.updateOne(
+    { _id: raiseId, scenarioId },
+    { $pull: { investors: { _id: new Types.ObjectId(investorId) } } },
+  );
+  revalidatePath(`/scenarios/${scenarioId}`);
+}
+
+// ── Capital-raise seeds ─────────────────────────────────────────────────────
+// One-click seed for the Initial Convertible Note round. Data is the actual
+// investor list as of the initial bring-up — 26 commitments, AU$10,000 per
+// note. Status mapping:
+//   AML/CTF Fail              → withdrawn
+//   Payment Received = Yes    → funded
+//   otherwise                 → committed
+// Multi-tranche commitments (e.g. Bauer's three tranches) are collapsed into
+// a single investor row at the original subscription date; tranche details
+// are preserved verbatim in the notes field.
+
+type SeedInvestorRow = {
+  name: string;
+  commitment: number; // AUD
+  fundingDate: string; // YYYY-MM-DD
+  status: InvestorStatus;
+  notes?: string;
+};
+
+const INITIAL_CN_NOTE_PRICE = 10000;
+
+const INITIAL_CN_INVESTORS: SeedInvestorRow[] = [
+  {
+    name: "JAM 2222 LLC",
+    commitment: 760000,
+    fundingDate: "2025-10-23",
+    status: "funded",
+    notes:
+      "Iovino · Wholesale Family Office. Actual amount converted from US$500,000 was AU$762,645 but only 76 AU$10,000 Notes were issued and recorded as a AU$760,000 investment. When we convert the notes we will note the extra amount and allocate shares commensurately.",
+  },
+  {
+    name: "Frazis Venture Fund",
+    commitment: 500000,
+    fundingDate: "2024-11-06",
+    status: "funded",
+    notes:
+      "Apex Fund Services Pty Ltd · Wholesale Family Office. Payment Reference when sending interest or dividend payments is GTI41219",
+  },
+  {
+    name: "BauerAR Pty Ltd",
+    commitment: 400000,
+    fundingDate: "2025-03-19",
+    status: "funded",
+    notes:
+      "Andrew Bauer · Wholesale HNW. $100,000 invested on 19 March 2025; $100,000 invested on 28 August 2025; $200,000 invested on 5 March 2026.",
+  },
+  {
+    name: "Johnsey Pty Ltd",
+    commitment: 250000,
+    fundingDate: "2024-10-03",
+    status: "committed",
+    notes: "Keystone Advisors on behalf of the Carleton Family Office · Wholesale Family Office.",
+  },
+  {
+    name: "Madhuri Pty Ltd",
+    commitment: 250000,
+    fundingDate: "2024-11-07",
+    status: "committed",
+    notes: "Keystone Advisors on behalf of Alok Patel and his parents · Wholesale HNW.",
+  },
+  {
+    name: "The Carter Family Trust Number 2",
+    commitment: 250000,
+    fundingDate: "2025-02-24",
+    status: "committed",
+    notes: "Viernes Pty Ltd · Rob Carter · Wholesale HNW.",
+  },
+  {
+    name: "Jacaranda Finance Pty Ltd",
+    commitment: 200000,
+    fundingDate: "2024-09-25",
+    status: "committed",
+    notes: "Daniel Wessels · Sophisticated Fund Manager.",
+  },
+  {
+    name: "Peter Pan Investments",
+    commitment: 200000,
+    fundingDate: "2025-09-23",
+    status: "committed",
+    notes:
+      "Botteva Pty Ltd · Alistair Ferdinands via Julien Brodie (VP Wealth) · Wholesale Family Office. NOTE: all comms to Netwealth Wealth Accelerator Non-Custodial Investment Service 20Oct25.",
+  },
+  {
+    name: "KSR Trust",
+    commitment: 200000,
+    fundingDate: "2025-03-04",
+    status: "committed",
+    notes:
+      "Benayeo Investments Pty Ltd · Rob Porter + Tom Porter · Wholesale Family Office. Invested $100,000 4 March 2025; invested $100,000 10 March 2026.",
+  },
+  {
+    name: "Plymouth Trust",
+    commitment: 150000,
+    fundingDate: "2025-04-16",
+    status: "funded",
+    notes:
+      "Plymouth Nominees Pty Ltd · Simon Toussaint · Sophisticated Family Office. Invested $100,000 on 16 April 2025; invested $50,000 on 13 February 2026.",
+  },
+  {
+    name: "Dale International Trust Company Limited as Trustees of The PBS Trust",
+    commitment: 150000,
+    fundingDate: "2025-03-26",
+    status: "committed",
+    notes:
+      "David Kay · Wholesale HNW. Invested $100,000 on 26 March 2025; invested $50,000 on 16 February 2026.",
+  },
+  {
+    name: "John Victor Swinson",
+    commitment: 150000,
+    fundingDate: "2026-02-02",
+    status: "funded",
+    notes: "Sophisticated HNW.",
+  },
+  {
+    name: "Dale International Trust Company Limited as Trustees of The Pilot Trust",
+    commitment: 100000,
+    fundingDate: "2025-04-29",
+    status: "committed",
+    notes: "Robert Currie · Wholesale HNW.",
+  },
+  {
+    name: "Kilmartin Super Pty Ltd ATF Kilmartin Super",
+    commitment: 100000,
+    fundingDate: "2025-01-06",
+    status: "funded",
+    notes:
+      "Ben Kilmartin · Wholesale HNW. Invested $70,000 on 6 January 2025; invested $30,000 on 20 May 2025.",
+  },
+  {
+    name: "Macarthur Biosciences Pty Ltd ATF Sethi Family Trust No.2",
+    commitment: 100000,
+    fundingDate: "2025-08-28",
+    status: "withdrawn",
+    notes: "Sharif Sethi · Wholesale Family Office. AML/CTF Failed.",
+  },
+  {
+    name: "NC Resources Pty Limited ATF CJN Family Trust",
+    commitment: 100000,
+    fundingDate: "2025-06-27",
+    status: "committed",
+    notes:
+      "Callum Newton · Wholesale HNW. Invested $50,000 on 27 June 2025; invested $50,000 on 28 August 2025.",
+  },
+  {
+    name: "Tre Fratelli Pty Ltd ATF Lincoln SMSF",
+    commitment: 80000,
+    fundingDate: "2025-02-25",
+    status: "committed",
+    notes:
+      "Tony Conaghan · Wholesale HNW. Invested $50,000 on 25 February 2025; invested $30,000 on 19 October 2025.",
+  },
+  {
+    name: "PNC Horizon Pty Ltd ATF The Higgs Family Trust",
+    commitment: 60000,
+    fundingDate: "2025-06-17",
+    status: "committed",
+    notes:
+      "Haydn Higgs · Wholesale HNW. Invested $30,000 on 17 June 2025; invested $30,000 on 8 October 2025.",
+  },
+  {
+    name: "KPSF Pty Ltd ATF The Jackson Family Super Fund",
+    commitment: 50000,
+    fundingDate: "2025-10-02",
+    status: "committed",
+    notes: "David Jackson · Wholesale Family Office.",
+  },
+  {
+    name: "BKIM Holdings Pty Ltd ATF BK Discretionary Trust",
+    commitment: 30000,
+    fundingDate: "2025-05-30",
+    status: "committed",
+    notes: "Ben Kilmartin · Wholesale HNW.",
+  },
+  {
+    name: "H and D Higgs Pty Ltd ATF The Higgs Superannuation Fund",
+    commitment: 30000,
+    fundingDate: "2025-06-17",
+    status: "committed",
+    notes: "Haydn Higgs · Wholesale HNW.",
+  },
+  {
+    name: "Faxanadu Pty Ltd ATF Howes Family Investment Trust",
+    commitment: 30000,
+    fundingDate: "2025-02-07",
+    status: "committed",
+    notes: "Luke Howes · Wholesale HNW.",
+  },
+  {
+    name: "Tatsiana Bakun",
+    commitment: 30000,
+    fundingDate: "2025-10-31",
+    status: "committed",
+    notes: "Wholesale HNW.",
+  },
+  {
+    name: "Krystian Wakiec",
+    commitment: 250000,
+    fundingDate: "2026-03-24",
+    status: "withdrawn",
+    notes: "Sophisticated HNW. AML/CTF Failed. 27 Gristock Street Coorparoo, Australia.",
+  },
+  {
+    name: "Andreas Moser",
+    commitment: 50000,
+    fundingDate: "2026-03-25",
+    status: "withdrawn",
+    notes: "Sophisticated Family Office. AML/CTF Failed.",
+  },
+  {
+    name: "Christopher John Grogan",
+    commitment: 50000,
+    fundingDate: "2026-03-24",
+    status: "committed",
+    notes: "Sophisticated Family Office.",
+  },
+];
+
+export async function seedInitialConvertibleNote(scenarioId: string): Promise<SeedResult> {
+  if (!Types.ObjectId.isValid(scenarioId)) return { ok: false, error: "invalid scenario" };
+
+  try {
+    await connectToDatabase();
+    const totalCommitted = INITIAL_CN_INVESTORS.reduce((acc, r) => acc + r.commitment, 0);
+    const earliestDate = INITIAL_CN_INVESTORS.map((r) => r.fundingDate).sort()[0];
+
+    const raise = await CapitalRaise.create({
+      scenarioId: new Types.ObjectId(scenarioId),
+      name: "Initial Convertible Note",
+      type: "convertible_note",
+      raiseDate: new Date(`${earliestDate}T00:00:00Z`),
+      targetSize: toDecimal128(String(totalCommitted)),
+      pricePerUnit: toDecimal128(String(INITIAL_CN_NOTE_PRICE)),
+      investors: INITIAL_CN_INVESTORS.map((r) => ({
+        name: r.name,
+        commitment: toDecimal128(String(r.commitment)),
+        fundingDate: new Date(`${r.fundingDate}T00:00:00Z`),
+        numNotes: Math.round(r.commitment / INITIAL_CN_NOTE_PRICE),
+        status: r.status,
+        notes: r.notes,
+      })),
+    });
+
+    revalidatePath(`/scenarios/${scenarioId}`);
+    return { ok: true, created: raise.investors.length };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }

@@ -13,6 +13,8 @@ export interface CashflowData {
   capexOutflow: SerializedSeries;
   notesIssuance: SerializedSeries;
   notesRepayment: SerializedSeries;
+  equityProceeds: SerializedSeries;
+  convertibleProceeds: SerializedSeries;
   netCashMovement: SerializedSeries;
   endingCash: SerializedSeries;
   openingCash: string;
@@ -58,14 +60,24 @@ export function CashflowTab({ data }: { data: CashflowData }) {
   const totalOperating = data.horizon.reduce((acc, pk) => acc + valueAt(operatingFlow, pk), 0);
   const totalCapex = data.horizon.reduce((acc, pk) => acc + valueAt(data.capexOutflow, pk), 0);
   const totalFinancing = data.horizon.reduce(
-    (acc, pk) => acc + valueAt(data.notesIssuance, pk) - valueAt(data.notesRepayment, pk),
+    (acc, pk) =>
+      acc +
+      valueAt(data.notesIssuance, pk) -
+      valueAt(data.notesRepayment, pk) +
+      valueAt(data.equityProceeds, pk) +
+      valueAt(data.convertibleProceeds, pk),
     0,
   );
   const financingFlow: SerializedSeries = {
     monthly: Object.fromEntries(
       data.horizon.map((pk) => [
         pk,
-        (valueAt(data.notesIssuance, pk) - valueAt(data.notesRepayment, pk)).toFixed(2),
+        (
+          valueAt(data.notesIssuance, pk) -
+          valueAt(data.notesRepayment, pk) +
+          valueAt(data.equityProceeds, pk) +
+          valueAt(data.convertibleProceeds, pk)
+        ).toFixed(2),
       ]),
     ),
   };
@@ -188,6 +200,12 @@ export function CashflowTab({ data }: { data: CashflowData }) {
               series={data.notesRepayment}
               groups={groups}
               negate
+            />
+            <FlowRow label="+ Equity raise proceeds" series={data.equityProceeds} groups={groups} />
+            <FlowRow
+              label="+ Convertible note proceeds"
+              series={data.convertibleProceeds}
+              groups={groups}
             />
             <SubtotalRow label="Financing cash flow" series={financingFlow} groups={groups} />
 
