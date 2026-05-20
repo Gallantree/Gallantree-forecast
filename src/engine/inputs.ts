@@ -189,11 +189,13 @@ interface ProgramDoc {
   endPeriodKey?: string;
   fees: ProgramFeeDoc[];
   liabilities?: ProgramLiabilityDoc[];
+  gallantreeSharePct?: D128;
 }
 
 function flattenProgramFees(programs: ProgramDoc[]): ProgramFeeInput[] {
   const out: ProgramFeeInput[] = [];
   for (const p of programs) {
+    const share = p.gallantreeSharePct?.toString();
     for (const f of p.fees ?? []) {
       out.push({
         id: String(f._id),
@@ -207,6 +209,7 @@ function flattenProgramFees(programs: ProgramDoc[]): ProgramFeeInput[] {
         accountCode: f.accountCode,
         startPeriodKey: p.startPeriodKey,
         endPeriodKey: p.endPeriodKey,
+        gallantreeSharePct: share,
       });
     }
   }

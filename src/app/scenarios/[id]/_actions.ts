@@ -54,6 +54,9 @@ export type ProgramPayload = {
   notes?: string;
   // Decimal fraction (0.03 = 3%). The UI takes a whole percent and converts.
   arrearsPctTarget?: string;
+  // Decimal fraction (0.33 = 33%) — Gallantree's share of servicing fees.
+  // UI sends whole percent ("33") that we convert before persisting.
+  gallantreeSharePct?: string;
   fees: ProgramFeePayload[];
   liabilities?: ProgramLiabilityPayload[];
 };
@@ -322,6 +325,9 @@ export async function createProgram(scenarioId: string, payload: ProgramPayload)
     endPeriodKey: payload.endPeriodKey,
     notes: payload.notes,
     arrearsPctTarget: payload.arrearsPctTarget ? toDecimal128(payload.arrearsPctTarget) : undefined,
+    gallantreeSharePct: payload.gallantreeSharePct
+      ? toDecimal128(payload.gallantreeSharePct)
+      : undefined,
     fees,
     liabilities: sanitiseLiabilities(payload),
   });
@@ -373,6 +379,9 @@ export async function updateProgram(
         arrearsPctTarget: payload.arrearsPctTarget
           ? toDecimal128(payload.arrearsPctTarget)
           : undefined,
+        gallantreeSharePct: payload.gallantreeSharePct
+          ? toDecimal128(payload.gallantreeSharePct)
+          : undefined,
         fees,
         liabilities: sanitiseLiabilities(payload),
       },
@@ -382,6 +391,7 @@ export async function updateProgram(
         ...(payload.endPeriodKey ? {} : { endPeriodKey: "" }),
         ...(payload.notes ? {} : { notes: "" }),
         ...(payload.arrearsPctTarget ? {} : { arrearsPctTarget: "" }),
+        ...(payload.gallantreeSharePct ? {} : { gallantreeSharePct: "" }),
       },
     },
   );
@@ -1014,6 +1024,7 @@ export type ControlPanelPayload = {
   baseRateType?: "BBSW" | "BBSY" | "SOFR";
   baseRateBps?: number;
   firstYearLabel?: number;
+  taxRatePct?: number;
 };
 
 const BASE_RATE_TYPES = new Set(["BBSW", "BBSY", "SOFR"]);
@@ -1043,6 +1054,15 @@ export async function updateControlPanel(
     set.firstYearLabel = payload.firstYearLabel;
   } else {
     unset.firstYearLabel = "";
+  }
+  if (
+    Number.isFinite(payload.taxRatePct) &&
+    (payload.taxRatePct as number) >= 0 &&
+    (payload.taxRatePct as number) <= 100
+  ) {
+    set.taxRatePct = toDecimal128(String(payload.taxRatePct));
+  } else {
+    unset.taxRatePct = "";
   }
   await connectToDatabase();
   await Scenario.updateOne(
