@@ -7,6 +7,7 @@ export type TabKey =
   | "loan-book"
   | "loan-book-analysis"
   | "capital-programs"
+  | "capital-raises"
   | "platform-revenues"
   | "opex-general"
   | "opex-staffing"
@@ -24,6 +25,7 @@ export const TABS: { key: TabKey; label: string }[] = [
   { key: "loan-book", label: "Loan Book" },
   { key: "loan-book-analysis", label: "Loan Book Analysis" },
   { key: "capital-programs", label: "Capital Programs" },
+  { key: "capital-raises", label: "Capital Raises" },
   { key: "platform-revenues", label: "Platform Revenues" },
   { key: "opex-general", label: "OPEX — General" },
   { key: "opex-staffing", label: "OPEX — Staffing" },

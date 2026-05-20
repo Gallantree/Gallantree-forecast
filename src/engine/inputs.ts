@@ -1,4 +1,5 @@
-import { CapitalProgram, Driver, Headcount, Loan, PlatformLicense } from "@/models";
+import { CapitalProgram, CapitalRaise, Driver, Headcount, Loan, PlatformLicense } from "@/models";
+import type { CapitalRaiseInput } from "./capitalRaises";
 import { dateToPeriodKey, type LoanInput, PROGRAM_TYPE_ACCOUNT, type ProgramType } from "./loans";
 import type { PlatformLicenseInput } from "./platformLicenses";
 import type { DriverInput, HeadcountInput } from "./pnl";
@@ -290,6 +291,19 @@ function toLicenseInput(l: LicenseDoc): PlatformLicenseInput {
   };
 }
 
+interface CapitalRaiseDoc {
+  _id: unknown;
+  name: string;
+  type: "equity" | "convertible_note";
+  investors: Array<{
+    _id: unknown;
+    name: string;
+    commitment: D128;
+    fundingDate: Date;
+    status: "committed" | "funded" | "withdrawn";
+  }>;
+}
+
 export async function loadEngineInputs(scenarioId: string): Promise<{
   drivers: DriverInput[];
   headcount: HeadcountInput[];
@@ -297,14 +311,17 @@ export async function loadEngineInputs(scenarioId: string): Promise<{
   programFees: ProgramFeeInput[];
   programLiabilities: ProgramLiabilityInput[];
   platformLicenses: PlatformLicenseInput[];
+  capitalRaises: CapitalRaiseInput[];
 }> {
-  const [driverDocs, headcountDocs, loanDocs, programDocs, licenseDocs] = await Promise.all([
-    Driver.find({ scenarioId }).lean<DriverDoc[]>(),
-    Headcount.find({ scenarioId }).lean<HeadcountDoc[]>(),
-    Loan.find({ scenarioId }).lean<LoanDoc[]>(),
-    CapitalProgram.find({ scenarioId }).lean<ProgramDoc[]>(),
-    PlatformLicense.find({ scenarioId }).lean<LicenseDoc[]>(),
-  ]);
+  const [driverDocs, headcountDocs, loanDocs, programDocs, licenseDocs, raiseDocs] =
+    await Promise.all([
+      Driver.find({ scenarioId }).lean<DriverDoc[]>(),
+      Headcount.find({ scenarioId }).lean<HeadcountDoc[]>(),
+      Loan.find({ scenarioId }).lean<LoanDoc[]>(),
+      CapitalProgram.find({ scenarioId }).lean<ProgramDoc[]>(),
+      PlatformLicense.find({ scenarioId }).lean<LicenseDoc[]>(),
+      CapitalRaise.find({ scenarioId }).lean<CapitalRaiseDoc[]>(),
+    ]);
   return {
     drivers: driverDocs.map(toDriverInput),
     headcount: headcountDocs.map(toHeadcountInput),
@@ -328,5 +345,21 @@ export async function loadEngineInputs(scenarioId: string): Promise<{
     programFees: flattenProgramFees(programDocs),
     programLiabilities: flattenProgramLiabilities(programDocs),
     platformLicenses: licenseDocs.map(toLicenseInput),
+    capitalRaises: raiseDocs.map((r) => ({
+      id: String(r._id),
+      name: r.name,
+      kind: r.type,
+      investors: r.investors.map((inv) => {
+        const d = new Date(inv.fundingDate);
+        const periodKey = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+        return {
+          id: String(inv._id),
+          name: inv.name,
+          commitment: inv.commitment.toString(),
+          fundingPeriodKey: periodKey,
+          status: inv.status,
+        };
+      }),
+    })),
   };
 }

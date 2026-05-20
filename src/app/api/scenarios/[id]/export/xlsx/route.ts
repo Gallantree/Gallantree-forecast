@@ -79,6 +79,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     inputs.programFees,
     inputs.platformLicenses,
     inputs.programLiabilities,
+    inputs.capitalRaises,
   );
 
   const wb = new ExcelJS.Workbook();

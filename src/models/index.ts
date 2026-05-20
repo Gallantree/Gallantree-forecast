@@ -9,6 +9,13 @@ export {
   type LiabilityCalculationMethod,
   type LiabilityRateType,
 } from "./capitalProgram.model";
+export {
+  type CapitalRaiseType,
+  default as CapitalRaise,
+  type ICapitalRaise,
+  type IInvestor,
+  type InvestorStatus,
+} from "./capitalRaise.model";
 export { type DriverType, default as Driver, type IDriver } from "./driver.model";
 export { default as Headcount, type IHeadcount } from "./headcount.model";
 export { default as Loan, type ILoan } from "./loan.model";

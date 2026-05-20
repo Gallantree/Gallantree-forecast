@@ -12,6 +12,7 @@ import { connectToDatabase } from "@/lib/db";
 import {
   Account,
   CapitalProgram,
+  CapitalRaise,
   Driver,
   Headcount,
   Loan,
@@ -27,6 +28,7 @@ import {
   BalanceSheetTab,
   type SerializedSeries,
 } from "./_components/BalanceSheetTab";
+import { type CapitalRaiseRow, CapitalRaisesTab } from "./_components/CapitalRaisesTab";
 import { type CashflowData, CashflowTab } from "./_components/CashflowTab";
 import { ConsolidatedModal } from "./_components/ConsolidatedModal";
 import { ControlPanelTab } from "./_components/ControlPanelTab";
@@ -154,6 +156,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
     loanDocs,
     programDocs,
     licenseDocs,
+    raiseDocs,
     inputs,
   ] = await Promise.all([
     // Period docs are kept for historical reasons but the horizon is now
@@ -168,6 +171,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
     Loan.find({ scenarioId: id }).sort({ loanId: 1 }).lean(),
     CapitalProgram.find({ scenarioId: id }).sort({ startPeriodKey: 1, name: 1 }).lean(),
     PlatformLicense.find({ scenarioId: id }).sort({ type: 1, startPeriodKey: 1, name: 1 }).lean(),
+    CapitalRaise.find({ scenarioId: id }).sort({ raiseDate: 1, name: 1 }).lean(),
     loadEngineInputs(id),
   ]);
 
@@ -477,6 +481,46 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
       : undefined,
   }));
 
+  const raiseRows: CapitalRaiseRow[] = (
+    raiseDocs as unknown as Array<{
+      _id: { toString: () => string };
+      name: string;
+      type: "equity" | "convertible_note";
+      raiseDate: Date;
+      targetSize: { toString: () => string };
+      discountPct?: { toString: () => string };
+      valuationCap?: { toString: () => string };
+      pricePerUnit?: { toString: () => string };
+      investors: Array<{
+        _id: { toString: () => string };
+        name: string;
+        commitment: { toString: () => string };
+        fundingDate: Date;
+        numNotes?: number;
+        status: "committed" | "funded" | "withdrawn";
+        notes?: string;
+      }>;
+    }>
+  ).map((r) => ({
+    _id: r._id.toString(),
+    name: r.name,
+    type: r.type,
+    raiseDate: new Date(r.raiseDate).toISOString(),
+    targetSize: r.targetSize.toString(),
+    discountPct: r.discountPct?.toString(),
+    valuationCap: r.valuationCap?.toString(),
+    pricePerUnit: r.pricePerUnit?.toString(),
+    investors: r.investors.map((inv) => ({
+      _id: inv._id.toString(),
+      name: inv.name,
+      commitment: inv.commitment.toString(),
+      fundingDate: new Date(inv.fundingDate).toISOString(),
+      numNotes: inv.numNotes,
+      status: inv.status,
+      notes: inv.notes,
+    })),
+  }));
+
   // Year 1 calendar year from the Control Panel — drives the horizon across
   // every tab. Falls back to 2026 (the seed default) when not set.
   const firstCalendarYear = scenario.firstYearLabel ?? 2026;
@@ -538,6 +582,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
           inputs.programFees,
           inputs.platformLicenses,
           inputs.programLiabilities,
+          inputs.capitalRaises,
         )
       : null;
 
@@ -642,6 +687,8 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
           capexOutflow: serializeSeries(cf.capexOutflow),
           notesIssuance: serializeSeries(cf.notesIssuance),
           notesRepayment: serializeSeries(cf.notesRepayment),
+          equityProceeds: serializeSeries(cf.equityProceeds),
+          convertibleProceeds: serializeSeries(cf.convertibleProceeds),
           netCashMovement: serializeSeries(cf.netCashMovement),
           endingCash: serializeSeries(cf.endingCash),
           openingCash: scenario.openingCash?.toString() ?? "0",
@@ -850,6 +897,8 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
             )}
           />
         )}
+
+        {tab === "capital-raises" && <CapitalRaisesTab scenarioId={id} raises={raiseRows} />}
 
         {tab === "opex-staffing" && (
           <StaffingTab
