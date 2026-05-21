@@ -1,6 +1,7 @@
 import Decimal from "decimal.js";
 import { type Money, money, ZERO } from "@/utils/money";
 import type { MonthlyValue } from "./pnl";
+import { programBalanceFactor } from "./programFactor";
 
 export type LiabilityCalculationMethod = "monthly" | "quarterly" | "annually";
 export type LiabilityRateType = "fixed" | "variable";
@@ -17,6 +18,11 @@ export interface ProgramLiabilityInput {
   accountCode: string;
   startPeriodKey: string; // program startPeriodKey
   endPeriodKey?: string; // program endPeriodKey
+  // Program-level ramp/amort profile. The note balance and interest expense
+  // both scale by the deal-balance factor — notes are issued in step with the
+  // ramp and repaid in step with tail amortisation.
+  rampUpMonths?: number;
+  amortisationMonths?: number;
 }
 
 export const DEFAULT_LIABILITY_ACCOUNT = "6800";
@@ -47,10 +53,20 @@ export function projectProgramLiability(
   }
   // Monthly interest expense = principal × allInBps / 10000 / 12
   const monthly = principal.times(allInBps).div(10000).div(12);
-  return horizon.map((pk) => ({
-    periodKey: pk,
-    value: isActive(pk, l.startPeriodKey, l.endPeriodKey) ? monthly : (ZERO as Money),
-  }));
+  const hasProfile = !!(l.rampUpMonths || l.amortisationMonths);
+  return horizon.map((pk) => {
+    if (!isActive(pk, l.startPeriodKey, l.endPeriodKey)) {
+      return { periodKey: pk, value: ZERO as Money };
+    }
+    if (!hasProfile) return { periodKey: pk, value: monthly };
+    const factor = programBalanceFactor(pk, {
+      startPeriodKey: l.startPeriodKey,
+      endPeriodKey: l.endPeriodKey,
+      rampUpMonths: l.rampUpMonths,
+      amortisationMonths: l.amortisationMonths,
+    });
+    return { periodKey: pk, value: monthly.times(factor) };
+  });
 }
 
 void Decimal;

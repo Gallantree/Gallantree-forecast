@@ -80,6 +80,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     inputs.platformLicenses,
     inputs.programLiabilities,
     inputs.capitalRaises,
+    inputs.programUpfrontFees,
   );
 
   const wb = new ExcelJS.Workbook();
@@ -154,10 +155,12 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   bSheet.addRow(row("  PPE gross", s.bs.ppeGross));
   bSheet.addRow(row("  Accumulated depreciation", s.bs.accumulatedDepreciation));
   bSheet.addRow(row("  PPE net", s.bs.ppeNet));
+  bSheet.addRow(row("  Prepaid issuance costs", s.bs.prepaidIssuanceCosts));
   bSheet.addRow(row("Total assets", s.bs.totalAssets)).font = { bold: true };
   bSheet.addRow([]);
   bSheet.addRow(["Liabilities & Equity"]);
   bSheet.addRow(row("  Accounts payable", s.bs.ap));
+  bSheet.addRow(row("  Deferred revenue", s.bs.deferredRevenue));
   bSheet.addRow(row("  Equity", s.bs.equity));
   bSheet.addRow(row("Total L&E", s.bs.totalLiabilitiesAndEquity)).font = { bold: true };
 
@@ -166,8 +169,11 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   cSheet.addRow(headerRow("Line", horizon, false)).font = { bold: true };
   cSheet.addRow(row("Net income", s.cf.netIncome));
   cSheet.addRow(row("+ Depreciation", s.cf.depreciation));
+  cSheet.addRow(row("+ Issuance cost amortisation", s.cf.issuanceAmortisation));
   cSheet.addRow(row("- Change in AR", s.cf.changeInAr));
   cSheet.addRow(row("+ Change in AP", s.cf.changeInAp));
+  cSheet.addRow(row("+ Change in deferred revenue", s.cf.changeInDeferredRevenue));
+  cSheet.addRow(row("- Issuance cost outflow", s.cf.issuanceCostOutflow));
   cSheet.addRow(row("- Capex outflow", s.cf.capexOutflow));
   cSheet.addRow(row("Net cash movement", s.cf.netCashMovement)).font = { bold: true };
   cSheet.addRow(row("Ending cash", s.cf.endingCash)).font = { bold: true };

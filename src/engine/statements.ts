@@ -6,7 +6,11 @@ import {
   projectEquityProceeds,
 } from "./capitalRaises";
 import type { LoanInput } from "./loans";
-import type { PlatformLicenseInput } from "./platformLicenses";
+import {
+  type PlatformLicenseInput,
+  projectLicenseBillings,
+  projectPlatformLicense,
+} from "./platformLicenses";
 import {
   type CapexStraightLineDriverInput,
   computePnL,
@@ -16,8 +20,14 @@ import {
   type PnL,
   projectCapexDepreciation,
 } from "./pnl";
+import { programBalanceFactor } from "./programFactor";
 import type { ProgramLiabilityInput } from "./programLiabilities";
 import type { ProgramFeeInput } from "./programs";
+import {
+  type ProgramUpfrontFeeInput,
+  projectUpfrontFeeAmortisation,
+  projectUpfrontFeeCashOutflow,
+} from "./programUpfrontFees";
 
 export interface ScenarioAssumptions {
   dsoDays?: Decimal.Value;
@@ -31,6 +41,7 @@ export interface ScenarioAssumptions {
 
 export interface PnLExtended extends PnL {
   depreciation: MonthlyValue[];
+  issuanceAmortisation: MonthlyValue[];
   interestExpense: MonthlyValue[];
   ebitda: MonthlyValue[];
   ebit: MonthlyValue[];
@@ -46,8 +57,10 @@ export interface BalanceSheet {
   ppeGross: MonthlyValue[];
   accumulatedDepreciation: MonthlyValue[];
   ppeNet: MonthlyValue[];
+  prepaidIssuanceCosts: MonthlyValue[];
   cash: MonthlyValue[];
   notesPayable: MonthlyValue[];
+  deferredRevenue: MonthlyValue[];
   totalAssets: MonthlyValue[];
   equity: MonthlyValue[];
   totalLiabilitiesAndEquity: MonthlyValue[];
@@ -56,9 +69,12 @@ export interface BalanceSheet {
 export interface CashFlow {
   netIncome: MonthlyValue[];
   depreciation: MonthlyValue[];
+  issuanceAmortisation: MonthlyValue[];
   changeInAr: MonthlyValue[];
   changeInAp: MonthlyValue[];
+  changeInDeferredRevenue: MonthlyValue[];
   capexOutflow: MonthlyValue[];
+  issuanceCostOutflow: MonthlyValue[];
   notesIssuance: MonthlyValue[];
   notesRepayment: MonthlyValue[];
   equityProceeds: MonthlyValue[];
@@ -114,6 +130,7 @@ export function computeStatements(
   platformLicenses: PlatformLicenseInput[] = [],
   programLiabilities: ProgramLiabilityInput[] = [],
   capitalRaises: CapitalRaiseInput[] = [],
+  programUpfrontFees: ProgramUpfrontFeeInput[] = [],
 ): Statements {
   const pnl = computePnL(
     drivers,
@@ -125,7 +142,32 @@ export function computeStatements(
     platformLicenses,
     programLiabilities,
     assumptions.baseRateBps ?? 0,
+    programUpfrontFees,
   );
+
+  // Issuance cost cash outflow (full amount at the program's start period) and
+  // straight-line amortisation across the deal life. The cash outflow lands in
+  // operating CF; the unamortised balance sits on the BS as a prepaid asset.
+  const issuanceCostOutflowByFee = programUpfrontFees.map((u) =>
+    projectUpfrontFeeCashOutflow(u, horizon),
+  );
+  const issuanceAmortisationByFee = programUpfrontFees.map((u) =>
+    projectUpfrontFeeAmortisation(u, horizon),
+  );
+  const issuanceCostOutflow: MonthlyValue[] =
+    issuanceCostOutflowByFee.length === 0
+      ? zeroSeries(horizon)
+      : sumSeries(issuanceCostOutflowByFee, horizon);
+  const issuanceAmortisation: MonthlyValue[] =
+    issuanceAmortisationByFee.length === 0
+      ? zeroSeries(horizon)
+      : sumSeries(issuanceAmortisationByFee, horizon);
+  const cumulativeIssuancePurchases = runningSum(issuanceCostOutflow, ZERO as Money, horizon);
+  const cumulativeIssuanceAmortisation = runningSum(issuanceAmortisation, ZERO as Money, horizon);
+  const prepaidIssuanceCosts: MonthlyValue[] = horizon.map((pk, i) => ({
+    periodKey: pk,
+    value: cumulativeIssuancePurchases[i].value.minus(cumulativeIssuanceAmortisation[i].value),
+  }));
 
   const capex = drivers.filter(
     (d): d is CapexStraightLineDriverInput => d.kind === "capex_straight_line",
@@ -154,19 +196,24 @@ export function computeStatements(
   }));
 
   // Proper P&L cascade:
-  //   EBITDA          = revenue − (opex − depreciation)
-  //   EBIT            = EBITDA − depreciation
+  //   EBITDA          = revenue − (opex − depreciation − issuance amortisation)
+  //   EBIT            = EBITDA − depreciation − issuance amortisation
   //   Pre-tax income  = EBIT − interest expense
   //   Tax             = max(0, pre-tax) × rate
   //   Net income      = pre-tax − tax
+  // Both depreciation and issuance-cost amortisation are non-cash deductions
+  // sitting inside opex; they're added back for EBITDA and re-deducted for EBIT.
   const taxRate = money(assumptions.taxRatePct ?? 0).div(100);
   const ebitda: MonthlyValue[] = horizon.map((pk, i) => ({
     periodKey: pk,
-    value: pnl.revenue.totals[i].value.minus(pnl.opex.totals[i].value).plus(depreciation[i].value),
+    value: pnl.revenue.totals[i].value
+      .minus(pnl.opex.totals[i].value)
+      .plus(depreciation[i].value)
+      .plus(issuanceAmortisation[i].value),
   }));
   const ebit: MonthlyValue[] = horizon.map((pk, i) => ({
     periodKey: pk,
-    value: ebitda[i].value.minus(depreciation[i].value),
+    value: ebitda[i].value.minus(depreciation[i].value).minus(issuanceAmortisation[i].value),
   }));
   const pretaxIncome: MonthlyValue[] = horizon.map((pk, i) => ({
     periodKey: pk,
@@ -186,15 +233,45 @@ export function computeStatements(
   const dso = money(assumptions.dsoDays ?? 0).div(DAYS_PER_MONTH);
   const dpo = money(assumptions.dpoDays ?? 0).div(DAYS_PER_MONTH);
 
-  // Cash opex = opex total - depreciation (depreciation is non-cash and not on AP).
+  // Cash opex = opex total − non-cash items (depreciation, issuance amort).
+  // Used to scale AP via DPO so we don't accrue payables against non-cash lines.
   const cashOpex: MonthlyValue[] = horizon.map((pk, i) => ({
     periodKey: pk,
-    value: pnl.opex.totals[i].value.minus(depreciation[i].value),
+    value: pnl.opex.totals[i].value
+      .minus(depreciation[i].value)
+      .minus(issuanceAmortisation[i].value),
   }));
 
+  // Deferred revenue from annual-billed platform licences. Annual licences are
+  // invoiced upfront for 12 months of recognition; the gap between cash billings
+  // and recognised revenue accumulates as a current liability (deferred rev),
+  // then drains back to 0 over the year as the revenue is earned.
+  const annualLicenceRecognition = horizon.map(() => ZERO as Money);
+  const annualLicenceBillings = horizon.map(() => ZERO as Money);
+  for (const l of platformLicenses) {
+    if (l.type !== "compliance" || l.billingFrequency !== "annual") continue;
+    const rec = projectPlatformLicense(l, horizon);
+    const bil = projectLicenseBillings(l, horizon);
+    for (let i = 0; i < horizon.length; i++) {
+      annualLicenceRecognition[i] = annualLicenceRecognition[i].plus(rec[i].value);
+      annualLicenceBillings[i] = annualLicenceBillings[i].plus(bil[i].value);
+    }
+  }
+  const changeInDeferredRevenue: MonthlyValue[] = horizon.map((pk, i) => ({
+    periodKey: pk,
+    value: annualLicenceBillings[i].minus(annualLicenceRecognition[i]),
+  }));
+  const deferredRevenue = runningSum(changeInDeferredRevenue, ZERO as Money, horizon);
+
+  // AR base excludes annually-prepaid revenue (the customer pays upfront, so
+  // there's no receivable — the timing lives in deferred revenue instead).
+  const arRevenueBase: MonthlyValue[] = horizon.map((pk, i) => ({
+    periodKey: pk,
+    value: pnl.revenue.totals[i].value.minus(annualLicenceRecognition[i]),
+  }));
   const ar: MonthlyValue[] = horizon.map((pk, i) => ({
     periodKey: pk,
-    value: pnl.revenue.totals[i].value.times(dso),
+    value: arRevenueBase[i].value.times(dso),
   }));
   const ap: MonthlyValue[] = horizon.map((pk, i) => ({
     periodKey: pk,
@@ -209,44 +286,48 @@ export function computeStatements(
   //                     period AFTER the tranche matures)
   // Σ issuance − Σ repayment over the horizon equals the closing notesPayable
   // balance, keeping the BS balanced through Δcash on the asset side.
-  const notesPayable: MonthlyValue[] = horizon.map((pk) => {
+  // Per-tranche balance curve: scaled principal at each period. For tranches
+  // without a ramp/amort profile this is a flat full-principal block. With a
+  // profile it ramps in step with the deal and amortises at the tail.
+  const trancheBalance = programLiabilities.map((l) => {
+    const principal = money(l.principal);
+    const hasProfile = !!(l.rampUpMonths || l.amortisationMonths);
+    return horizon.map((pk) => {
+      if (pk.localeCompare(l.startPeriodKey) < 0) return ZERO as Money;
+      if (l.endPeriodKey && pk.localeCompare(l.endPeriodKey) > 0) return ZERO as Money;
+      if (!hasProfile) return principal;
+      const factor = programBalanceFactor(pk, {
+        startPeriodKey: l.startPeriodKey,
+        endPeriodKey: l.endPeriodKey,
+        rampUpMonths: l.rampUpMonths,
+        amortisationMonths: l.amortisationMonths,
+      });
+      return principal.times(factor);
+    });
+  });
+  const notesPayable: MonthlyValue[] = horizon.map((pk, i) => {
     let acc = ZERO as Money;
-    for (const l of programLiabilities) {
-      if (pk.localeCompare(l.startPeriodKey) < 0) continue;
-      if (l.endPeriodKey && pk.localeCompare(l.endPeriodKey) > 0) continue;
-      acc = acc.plus(money(l.principal));
-    }
+    for (const tb of trancheBalance) acc = acc.plus(tb[i]);
     return { periodKey: pk, value: acc };
   });
+  // Issuance/repayment derived from the period-on-period delta of each
+  // tranche's balance. Positive Δ → issuance; negative Δ → repayment. This
+  // keeps the BS balanced regardless of ramp/amort shape.
   const notesIssuance: MonthlyValue[] = horizon.map((pk, i) => {
     let acc = ZERO as Money;
-    for (const l of programLiabilities) {
-      // First horizon period in which the tranche is active.
-      const firstActiveIdx = horizon.findIndex(
-        (p) =>
-          p.localeCompare(l.startPeriodKey) >= 0 &&
-          (!l.endPeriodKey || p.localeCompare(l.endPeriodKey) <= 0),
-      );
-      if (firstActiveIdx === i) acc = acc.plus(money(l.principal));
+    for (const tb of trancheBalance) {
+      const prev = i === 0 ? (ZERO as Money) : tb[i - 1];
+      const delta = tb[i].minus(prev);
+      if (delta.gt(0)) acc = acc.plus(delta);
     }
     return { periodKey: pk, value: acc };
   });
   const notesRepayment: MonthlyValue[] = horizon.map((pk, i) => {
     let acc = ZERO as Money;
-    for (const l of programLiabilities) {
-      if (!l.endPeriodKey) continue;
-      // Repaid at the period immediately following the last active period.
-      const lastActiveIdx = horizon
-        .map((p, j) => ({ p, j }))
-        .filter(
-          ({ p }) =>
-            p.localeCompare(l.startPeriodKey) >= 0 && p.localeCompare(l.endPeriodKey!) <= 0,
-        )
-        .map(({ j }) => j)
-        .pop();
-      if (lastActiveIdx !== undefined && lastActiveIdx + 1 === i) {
-        acc = acc.plus(money(l.principal));
-      }
+    for (const tb of trancheBalance) {
+      const prev = i === 0 ? (ZERO as Money) : tb[i - 1];
+      const delta = tb[i].minus(prev);
+      if (delta.lt(0)) acc = acc.plus(delta.abs());
     }
     return { periodKey: pk, value: acc };
   });
@@ -276,8 +357,11 @@ export function computeStatements(
     periodKey: pk,
     value: netIncome[i].value
       .plus(depreciation[i].value)
+      .plus(issuanceAmortisation[i].value)
       .minus(changeInAr[i].value)
       .plus(changeInAp[i].value)
+      .plus(changeInDeferredRevenue[i].value)
+      .minus(issuanceCostOutflow[i].value)
       .minus(capexOutflow[i].value)
       .plus(notesIssuance[i].value)
       .minus(notesRepayment[i].value)
@@ -289,7 +373,9 @@ export function computeStatements(
   const endingCash = runningSum(netCashMovement, openingCash, horizon);
 
   // Equity = opening + cumulative net income + cumulative equity proceeds.
-  const openingEquity = money(assumptions.openingEquity ?? 0);
+  // Opening cash is contributed capital on day 0 — add it to the equity
+  // baseline so the BS balances at t=0 (Assets = cash = Equity).
+  const openingEquity = money(assumptions.openingEquity ?? 0).plus(openingCash);
   const cumulativeEquityProceeds = runningSum(equityProceeds, ZERO as Money, horizon);
   const cumulativeNetIncome = runningSum(netIncome, ZERO as Money, horizon);
   const equity: MonthlyValue[] = horizon.map((pk, i) => ({
@@ -307,11 +393,17 @@ export function computeStatements(
 
   const totalAssets: MonthlyValue[] = horizon.map((pk, i) => ({
     periodKey: pk,
-    value: endingCash[i].value.plus(ar[i].value).plus(ppeNet[i].value),
+    value: endingCash[i].value
+      .plus(ar[i].value)
+      .plus(ppeNet[i].value)
+      .plus(prepaidIssuanceCosts[i].value),
   }));
   const totalLiabilitiesAndEquity: MonthlyValue[] = horizon.map((pk, i) => ({
     periodKey: pk,
-    value: ap[i].value.plus(notesPayableWithConvertibles[i].value).plus(equity[i].value),
+    value: ap[i].value
+      .plus(notesPayableWithConvertibles[i].value)
+      .plus(deferredRevenue[i].value)
+      .plus(equity[i].value),
   }));
 
   return {
@@ -319,6 +411,7 @@ export function computeStatements(
     pnl: {
       ...pnl,
       depreciation,
+      issuanceAmortisation,
       interestExpense,
       ebitda,
       ebit,
@@ -333,8 +426,10 @@ export function computeStatements(
       ppeGross,
       accumulatedDepreciation,
       ppeNet,
+      prepaidIssuanceCosts,
       cash: endingCash,
       notesPayable: notesPayableWithConvertibles,
+      deferredRevenue,
       totalAssets,
       equity,
       totalLiabilitiesAndEquity,
@@ -342,9 +437,12 @@ export function computeStatements(
     cf: {
       netIncome,
       depreciation,
+      issuanceAmortisation,
       changeInAr,
       changeInAp,
+      changeInDeferredRevenue,
       capexOutflow,
+      issuanceCostOutflow,
       notesIssuance,
       notesRepayment,
       equityProceeds,

@@ -1,6 +1,7 @@
 import { Fragment } from "react";
 import { fmtMoney2, fmtNum0 } from "@/utils/format";
 import type { SerializedSeries } from "./BalanceSheetTab";
+import { EditOpeningCashModal } from "./EditOpeningCashModal";
 import type { FYGroup } from "./PnlClientTable";
 
 export interface CashflowData {
@@ -8,9 +9,12 @@ export interface CashflowData {
   groups: FYGroup[];
   netIncome: SerializedSeries;
   depreciation: SerializedSeries;
+  issuanceAmortisation: SerializedSeries;
   changeInAr: SerializedSeries;
   changeInAp: SerializedSeries;
+  changeInDeferredRevenue: SerializedSeries;
   capexOutflow: SerializedSeries;
+  issuanceCostOutflow: SerializedSeries;
   notesIssuance: SerializedSeries;
   notesRepayment: SerializedSeries;
   equityProceeds: SerializedSeries;
@@ -42,7 +46,7 @@ function totalCols(groups: FYGroup[]): number {
   return 1 + groups.reduce((acc, g) => acc + g.months.length + 1, 0);
 }
 
-export function CashflowTab({ data }: { data: CashflowData }) {
+export function CashflowTab({ scenarioId, data }: { scenarioId: string; data: CashflowData }) {
   const { groups } = data;
   const operatingFlow: SerializedSeries = {
     monthly: Object.fromEntries(
@@ -50,9 +54,12 @@ export function CashflowTab({ data }: { data: CashflowData }) {
         pk,
         (
           valueAt(data.netIncome, pk) +
-          valueAt(data.depreciation, pk) -
+          valueAt(data.depreciation, pk) +
+          valueAt(data.issuanceAmortisation, pk) -
           valueAt(data.changeInAr, pk) +
-          valueAt(data.changeInAp, pk)
+          valueAt(data.changeInAp, pk) +
+          valueAt(data.changeInDeferredRevenue, pk) -
+          valueAt(data.issuanceCostOutflow, pk)
         ).toFixed(2),
       ]),
     ),
@@ -86,7 +93,11 @@ export function CashflowTab({ data }: { data: CashflowData }) {
     <div className="flex h-full flex-col bg-white">
       {/* Headline tiles */}
       <div className="grid grid-cols-5 gap-px border-b border-zinc-200 bg-zinc-200">
-        <Tile label="Opening cash" value={fmtMoney2(data.openingCash)} />
+        <Tile
+          label="Opening cash"
+          value={fmtMoney2(data.openingCash)}
+          action={<EditOpeningCashModal scenarioId={scenarioId} initial={data.openingCash} />}
+        />
         <Tile
           label="Operating cash flow (5y)"
           value={fmtMoney2(totalOperating)}
@@ -164,6 +175,12 @@ export function CashflowTab({ data }: { data: CashflowData }) {
               subtle
             />
             <FlowRow
+              label="+ Issuance cost amortisation (non-cash add-back)"
+              series={data.issuanceAmortisation}
+              groups={groups}
+              subtle
+            />
+            <FlowRow
               label="− Increase in accounts receivable"
               series={data.changeInAr}
               groups={groups}
@@ -175,6 +192,19 @@ export function CashflowTab({ data }: { data: CashflowData }) {
               series={data.changeInAp}
               groups={groups}
               subtle
+            />
+            <FlowRow
+              label="+ Increase in deferred revenue (annual-prepaid licences)"
+              series={data.changeInDeferredRevenue}
+              groups={groups}
+              subtle
+            />
+            <FlowRow
+              label="− Issuance cost outflow (one-off at deal start)"
+              series={data.issuanceCostOutflow}
+              groups={groups}
+              subtle
+              negate
             />
             <SubtotalRow label="Operating cash flow" series={operatingFlow} groups={groups} />
 
@@ -371,13 +401,26 @@ function BalanceRow({
   );
 }
 
-function Tile({ label, value, tone }: { label: string; value: string; tone?: "ok" | "warn" }) {
+function Tile({
+  label,
+  value,
+  tone,
+  action,
+}: {
+  label: string;
+  value: string;
+  tone?: "ok" | "warn";
+  action?: React.ReactNode;
+}) {
   const valueClass =
     tone === "warn" ? "text-rose-700" : tone === "ok" ? "text-emerald-700" : "text-zinc-900";
   return (
     <div className="flex flex-col gap-1 bg-white px-4 py-3">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
-        {label}
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+          {label}
+        </div>
+        {action}
       </div>
       <div className={`text-base font-semibold ${valueClass}`}>{value}</div>
     </div>

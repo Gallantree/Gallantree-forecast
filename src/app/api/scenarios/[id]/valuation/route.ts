@@ -87,6 +87,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     inputs.platformLicenses,
     inputs.programLiabilities,
     inputs.capitalRaises,
+    inputs.programUpfrontFees,
   );
 
   const v = computeValuation(

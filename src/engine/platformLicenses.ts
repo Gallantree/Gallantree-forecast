@@ -106,6 +106,32 @@ export function projectPlatformLicense(l: PlatformLicenseInput, horizon: string[
   return projectTrusteeLicense(l, horizon);
 }
 
+// Cash billings per period — when the customer is invoiced. For monthly billing
+// this matches recognition; for annual billing it lumps 12 months of recognised
+// revenue into the anniversary month (start, +12, +24, …). The gap between
+// billings and recognition is deferred revenue (a current liability).
+export function projectLicenseBillings(l: PlatformLicenseInput, horizon: string[]): MonthlyValue[] {
+  const recognised = projectPlatformLicense(l, horizon);
+  if (l.type !== "compliance" || l.billingFrequency !== "annual") return recognised;
+  const startIdx = horizon.indexOf(l.startPeriodKey);
+  if (startIdx < 0) return recognised;
+  return horizon.map((pk, i) => {
+    if (!isActive(pk, l.startPeriodKey, l.endPeriodKey))
+      return { periodKey: pk, value: ZERO as Money };
+    const monthsFromStart = i - startIdx;
+    if (monthsFromStart < 0) return { periodKey: pk, value: ZERO as Money };
+    if (monthsFromStart % 12 !== 0) return { periodKey: pk, value: ZERO as Money };
+    let billing = ZERO as Money;
+    for (let k = 0; k < 12; k++) {
+      const j = i + k;
+      if (j >= horizon.length) break;
+      if (!isActive(horizon[j], l.startPeriodKey, l.endPeriodKey)) break;
+      billing = billing.plus(recognised[j].value);
+    }
+    return { periodKey: pk, value: billing };
+  });
+}
+
 export function licenseAccount(l: PlatformLicenseInput): string {
   return l.accountCode ?? LICENSE_ACCOUNT[l.type];
 }

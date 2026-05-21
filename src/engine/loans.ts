@@ -2,6 +2,7 @@ import Decimal from "decimal.js";
 import { periodKey } from "@/constants/periods";
 import { type Money, money, ZERO } from "@/utils/money";
 import type { MonthlyValue } from "./pnl";
+import { programBalanceFactor } from "./programFactor";
 
 export type ProgramType = "CRE_CLO" | "CMBS" | "MIT_FUND" | "WAREHOUSE" | "OTHER";
 
@@ -18,6 +19,14 @@ export interface LoanInput {
   maturityPeriodKey: string;
   // Spread over the scenario base rate. All-in interest rate = base + spread.
   creditSpreadBps: number;
+  // Program-level ramp/amortisation profile. When present, this loan's
+  // contribution is scaled by the program's deal-balance factor at each
+  // period — modelling stepped ramp-up and tail amortisation across the
+  // whole program rather than per-loan.
+  programStartPeriodKey?: string;
+  programEndPeriodKey?: string;
+  rampUpMonths?: number;
+  amortisationMonths?: number;
 }
 
 // Default revenue account by program type.
@@ -74,13 +83,25 @@ export function projectLoanRevenue(
   }
   const noGrowth = rates.every((r) => r.eq(0));
 
+  const hasProgramProfile =
+    !!loan.programStartPeriodKey && (loan.rampUpMonths || loan.amortisationMonths);
+
   return horizon.map((pk, i) => {
     const isActive =
       pk.localeCompare(loan.originationPeriodKey) >= 0 &&
       pk.localeCompare(loan.maturityPeriodKey) <= 0;
     if (!isActive) return { periodKey: pk, value: ZERO as Money };
-    if (noGrowth) return { periodKey: pk, value: monthly };
-    const factor = growthFactorAt(i, rates, prefixProduct);
-    return { periodKey: pk, value: monthly.times(factor) };
+    let v = noGrowth ? monthly : monthly.times(growthFactorAt(i, rates, prefixProduct));
+    if (hasProgramProfile) {
+      v = v.times(
+        programBalanceFactor(pk, {
+          startPeriodKey: loan.programStartPeriodKey!,
+          endPeriodKey: loan.programEndPeriodKey,
+          rampUpMonths: loan.rampUpMonths,
+          amortisationMonths: loan.amortisationMonths,
+        }),
+      );
+    }
+    return { periodKey: pk, value: v };
   });
 }

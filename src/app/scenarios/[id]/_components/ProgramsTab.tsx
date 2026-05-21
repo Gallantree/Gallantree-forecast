@@ -76,6 +76,8 @@ export interface ProgramRow {
   arrearsPctTarget?: { toString: () => string };
   // Decimal fraction (0.33 = 33%). Applied to servicing fees only.
   gallantreeSharePct?: { toString: () => string };
+  rampUpMonths?: number;
+  amortisationMonths?: number;
 }
 
 const TYPE_LABEL: Record<ProgramRow["type"], string> = {
@@ -120,6 +122,8 @@ function toFormInitial(p: ProgramRow): ProgramFormInitial {
     gallantreeSharePct: p.gallantreeSharePct
       ? (Number(p.gallantreeSharePct.toString()) * 100).toString()
       : "33",
+    rampUpMonths: p.rampUpMonths,
+    amortisationMonths: p.amortisationMonths,
     fees: p.fees.map((f) => ({
       name: f.name,
       category: f.category,
@@ -134,6 +138,12 @@ function toFormInitial(p: ProgramRow): ProgramFormInitial {
       calculationMethod: l.calculationMethod,
       rateType: l.rateType,
       accountCode: l.accountCode,
+    })),
+    upfrontFees: (p.upfrontFees ?? []).map((u) => ({
+      name: u.name,
+      category: u.category,
+      amount: fmtMoneyInput(u.amount.toString()),
+      accountCode: u.accountCode,
     })),
   };
 }
@@ -346,6 +356,33 @@ export function ProgramsTab({
                           </span>
                         </span>
                       ) : null}
+                      {(() => {
+                        const explicitRamp = p.rampUpMonths;
+                        const explicitAmort = p.amortisationMonths;
+                        const usesDefault =
+                          (p.type === "CRE_CLO" || p.type === "CMBS") &&
+                          explicitRamp == null &&
+                          explicitAmort == null;
+                        const effectiveRamp = explicitRamp ?? (usesDefault ? 3 : undefined);
+                        const effectiveAmort = explicitAmort ?? (usesDefault ? 12 : undefined);
+                        if (effectiveRamp == null && effectiveAmort == null) return null;
+                        return (
+                          <span
+                            className="text-xs text-zinc-500"
+                            title="Stepped ramp-up + tail amortisation (months). Edit to override."
+                          >
+                            Ramp/Amort{" "}
+                            <span className="font-semibold text-sky-700">
+                              {effectiveRamp ?? 0}/{effectiveAmort ?? 0}
+                            </span>
+                            {usesDefault ? (
+                              <span className="ml-1 text-[10px] uppercase tracking-wider text-zinc-400">
+                                default
+                              </span>
+                            ) : null}
+                          </span>
+                        );
+                      })()}
                       <AddProgramModal
                         defaultStartPeriod={defaultStartPeriod}
                         expenseAccountsForOverride={expenseAccounts}

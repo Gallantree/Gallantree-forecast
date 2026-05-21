@@ -19,7 +19,8 @@ export interface SerializedItem {
     | "loan"
     | "program_fee"
     | "platform_license"
-    | "program_liability";
+    | "program_liability"
+    | "program_upfront_fee";
   monthly: Record<string, string>; // periodKey -> value
 }
 
@@ -43,6 +44,7 @@ export interface OpexItemEditTarget {
 export interface PnlCascadeSeries {
   ebitda: Record<string, string>;
   depreciation: Record<string, string>;
+  issuanceAmortisation: Record<string, string>;
   ebit: Record<string, string>;
   interestExpense: Record<string, string>;
   pretaxIncome: Record<string, string>;
@@ -74,6 +76,7 @@ const SOURCE_LABEL: Record<SerializedItem["source"], string> = {
   program_fee: "fee",
   platform_license: "licence",
   program_liability: "liability",
+  program_upfront_fee: "issuance amort",
 };
 
 function fySum(values: Record<string, string>, months: string[]): number {
@@ -347,6 +350,12 @@ export function PnlClientTable(props: PnlClientTableProps) {
             <CascadeNegativeRow
               label="Less: Depreciation"
               totals={cascade.depreciation}
+              horizon={horizon}
+              groups={groups}
+            />
+            <CascadeNegativeRow
+              label="Less: Issuance cost amortisation"
+              totals={cascade.issuanceAmortisation}
               horizon={horizon}
               groups={groups}
             />

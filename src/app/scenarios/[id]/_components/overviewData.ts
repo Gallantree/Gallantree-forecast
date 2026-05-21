@@ -31,6 +31,7 @@ export interface OverviewData {
     revenue: number[];
     opex: number[];
     depreciation: number[];
+    issuanceAmortisation: number[];
     interestExpense: number[];
     ebitda: number[];
     ebit: number[];
@@ -42,6 +43,7 @@ export interface OverviewData {
     revenue: number;
     opex: number;
     depreciation: number;
+    issuanceAmortisation: number;
     interestExpense: number;
     ebitda: number;
     ebit: number;
@@ -80,6 +82,7 @@ export function buildOverviewData(
       }[];
     };
     depreciation: { periodKey: string; value: { toFixed: (n: number) => string } }[];
+    issuanceAmortisation: { periodKey: string; value: { toFixed: (n: number) => string } }[];
     interestExpense: { periodKey: string; value: { toFixed: (n: number) => string } }[];
     ebitda: { periodKey: string; value: { toFixed: (n: number) => string } }[];
     ebit: { periodKey: string; value: { toFixed: (n: number) => string } }[];
@@ -141,6 +144,7 @@ export function buildOverviewData(
   const revenue = sumByFy(pnlExt.revenue.totals);
   const opex = sumByFy(pnlExt.opex.totals);
   const depreciation = sumByFy(pnlExt.depreciation);
+  const issuanceAmortisation = sumByFy(pnlExt.issuanceAmortisation);
   const interestExpenseTotals = sumByFy(pnlExt.interestExpense);
   const ebitda = sumByFy(pnlExt.ebitda);
   const ebit = sumByFy(pnlExt.ebit);
@@ -165,6 +169,7 @@ export function buildOverviewData(
       revenue,
       opex,
       depreciation,
+      issuanceAmortisation,
       interestExpense: interestExpenseTotals,
       ebitda,
       ebit,
@@ -176,6 +181,7 @@ export function buildOverviewData(
       revenue: sum(revenue),
       opex: sum(opex),
       depreciation: sum(depreciation),
+      issuanceAmortisation: sum(issuanceAmortisation),
       interestExpense: sum(interestExpenseTotals),
       ebitda: sum(ebitda),
       ebit: sum(ebit),
@@ -254,6 +260,7 @@ export function toGallantreeOverview(data: OverviewData): OverviewData {
       revenue,
       opex: data.totals.opex,
       depreciation: data.totals.depreciation,
+      issuanceAmortisation: data.totals.issuanceAmortisation,
       interestExpense: data.fys.map(() => 0),
       ebitda,
       ebit,
@@ -265,6 +272,7 @@ export function toGallantreeOverview(data: OverviewData): OverviewData {
       revenue: sum(revenue),
       opex: data.fiveYear.opex,
       depreciation: data.fiveYear.depreciation,
+      issuanceAmortisation: data.fiveYear.issuanceAmortisation,
       interestExpense: 0,
       ebitda: sum(ebitda),
       ebit: sum(ebit),

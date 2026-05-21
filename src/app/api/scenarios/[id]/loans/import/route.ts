@@ -26,7 +26,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
   const buffer = await file.arrayBuffer();
   const scenarioId = new Types.ObjectId(id);
 
-  let loans;
+  let loans: Awaited<ReturnType<typeof parseLoanTape>>;
   try {
     loans = await parseLoanTape(buffer, scenarioId);
   } catch (err) {

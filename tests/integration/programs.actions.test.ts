@@ -153,6 +153,88 @@ describe("scenarios/[id] program actions", () => {
     expect(remaining[0]._id.toString()).toBe(b._id.toString());
   });
 
+  it("createProgram persists rampUpMonths + amortisationMonths when provided", async () => {
+    const scenario = await makeScenario();
+    await createProgram(
+      scenario._id.toString(),
+      basePayload({ rampUpMonths: 3, amortisationMonths: 12 }),
+    );
+    const found = await CapitalProgram.findOne({ scenarioId: scenario._id });
+    expect(found?.rampUpMonths).toBe(3);
+    expect(found?.amortisationMonths).toBe(12);
+  });
+
+  it("createProgram coerces non-positive ramp/amort to undefined", async () => {
+    const scenario = await makeScenario();
+    await createProgram(
+      scenario._id.toString(),
+      basePayload({ rampUpMonths: 0, amortisationMonths: -5 }),
+    );
+    const found = await CapitalProgram.findOne({ scenarioId: scenario._id });
+    expect(found?.rampUpMonths).toBeUndefined();
+    expect(found?.amortisationMonths).toBeUndefined();
+  });
+
+  it("updateProgram unsets ramp/amort when cleared, persists when set", async () => {
+    const scenario = await makeScenario();
+    await createProgram(
+      scenario._id.toString(),
+      basePayload({ rampUpMonths: 6, amortisationMonths: 24 }),
+    );
+    const created = await CapitalProgram.findOne({ scenarioId: scenario._id });
+    expect(created?.rampUpMonths).toBe(6);
+
+    // Clear by passing undefined (form left blank).
+    await updateProgram(
+      scenario._id.toString(),
+      created!._id.toString(),
+      basePayload({ rampUpMonths: undefined, amortisationMonths: undefined }),
+    );
+    const cleared = await CapitalProgram.findOne({ _id: created!._id });
+    expect(cleared?.rampUpMonths).toBeUndefined();
+    expect(cleared?.amortisationMonths).toBeUndefined();
+
+    // Re-set to new values.
+    await updateProgram(
+      scenario._id.toString(),
+      created!._id.toString(),
+      basePayload({ rampUpMonths: 2, amortisationMonths: 18 }),
+    );
+    const reset = await CapitalProgram.findOne({ _id: created!._id });
+    expect(reset?.rampUpMonths).toBe(2);
+    expect(reset?.amortisationMonths).toBe(18);
+  });
+
+  it("createProgram persists upfrontFees and sanitises malformed rows", async () => {
+    const scenario = await makeScenario();
+    await createProgram(
+      scenario._id.toString(),
+      basePayload({
+        upfrontFees: [
+          {
+            name: "Legal counsel",
+            category: "legal",
+            amount: "900000",
+            accountCode: "6900",
+          },
+          // Invalid: empty name
+          { name: "", category: "other", amount: "100", accountCode: "6900" },
+          // Invalid: bad amount
+          {
+            name: "Bad amount",
+            category: "underwriter",
+            amount: "not-a-number",
+            accountCode: "6900",
+          },
+        ],
+      }),
+    );
+    const found = await CapitalProgram.findOne({ scenarioId: scenario._id });
+    expect(found?.upfrontFees).toHaveLength(1);
+    expect(found?.upfrontFees?.[0].name).toBe("Legal counsel");
+    expect(Number(found?.upfrontFees?.[0].amount.toString())).toBe(900_000);
+  });
+
   it("cloneProgram duplicates fees + liabilities and tags name with (copy)", async () => {
     const scenario = await makeScenario();
     const original = await makeProgram(scenario._id, { name: "FL-1" });

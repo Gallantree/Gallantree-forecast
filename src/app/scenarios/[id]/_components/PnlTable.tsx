@@ -194,6 +194,7 @@ export function toGallantreePnl(
     newCascade = {
       ebitda: toStringMap(newEbitda),
       depreciation: cascade.depreciation,
+      issuanceAmortisation: cascade.issuanceAmortisation,
       ebit: toStringMap(newEbit),
       interestExpense: toStringMap(zeros),
       pretaxIncome: toStringMap(newPretax),

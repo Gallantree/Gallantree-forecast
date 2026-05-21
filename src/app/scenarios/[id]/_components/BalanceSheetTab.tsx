@@ -1,5 +1,6 @@
 import { Fragment } from "react";
 import { fmtMoney2, fmtNum0 } from "@/utils/format";
+import { EditWorkingCapitalModal } from "./EditWorkingCapitalModal";
 import type { FYGroup } from "./PnlClientTable";
 
 export interface SerializedSeries {
@@ -15,10 +16,12 @@ export interface BalanceSheetData {
   ppeGross: SerializedSeries;
   accumulatedDepreciation: SerializedSeries;
   ppeNet: SerializedSeries;
+  prepaidIssuanceCosts: SerializedSeries;
   totalAssets: SerializedSeries;
   // L&E
   ap: SerializedSeries;
   notesPayable: SerializedSeries;
+  deferredRevenue: SerializedSeries;
   equity: SerializedSeries;
   totalLiabilitiesAndEquity: SerializedSeries;
   // Headline
@@ -56,8 +59,14 @@ function maxDrift(bs: BalanceSheetData): number {
   return max;
 }
 
-export function BalanceSheetTab({ data }: { data: BalanceSheetData }) {
-  const { horizon, groups } = data;
+export function BalanceSheetTab({
+  scenarioId,
+  data,
+}: {
+  scenarioId: string;
+  data: BalanceSheetData;
+}) {
+  const { groups } = data;
   const drift = maxDrift(data);
   const drifted = drift > 1; // > $1 over any month means the model doesn't balance
 
@@ -79,6 +88,11 @@ export function BalanceSheetTab({ data }: { data: BalanceSheetData }) {
       <div className="flex flex-wrap items-center gap-x-6 gap-y-1 border-b border-zinc-200 bg-zinc-50 px-4 py-2 text-[11px] text-zinc-600">
         <Stat label="DSO (days)" value={data.assumptions.dsoDays ?? "0"} />
         <Stat label="DPO (days)" value={data.assumptions.dpoDays ?? "0"} />
+        <EditWorkingCapitalModal
+          scenarioId={scenarioId}
+          initialDso={data.assumptions.dsoDays ?? "0"}
+          initialDpo={data.assumptions.dpoDays ?? "0"}
+        />
         <Stat label="Tax rate" value={`${data.assumptions.taxRatePct ?? "0"}%`} />
         <Stat label="Opening cash" value={fmtMoney2(data.assumptions.openingCash ?? "0")} />
         <Stat label="Opening equity" value={fmtMoney2(data.assumptions.openingEquity ?? "0")} />
@@ -141,6 +155,11 @@ export function BalanceSheetTab({ data }: { data: BalanceSheetData }) {
               negative
             />
             <Row label="PPE — net" series={data.ppeNet} groups={groups} />
+            <Row
+              label="Prepaid issuance costs (deferred deal costs)"
+              series={data.prepaidIssuanceCosts}
+              groups={groups}
+            />
             <TotalRow label="Total assets" series={data.totalAssets} groups={groups} />
 
             <SectionHeader
@@ -152,6 +171,11 @@ export function BalanceSheetTab({ data }: { data: BalanceSheetData }) {
             <Row
               label="Notes payable (capital program liabilities)"
               series={data.notesPayable}
+              groups={groups}
+            />
+            <Row
+              label="Deferred revenue (annual-prepaid licences)"
+              series={data.deferredRevenue}
               groups={groups}
             />
             <Row

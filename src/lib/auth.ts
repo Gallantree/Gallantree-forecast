@@ -63,7 +63,6 @@ async function sendMagicLink({ identifier, url, expires, provider }: EmailProvid
   if (!apiKey) {
     // Dev fallback — print the link to the server console so the developer
     // can click through without configuring SendGrid.
-    // eslint-disable-next-line no-console
     console.log(
       `\n[auth] Magic link for ${identifier}:\n  ${url}\n  (set SENDGRID_API_KEY to send real email)\n`,
     );
@@ -144,14 +143,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // No invite on record — refuse silently. Returning false aborts
         // the flow; for email provider this means no email is ever sent.
         // Log so admins can spot brute-force attempts.
-        // eslint-disable-next-line no-console
         console.warn(
           `[auth] Sign-in blocked: no account for ${raw} (provider=${account?.provider ?? "unknown"})`,
         );
         return false;
       }
       if (doc.status === "disabled") {
-        // eslint-disable-next-line no-console
         console.warn(
           `[auth] Sign-in blocked: account disabled for ${raw} (provider=${account?.provider ?? "unknown"})`,
         );
@@ -200,8 +197,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       type: "email",
       from: process.env.SENDGRID_FROM_EMAIL,
       maxAge: 60 * 60, // 1-hour link validity
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      sendVerificationRequest: sendMagicLink as any,
+      // biome-ignore lint/suspicious/noExplicitAny: next-auth EmailConfig type signature for sendVerificationRequest is not exported cleanly
+      sendVerificationRequest: sendMagicLink as any, // eslint-disable-line @typescript-eslint/no-explicit-any
       server: {}, // unused — sendVerificationRequest handles delivery
       options: {},
     },
