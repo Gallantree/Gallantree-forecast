@@ -44,6 +44,13 @@ function isActive(periodKey: string, start: string, end: string | undefined): bo
   return true;
 }
 
+function monthsBetween(from: string, to: string): number {
+  // periodKeys are YYYY-MM. Signed month difference.
+  const [fy, fm] = from.split("-").map(Number);
+  const [ty, tm] = to.split("-").map(Number);
+  return (ty - fy) * 12 + (tm - fm);
+}
+
 export function projectComplianceLicense(
   l: ComplianceLicenseInput,
   horizon: string[],
@@ -113,12 +120,13 @@ export function projectPlatformLicense(l: PlatformLicenseInput, horizon: string[
 export function projectLicenseBillings(l: PlatformLicenseInput, horizon: string[]): MonthlyValue[] {
   const recognised = projectPlatformLicense(l, horizon);
   if (l.type !== "compliance" || l.billingFrequency !== "annual") return recognised;
-  const startIdx = horizon.indexOf(l.startPeriodKey);
-  if (startIdx < 0) return recognised;
+  // Anchor anniversaries to the license's startPeriodKey, not to its position
+  // within the horizon — a license that began before the horizon still has
+  // anniversary billings that fall inside it.
   return horizon.map((pk, i) => {
     if (!isActive(pk, l.startPeriodKey, l.endPeriodKey))
       return { periodKey: pk, value: ZERO as Money };
-    const monthsFromStart = i - startIdx;
+    const monthsFromStart = monthsBetween(l.startPeriodKey, pk);
     if (monthsFromStart < 0) return { periodKey: pk, value: ZERO as Money };
     if (monthsFromStart % 12 !== 0) return { periodKey: pk, value: ZERO as Money };
     let billing = ZERO as Money;
