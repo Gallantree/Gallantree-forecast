@@ -3,6 +3,10 @@ import type { CapitalRaiseInput } from "./capitalRaises";
 import { dateToPeriodKey, type LoanInput, PROGRAM_TYPE_ACCOUNT, type ProgramType } from "./loans";
 import type { PlatformLicenseInput } from "./platformLicenses";
 import type { DriverInput, HeadcountInput } from "./pnl";
+import {
+  DEFAULT_UPFRONT_FEE_ACCOUNT,
+  type ProgramUpfrontFeeInput,
+} from "./programUpfrontFees";
 import type {
   LiabilityCalculationMethod,
   LiabilityRateType,
@@ -149,7 +153,16 @@ interface LoanDoc {
   includeInRevenue?: boolean;
 }
 
-function toLoanInput(l: LoanDoc, accountCode: string): LoanInput {
+function toLoanInput(
+  l: LoanDoc,
+  accountCode: string,
+  programProfile?: {
+    startPeriodKey: string;
+    endPeriodKey?: string;
+    rampUpMonths?: number;
+    amortisationMonths?: number;
+  },
+): LoanInput {
   return {
     id: String(l._id),
     loanId: l.loanId,
@@ -159,6 +172,10 @@ function toLoanInput(l: LoanDoc, accountCode: string): LoanInput {
     originationPeriodKey: dateToPeriodKey(new Date(l.originationDate)),
     maturityPeriodKey: dateToPeriodKey(new Date(l.maturityDate)),
     creditSpreadBps: l.creditSpreadBps ?? 0,
+    programStartPeriodKey: programProfile?.startPeriodKey,
+    programEndPeriodKey: programProfile?.endPeriodKey,
+    rampUpMonths: programProfile?.rampUpMonths,
+    amortisationMonths: programProfile?.amortisationMonths,
   };
 }
 
@@ -181,6 +198,14 @@ interface ProgramLiabilityDoc {
   accountCode?: string;
 }
 
+interface ProgramUpfrontFeeDoc {
+  _id: unknown;
+  name: string;
+  category: "underwriter" | "legal" | "credit_rating" | "other";
+  amount: D128;
+  accountCode?: string;
+}
+
 interface ProgramDoc {
   _id: unknown;
   name: string;
@@ -190,7 +215,29 @@ interface ProgramDoc {
   endPeriodKey?: string;
   fees: ProgramFeeDoc[];
   liabilities?: ProgramLiabilityDoc[];
+  upfrontFees?: ProgramUpfrontFeeDoc[];
   gallantreeSharePct?: D128;
+  rampUpMonths?: number;
+  amortisationMonths?: number;
+}
+
+// Programs whose deal mechanics naturally include a stepped ramp-up and tail
+// amortisation. When a program of these types has no explicit ramp/amort set,
+// we apply sensible market defaults so loan revenue, fees, and notes scale
+// with the deal book rather than appearing flat from day 1.
+const DEFAULT_RAMP_AMORT_BY_TYPE: Record<string, { ramp: number; amort: number }> = {
+  CRE_CLO: { ramp: 3, amort: 12 },
+  CMBS: { ramp: 3, amort: 12 },
+};
+
+function rampWithDefaults(p: { type: string; rampUpMonths?: number }): number | undefined {
+  if (p.rampUpMonths != null) return p.rampUpMonths;
+  return DEFAULT_RAMP_AMORT_BY_TYPE[p.type]?.ramp;
+}
+
+function amortWithDefaults(p: { type: string; amortisationMonths?: number }): number | undefined {
+  if (p.amortisationMonths != null) return p.amortisationMonths;
+  return DEFAULT_RAMP_AMORT_BY_TYPE[p.type]?.amort;
 }
 
 function flattenProgramFees(programs: ProgramDoc[]): ProgramFeeInput[] {
@@ -211,6 +258,28 @@ function flattenProgramFees(programs: ProgramDoc[]): ProgramFeeInput[] {
         startPeriodKey: p.startPeriodKey,
         endPeriodKey: p.endPeriodKey,
         gallantreeSharePct: share,
+        rampUpMonths: rampWithDefaults(p),
+        amortisationMonths: amortWithDefaults(p),
+      });
+    }
+  }
+  return out;
+}
+
+function flattenProgramUpfrontFees(programs: ProgramDoc[]): ProgramUpfrontFeeInput[] {
+  const out: ProgramUpfrontFeeInput[] = [];
+  for (const p of programs) {
+    for (const u of p.upfrontFees ?? []) {
+      out.push({
+        id: String(u._id),
+        programId: String(p._id),
+        programName: p.name,
+        feeName: u.name,
+        category: u.category,
+        amount: u.amount.toString(),
+        accountCode: u.accountCode || DEFAULT_UPFRONT_FEE_ACCOUNT,
+        startPeriodKey: p.startPeriodKey,
+        endPeriodKey: p.endPeriodKey,
       });
     }
   }
@@ -236,6 +305,8 @@ function flattenProgramLiabilities(programs: ProgramDoc[]): ProgramLiabilityInpu
         accountCode: l.accountCode ?? "6800",
         startPeriodKey: p.startPeriodKey,
         endPeriodKey: p.endPeriodKey,
+        rampUpMonths: rampWithDefaults(p),
+        amortisationMonths: amortWithDefaults(p),
       });
     }
   }
@@ -310,6 +381,7 @@ export async function loadEngineInputs(scenarioId: string): Promise<{
   loans: LoanInput[];
   programFees: ProgramFeeInput[];
   programLiabilities: ProgramLiabilityInput[];
+  programUpfrontFees: ProgramUpfrontFeeInput[];
   platformLicenses: PlatformLicenseInput[];
   capitalRaises: CapitalRaiseInput[];
 }> {
@@ -330,20 +402,38 @@ export async function loadEngineInputs(scenarioId: string): Promise<{
     // program's type.
     loans: (() => {
       const programAccount = new Map<string, string>();
+      const programProfile = new Map<
+        string,
+        {
+          startPeriodKey: string;
+          endPeriodKey?: string;
+          rampUpMonths?: number;
+          amortisationMonths?: number;
+        }
+      >();
       for (const p of programDocs) {
         const t = p.type as ProgramType;
-        programAccount.set(String(p._id), PROGRAM_TYPE_ACCOUNT[t] ?? "4400");
+        const id = String(p._id);
+        programAccount.set(id, PROGRAM_TYPE_ACCOUNT[t] ?? "4400");
+        programProfile.set(id, {
+          startPeriodKey: p.startPeriodKey,
+          endPeriodKey: p.endPeriodKey,
+          rampUpMonths: rampWithDefaults(p),
+          amortisationMonths: amortWithDefaults(p),
+        });
       }
       return loanDocs
         .filter((l) => l.includeInRevenue !== false)
         .filter((l) => l.capitalProgramId)
         .map((l) => {
-          const acct = programAccount.get(String(l.capitalProgramId)) ?? "4400";
-          return toLoanInput(l, acct);
+          const pid = String(l.capitalProgramId);
+          const acct = programAccount.get(pid) ?? "4400";
+          return toLoanInput(l, acct, programProfile.get(pid));
         });
     })(),
     programFees: flattenProgramFees(programDocs),
     programLiabilities: flattenProgramLiabilities(programDocs),
+    programUpfrontFees: flattenProgramUpfrontFees(programDocs),
     platformLicenses: licenseDocs.map(toLicenseInput),
     capitalRaises: raiseDocs.map((r) => ({
       id: String(r._id),

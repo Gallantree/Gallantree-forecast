@@ -2,7 +2,12 @@
 
 import { useRef, useState, useTransition } from "react";
 import { parseDecimalInput } from "@/utils/format";
-import type { ProgramFeePayload, ProgramLiabilityPayload, ProgramPayload } from "../_actions";
+import type {
+  ProgramFeePayload,
+  ProgramLiabilityPayload,
+  ProgramPayload,
+  ProgramUpfrontFeePayload,
+} from "../_actions";
 
 interface LiabilityRow extends ProgramLiabilityPayload {
   rowKey: string;
@@ -74,6 +79,35 @@ function makeFeeRow(category: ProgramFeePayload["category"], name: string): FeeR
   };
 }
 
+const UPFRONT_FEE_CATEGORIES: {
+  value: ProgramUpfrontFeePayload["category"];
+  label: string;
+  defaultAccount: string;
+}[] = [
+  { value: "underwriter", label: "Underwriter", defaultAccount: "6900" },
+  { value: "legal", label: "Legal", defaultAccount: "6900" },
+  { value: "credit_rating", label: "Credit ratings", defaultAccount: "6900" },
+  { value: "other", label: "Other", defaultAccount: "6900" },
+];
+
+interface UpfrontFeeRow extends ProgramUpfrontFeePayload {
+  rowKey: string;
+}
+
+function makeUpfrontFeeRow(
+  category: ProgramUpfrontFeePayload["category"] = "other",
+  name = "",
+): UpfrontFeeRow {
+  const cat = UPFRONT_FEE_CATEGORIES.find((c) => c.value === category)!;
+  return {
+    rowKey: crypto.randomUUID(),
+    name,
+    category,
+    amount: "0",
+    accountCode: cat.defaultAccount,
+  };
+}
+
 export type ProgramFormInitial = {
   name: string;
   type: ProgramPayload["type"];
@@ -89,8 +123,13 @@ export type ProgramFormInitial = {
   // Whole-percent string (e.g. "33" = 33%); persisted as a decimal fraction
   // (0.33). Applied only to servicing-category fees by the engine.
   gallantreeSharePct?: string;
+  // Stepped monthly ramp-up. Months; absent → no ramp.
+  rampUpMonths?: number;
+  // Tail amortisation in months. Absent → bullet maturity.
+  amortisationMonths?: number;
   fees: ProgramFeePayload[];
   liabilities?: ProgramLiabilityPayload[];
+  upfrontFees?: ProgramUpfrontFeePayload[];
 };
 
 function defaultInitial(startPeriod: string): ProgramFormInitial {
@@ -153,12 +192,23 @@ export function AddProgramModal({
   // numbers. Converted to a decimal fraction in handleSubmit.
   const [arrearsPctTarget, setArrearsPctTarget] = useState(seed.arrearsPctTarget ?? "");
   const [gallantreeSharePct, setGallantreeSharePct] = useState(seed.gallantreeSharePct ?? "33");
+  const [rampUpMonths, setRampUpMonths] = useState(
+    seed.rampUpMonths != null ? String(seed.rampUpMonths) : "",
+  );
+  const [amortisationMonths, setAmortisationMonths] = useState(
+    seed.amortisationMonths != null ? String(seed.amortisationMonths) : "",
+  );
   const [fees, setFees] = useState<FeeRow[]>(
     initial ? initial.fees.map((f) => ({ rowKey: crypto.randomUUID(), ...f })) : defaultFeeRows(),
   );
   const [liabilities, setLiabilities] = useState<LiabilityRow[]>(
     initial?.liabilities?.length
       ? initial.liabilities.map((l) => ({ rowKey: crypto.randomUUID(), ...l }))
+      : [],
+  );
+  const [upfrontFees, setUpfrontFees] = useState<UpfrontFeeRow[]>(
+    initial?.upfrontFees?.length
+      ? initial.upfrontFees.map((u) => ({ rowKey: crypto.randomUUID(), ...u }))
       : [],
   );
 
@@ -173,6 +223,8 @@ export function AddProgramModal({
     setNotes(s.notes ?? "");
     setArrearsPctTarget(s.arrearsPctTarget ?? "");
     setGallantreeSharePct(s.gallantreeSharePct ?? "33");
+    setRampUpMonths(s.rampUpMonths != null ? String(s.rampUpMonths) : "");
+    setAmortisationMonths(s.amortisationMonths != null ? String(s.amortisationMonths) : "");
     setFees(
       initial ? s.fees.map((f) => ({ rowKey: crypto.randomUUID(), ...f })) : defaultFeeRows(),
     );
@@ -181,6 +233,21 @@ export function AddProgramModal({
         ? initial.liabilities.map((l) => ({ rowKey: crypto.randomUUID(), ...l }))
         : [],
     );
+    setUpfrontFees(
+      initial?.upfrontFees?.length
+        ? initial.upfrontFees.map((u) => ({ rowKey: crypto.randomUUID(), ...u }))
+        : [],
+    );
+  }
+
+  function updateUpfrontFee(i: number, patch: Partial<UpfrontFeeRow>) {
+    setUpfrontFees((arr) => arr.map((u, idx) => (idx === i ? { ...u, ...patch } : u)));
+  }
+  function removeUpfrontFee(i: number) {
+    setUpfrontFees((arr) => arr.filter((_, idx) => idx !== i));
+  }
+  function addUpfrontFee() {
+    setUpfrontFees((arr) => [...arr, makeUpfrontFeeRow()]);
   }
 
   function updateLiability(i: number, patch: Partial<LiabilityRow>) {
@@ -243,6 +310,14 @@ export function AddProgramModal({
       notes: notes.trim() || undefined,
       arrearsPctTarget: arrearsAsFraction,
       gallantreeSharePct: shareAsFraction,
+      rampUpMonths: (() => {
+        const n = Number(rampUpMonths.trim());
+        return Number.isFinite(n) && n > 0 ? Math.floor(n) : undefined;
+      })(),
+      amortisationMonths: (() => {
+        const n = Number(amortisationMonths.trim());
+        return Number.isFinite(n) && n > 0 ? Math.floor(n) : undefined;
+      })(),
       fees: fees.map(({ rowKey: _rk, ...f }) => {
         void _rk;
         return f;
@@ -250,6 +325,10 @@ export function AddProgramModal({
       liabilities: liabilities.map(({ rowKey: _rk, ...l }) => {
         void _rk;
         return l;
+      }),
+      upfrontFees: upfrontFees.map(({ rowKey: _rk, ...u }) => {
+        void _rk;
+        return u;
       }),
     };
     const action = saveAction ?? createAction;
@@ -378,6 +457,34 @@ export function AddProgramModal({
                   className="rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
                 />
               </Field>
+              <Field
+                label="Ramp-up (months)"
+                hint="stepped monthly fill; e.g. 3 = 90 days"
+              >
+                <input
+                  type="number"
+                  min={0}
+                  step="1"
+                  value={rampUpMonths}
+                  onChange={(e) => setRampUpMonths(e.target.value)}
+                  placeholder="3"
+                  className="rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
+                />
+              </Field>
+              <Field
+                label="Amortisation (months)"
+                hint="linear paydown over the final N months"
+              >
+                <input
+                  type="number"
+                  min={0}
+                  step="1"
+                  value={amortisationMonths}
+                  onChange={(e) => setAmortisationMonths(e.target.value)}
+                  placeholder="12"
+                  className="rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
+                />
+              </Field>
             </section>
 
             <section className="flex flex-col gap-2">
@@ -502,6 +609,107 @@ export function AddProgramModal({
                       <tr>
                         <td colSpan={7} className="px-2 py-3 text-center text-zinc-400">
                           No fee streams. Click + Add fee.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section className="flex flex-col gap-2">
+              <div className="flex items-baseline justify-between">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-600">
+                  Upfront issuance costs
+                  <span className="ml-2 font-normal text-zinc-400">
+                    one-off — underwriter, legal, ratings, etc.
+                  </span>
+                </h3>
+                <button
+                  type="button"
+                  onClick={addUpfrontFee}
+                  className="rounded-md border border-zinc-300 px-2 py-0.5 text-xs text-zinc-700 hover:bg-zinc-100"
+                >
+                  + Add cost
+                </button>
+              </div>
+              <div className="overflow-hidden rounded-md border border-zinc-200">
+                <table className="w-full border-collapse text-xs">
+                  <thead className="bg-zinc-50 text-zinc-500">
+                    <tr>
+                      <th className="px-2 py-1.5 text-left font-medium">Name</th>
+                      <th className="px-2 py-1.5 text-left font-medium">Category</th>
+                      <th className="px-2 py-1.5 text-right font-medium">Amount ($)</th>
+                      <th className="px-2 py-1.5 text-left font-medium">Account</th>
+                      <th className="w-8" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {upfrontFees.map((u, i) => (
+                      <tr key={u.rowKey} className="border-t border-zinc-100">
+                        <td className="px-2 py-1">
+                          <input
+                            value={u.name}
+                            onChange={(e) => updateUpfrontFee(i, { name: e.target.value })}
+                            placeholder="e.g. Legal counsel"
+                            className="w-full rounded border border-zinc-300 px-2 py-1"
+                          />
+                        </td>
+                        <td className="px-2 py-1">
+                          <select
+                            value={u.category}
+                            onChange={(e) => {
+                              const newCat = e.target
+                                .value as ProgramUpfrontFeePayload["category"];
+                              const def = UPFRONT_FEE_CATEGORIES.find((c) => c.value === newCat);
+                              updateUpfrontFee(i, {
+                                category: newCat,
+                                accountCode: def?.defaultAccount ?? u.accountCode,
+                              });
+                            }}
+                            className="w-full rounded border border-zinc-300 px-1 py-1"
+                          >
+                            {UPFRONT_FEE_CATEGORIES.map((c) => (
+                              <option key={c.value} value={c.value}>
+                                {c.label}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="px-2 py-1">
+                          <input
+                            value={u.amount}
+                            onChange={(e) => updateUpfrontFee(i, { amount: e.target.value })}
+                            inputMode="decimal"
+                            className="w-full rounded border border-zinc-300 px-2 py-1 text-right tabular-nums"
+                          />
+                        </td>
+                        <td className="px-2 py-1">
+                          <input
+                            value={u.accountCode ?? ""}
+                            onChange={(e) =>
+                              updateUpfrontFee(i, { accountCode: e.target.value })
+                            }
+                            placeholder="6900"
+                            className="w-full rounded border border-zinc-300 px-2 py-1 font-mono"
+                          />
+                        </td>
+                        <td className="px-1 text-right">
+                          <button
+                            type="button"
+                            onClick={() => removeUpfrontFee(i)}
+                            className="rounded px-1 text-zinc-400 hover:bg-rose-50 hover:text-rose-600"
+                            title="Remove"
+                          >
+                            ×
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {upfrontFees.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="px-2 py-3 text-center text-zinc-400">
+                          No upfront costs. Click + Add cost.
                         </td>
                       </tr>
                     )}

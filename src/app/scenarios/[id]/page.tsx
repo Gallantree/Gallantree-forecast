@@ -437,6 +437,8 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
       }>;
       arrearsPctTarget?: { toString: () => string };
       gallantreeSharePct?: { toString: () => string };
+      rampUpMonths?: number;
+      amortisationMonths?: number;
     }>
   ).map((p) => ({
     _id: p._id.toString(),
@@ -479,6 +481,8 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
     gallantreeSharePct: p.gallantreeSharePct
       ? { toString: () => p.gallantreeSharePct!.toString() }
       : undefined,
+    rampUpMonths: p.rampUpMonths,
+    amortisationMonths: p.amortisationMonths,
   }));
 
   const raiseRows: CapitalRaiseRow[] = (
@@ -583,6 +587,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
           inputs.platformLicenses,
           inputs.programLiabilities,
           inputs.capitalRaises,
+          inputs.programUpfrontFees,
         )
       : null;
 
@@ -682,9 +687,12 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
           groups: buildFYGroups(scenarioPeriods),
           netIncome: serializeSeries(cf.netIncome),
           depreciation: serializeSeries(cf.depreciation),
+          issuanceAmortisation: serializeSeries(cf.issuanceAmortisation),
           changeInAr: serializeSeries(cf.changeInAr),
           changeInAp: serializeSeries(cf.changeInAp),
+          changeInDeferredRevenue: serializeSeries(cf.changeInDeferredRevenue),
           capexOutflow: serializeSeries(cf.capexOutflow),
+          issuanceCostOutflow: serializeSeries(cf.issuanceCostOutflow),
           notesIssuance: serializeSeries(cf.notesIssuance),
           notesRepayment: serializeSeries(cf.notesRepayment),
           equityProceeds: serializeSeries(cf.equityProceeds),
@@ -708,9 +716,11 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
         ppeGross: serializeSeries(statements.bs.ppeGross),
         accumulatedDepreciation: serializeSeries(statements.bs.accumulatedDepreciation),
         ppeNet: serializeSeries(statements.bs.ppeNet),
+        prepaidIssuanceCosts: serializeSeries(statements.bs.prepaidIssuanceCosts),
         totalAssets: serializeSeries(statements.bs.totalAssets),
         ap: serializeSeries(statements.bs.ap),
         notesPayable: serializeSeries(statements.bs.notesPayable),
+        deferredRevenue: serializeSeries(statements.bs.deferredRevenue),
         equity: serializeSeries(statements.bs.equity),
         totalLiabilitiesAndEquity: serializeSeries(statements.bs.totalLiabilitiesAndEquity),
         closingCash: statements.bs.cash[statements.bs.cash.length - 1].value.toFixed(2),
@@ -896,6 +906,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
                     ? {
                         ebitda: monthlyMap(statements.pnl.ebitda),
                         depreciation: monthlyMap(statements.pnl.depreciation),
+                        issuanceAmortisation: monthlyMap(statements.pnl.issuanceAmortisation),
                         ebit: monthlyMap(statements.pnl.ebit),
                         interestExpense: monthlyMap(statements.pnl.interestExpense),
                         pretaxIncome: monthlyMap(statements.pnl.pretaxIncome),
@@ -928,6 +939,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
                   ? {
                       ebitda: monthlyMap(statements.pnl.ebitda),
                       depreciation: monthlyMap(statements.pnl.depreciation),
+                      issuanceAmortisation: monthlyMap(statements.pnl.issuanceAmortisation),
                       ebit: monthlyMap(statements.pnl.ebit),
                       interestExpense: monthlyMap(statements.pnl.interestExpense),
                       pretaxIncome: monthlyMap(statements.pnl.pretaxIncome),
@@ -1044,14 +1056,14 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
 
         {tab === "balance-sheet" &&
           (balanceSheetData ? (
-            <BalanceSheetTab data={balanceSheetData} />
+            <BalanceSheetTab scenarioId={id} data={balanceSheetData} />
           ) : (
             <Stub title="Balance Sheet" message="Seed periods first — run `npm run seed`." />
           ))}
 
         {tab === "cashflow" &&
           (cashflowData ? (
-            <CashflowTab data={cashflowData} />
+            <CashflowTab scenarioId={id} data={cashflowData} />
           ) : (
             <Stub title="Cashflow" message="Seed periods first — run `npm run seed`." />
           ))}

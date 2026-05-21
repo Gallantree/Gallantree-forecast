@@ -84,6 +84,13 @@ export function ConsolidatedModal({
       indent: true,
     },
     {
+      label: "Less: Issuance cost amortisation",
+      perFy: totals.issuanceAmortisation.map((v) => -Math.abs(v)),
+      total: -Math.abs(fiveYear.issuanceAmortisation),
+      tone: "muted",
+      indent: true,
+    },
+    {
       label: "EBIT (Operating income)",
       perFy: totals.ebit,
       total: fiveYear.ebit,

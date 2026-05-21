@@ -1,6 +1,7 @@
 import type Decimal from "decimal.js";
 import { type Money, money, ZERO } from "@/utils/money";
 import type { MonthlyValue } from "./pnl";
+import { programBalanceFactor } from "./programFactor";
 
 export type FeeCategory = "senior_mgmt" | "subordinate_mgmt" | "servicing" | "other";
 
@@ -21,6 +22,11 @@ export interface ProgramFeeInput {
   // ~33% and the rest passes through to the originator/trustee. Absent →
   // 1.0 for non-servicing, 0.33 for servicing.
   gallantreeSharePct?: Decimal.Value;
+  // Program-level ramp/amort profile. Scales the fee basis (which is balance-
+  // pegged) so management/servicing fees during ramp and tail-amort match the
+  // partially-drawn book.
+  rampUpMonths?: number;
+  amortisationMonths?: number;
 }
 
 export const DEFAULT_SERVICING_SHARE = 0.33;
@@ -47,8 +53,18 @@ export function projectProgramFee(fee: ProgramFeeInput, horizon: string[]): Mont
       ? money(fee.gallantreeSharePct ?? DEFAULT_SERVICING_SHARE)
       : money(fee.gallantreeSharePct ?? 1);
   const monthly: Money = money(fee.basisAmount).times(fee.feeBps).div(10000).times(share).div(12);
-  return horizon.map((pk) => ({
-    periodKey: pk,
-    value: isActive(pk, fee.startPeriodKey, fee.endPeriodKey) ? monthly : (ZERO as Money),
-  }));
+  const hasProfile = !!(fee.rampUpMonths || fee.amortisationMonths);
+  return horizon.map((pk) => {
+    if (!isActive(pk, fee.startPeriodKey, fee.endPeriodKey)) {
+      return { periodKey: pk, value: ZERO as Money };
+    }
+    if (!hasProfile) return { periodKey: pk, value: monthly };
+    const factor = programBalanceFactor(pk, {
+      startPeriodKey: fee.startPeriodKey,
+      endPeriodKey: fee.endPeriodKey,
+      rampUpMonths: fee.rampUpMonths,
+      amortisationMonths: fee.amortisationMonths,
+    });
+    return { periodKey: pk, value: monthly.times(factor) };
+  });
 }

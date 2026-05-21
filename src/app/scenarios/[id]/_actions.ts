@@ -45,6 +45,13 @@ export type ProgramLiabilityPayload = {
   rateType: "fixed" | "variable";
   accountCode?: string;
 };
+
+export type ProgramUpfrontFeePayload = {
+  name: string;
+  category: "underwriter" | "legal" | "credit_rating" | "other";
+  amount: string;
+  accountCode?: string;
+};
 export type ProgramPayload = {
   name: string;
   type: "CRE_CLO" | "CMBS" | "MIT_FUND" | "WAREHOUSE" | "OTHER";
@@ -58,8 +65,13 @@ export type ProgramPayload = {
   // Decimal fraction (0.33 = 33%) — Gallantree's share of servicing fees.
   // UI sends whole percent ("33") that we convert before persisting.
   gallantreeSharePct?: string;
+  // Stepped monthly ramp-up — number of months. 0/undefined → no ramp.
+  rampUpMonths?: number;
+  // Linear tail amortisation — number of months. 0/undefined → bullet.
+  amortisationMonths?: number;
   fees: ProgramFeePayload[];
   liabilities?: ProgramLiabilityPayload[];
+  upfrontFees?: ProgramUpfrontFeePayload[];
 };
 
 const PERIOD_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -269,6 +281,27 @@ const PROGRAM_TYPES = new Set(["CRE_CLO", "CMBS", "MIT_FUND", "WAREHOUSE", "OTHE
 const FEE_CATEGORIES = new Set(["senior_mgmt", "subordinate_mgmt", "servicing", "other"]);
 const LIABILITY_CALC_METHODS = new Set(["monthly", "quarterly", "annually"]);
 const LIABILITY_RATE_TYPES = new Set(["fixed", "variable"]);
+const UPFRONT_FEE_CATEGORIES = new Set(["underwriter", "legal", "credit_rating", "other"]);
+
+function sanitiseUpfrontFees(payload: ProgramPayload) {
+  const list = payload.upfrontFees ?? [];
+  return list
+    .filter((u) => {
+      if (!u.name?.trim()) return false;
+      if (!UPFRONT_FEE_CATEGORIES.has(u.category)) return false;
+      // Test the raw input (with commas/whitespace stripped) — not
+      // parseDecimalInput, which silently coerces garbage to "0" and would
+      // let "not-a-number" slip through before toDecimal128() throws.
+      const stripped = String(u.amount ?? "").replace(/[,\s]/g, "");
+      return /^-?\d+(\.\d+)?$/.test(stripped);
+    })
+    .map((u) => ({
+      name: u.name.trim(),
+      category: u.category,
+      amount: toDecimal128(parseDecimalInput(u.amount)),
+      accountCode: u.accountCode?.trim() || undefined,
+    }));
+}
 
 function sanitiseLiabilities(payload: ProgramPayload) {
   const list = payload.liabilities ?? [];
@@ -329,8 +362,17 @@ export async function createProgram(scenarioId: string, payload: ProgramPayload)
     gallantreeSharePct: payload.gallantreeSharePct
       ? toDecimal128(payload.gallantreeSharePct)
       : undefined,
+    rampUpMonths:
+      Number.isFinite(payload.rampUpMonths) && (payload.rampUpMonths as number) > 0
+        ? Math.floor(payload.rampUpMonths as number)
+        : undefined,
+    amortisationMonths:
+      Number.isFinite(payload.amortisationMonths) && (payload.amortisationMonths as number) > 0
+        ? Math.floor(payload.amortisationMonths as number)
+        : undefined,
     fees,
     liabilities: sanitiseLiabilities(payload),
+    upfrontFees: sanitiseUpfrontFees(payload),
   });
   revalidatePath(`/scenarios/${scenarioId}`);
 }
@@ -363,6 +405,11 @@ export async function updateProgram(
       accountCode: f.accountCode,
     }));
 
+  const rampValid =
+    Number.isFinite(payload.rampUpMonths) && (payload.rampUpMonths as number) > 0;
+  const amortValid =
+    Number.isFinite(payload.amortisationMonths) && (payload.amortisationMonths as number) > 0;
+
   await connectToDatabase();
   await CapitalProgram.updateOne(
     { _id: programId, scenarioId },
@@ -383,8 +430,13 @@ export async function updateProgram(
         gallantreeSharePct: payload.gallantreeSharePct
           ? toDecimal128(payload.gallantreeSharePct)
           : undefined,
+        ...(rampValid ? { rampUpMonths: Math.floor(payload.rampUpMonths as number) } : {}),
+        ...(amortValid
+          ? { amortisationMonths: Math.floor(payload.amortisationMonths as number) }
+          : {}),
         fees,
         liabilities: sanitiseLiabilities(payload),
+        upfrontFees: sanitiseUpfrontFees(payload),
       },
       $unset: {
         ...(payload.dealSize ? {} : { dealSize: "" }),
@@ -393,6 +445,8 @@ export async function updateProgram(
         ...(payload.notes ? {} : { notes: "" }),
         ...(payload.arrearsPctTarget ? {} : { arrearsPctTarget: "" }),
         ...(payload.gallantreeSharePct ? {} : { gallantreeSharePct: "" }),
+        ...(rampValid ? {} : { rampUpMonths: "" }),
+        ...(amortValid ? {} : { amortisationMonths: "" }),
       },
     },
   );
@@ -2074,4 +2128,31 @@ export async function seedInitialConvertibleNote(scenarioId: string): Promise<Se
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
+}
+
+export async function updateOpeningCash(scenarioId: string, value: string): Promise<void> {
+  if (!Types.ObjectId.isValid(scenarioId)) return;
+  const cleaned = parseDecimalInput(value);
+  await connectToDatabase();
+  await Scenario.updateOne(
+    { _id: scenarioId },
+    { $set: { openingCash: toDecimal128(cleaned) } },
+  );
+  revalidatePath(`/scenarios/${scenarioId}`);
+}
+
+export async function updateWorkingCapitalDays(
+  scenarioId: string,
+  payload: { dsoDays: string; dpoDays: string },
+): Promise<void> {
+  if (!Types.ObjectId.isValid(scenarioId)) return;
+  const dso = parseDecimalInput(payload.dsoDays);
+  const dpo = parseDecimalInput(payload.dpoDays);
+  if (Number(dso) < 0 || Number(dpo) < 0) return;
+  await connectToDatabase();
+  await Scenario.updateOne(
+    { _id: scenarioId },
+    { $set: { dsoDays: toDecimal128(dso), dpoDays: toDecimal128(dpo) } },
+  );
+  revalidatePath(`/scenarios/${scenarioId}`);
 }

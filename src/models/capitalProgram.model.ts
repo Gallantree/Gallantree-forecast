@@ -65,6 +65,15 @@ export interface ICapitalProgram {
   // Applied in the engine only to fees with category === "servicing"; absent
   // → defaults to 0.33 at projection time.
   gallantreeSharePct?: Types.Decimal128;
+  // Stepped monthly ramp-up of the deal balance. During the first
+  // `rampUpMonths` from `startPeriodKey`, the program's loan revenue and
+  // management/servicing fees ramp linearly to 100%. Note interest expense
+  // and the notes-payable BS balance ramp in step. Absent or 0 → no ramp.
+  rampUpMonths?: number;
+  // Linear tail amortisation. During the final `amortisationMonths` of the
+  // program (ending at `endPeriodKey`), loan revenue, fees, and notes wind
+  // down to zero. Absent or 0 → bullet maturity.
+  amortisationMonths?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -141,6 +150,8 @@ const capitalProgramSchema = new Schema<ICapitalProgram>(
     upfrontFees: { type: [programUpfrontFeeSchema], default: [] },
     arrearsPctTarget: { type: Schema.Types.Decimal128 },
     gallantreeSharePct: { type: Schema.Types.Decimal128 },
+    rampUpMonths: { type: Number, min: 0 },
+    amortisationMonths: { type: Number, min: 0 },
   },
   { timestamps: true },
 );
