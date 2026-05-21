@@ -115,6 +115,7 @@ export function SeedLoansModal({
 
   // When the style flips or the underlying program list changes, rebuild
   // rows so the grid mirrors the new program set.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: buildDefaultRows is intentionally not a dep — we only want to rebuild on matchingPrograms changes
   useEffect(() => {
     setRows(buildDefaultRows(matchingPrograms));
     // eslint-disable-next-line react-hooks/exhaustive-deps

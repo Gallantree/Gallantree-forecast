@@ -137,7 +137,7 @@ export function LoansTab({
   loans,
   baseRateBps,
   fys,
-  growthProfiles,
+  growthProfiles: _growthProfiles,
   programs,
   seedEnabled,
 }: {

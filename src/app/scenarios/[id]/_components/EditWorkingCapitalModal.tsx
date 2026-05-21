@@ -53,13 +53,12 @@ export function EditWorkingCapitalModal({
           <div className="flex w-[440px] flex-col gap-4 p-6 text-sm">
             <header className="flex items-baseline justify-between">
               <h2 className="text-base font-semibold">Working capital days</h2>
-              <span className="text-[10px] uppercase tracking-wider text-zinc-400">
-                DSO / DPO
-              </span>
+              <span className="text-[10px] uppercase tracking-wider text-zinc-400">DSO / DPO</span>
             </header>
             <p className="text-[11px] text-zinc-500">
-              DSO scales accounts receivable as <span className="font-mono">revenue × (DSO / 30)</span>;
-              DPO scales accounts payable from cash opex. Use 0 for revenue billed upfront.
+              DSO scales accounts receivable as{" "}
+              <span className="font-mono">revenue × (DSO / 30)</span>; DPO scales accounts payable
+              from cash opex. Use 0 for revenue billed upfront.
             </p>
             <div className="grid grid-cols-2 gap-3">
               <Field label="DSO (days)" hint="receivables collection lag">

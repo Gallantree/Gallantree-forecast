@@ -405,8 +405,7 @@ export async function updateProgram(
       accountCode: f.accountCode,
     }));
 
-  const rampValid =
-    Number.isFinite(payload.rampUpMonths) && (payload.rampUpMonths as number) > 0;
+  const rampValid = Number.isFinite(payload.rampUpMonths) && (payload.rampUpMonths as number) > 0;
   const amortValid =
     Number.isFinite(payload.amortisationMonths) && (payload.amortisationMonths as number) > 0;
 
@@ -2134,10 +2133,7 @@ export async function updateOpeningCash(scenarioId: string, value: string): Prom
   if (!Types.ObjectId.isValid(scenarioId)) return;
   const cleaned = parseDecimalInput(value);
   await connectToDatabase();
-  await Scenario.updateOne(
-    { _id: scenarioId },
-    { $set: { openingCash: toDecimal128(cleaned) } },
-  );
+  await Scenario.updateOne({ _id: scenarioId }, { $set: { openingCash: toDecimal128(cleaned) } });
   revalidatePath(`/scenarios/${scenarioId}`);
 }
 

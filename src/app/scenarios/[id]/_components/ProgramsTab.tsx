@@ -363,10 +363,8 @@ export function ProgramsTab({
                           (p.type === "CRE_CLO" || p.type === "CMBS") &&
                           explicitRamp == null &&
                           explicitAmort == null;
-                        const effectiveRamp =
-                          explicitRamp ?? (usesDefault ? 3 : undefined);
-                        const effectiveAmort =
-                          explicitAmort ?? (usesDefault ? 12 : undefined);
+                        const effectiveRamp = explicitRamp ?? (usesDefault ? 3 : undefined);
+                        const effectiveAmort = explicitAmort ?? (usesDefault ? 12 : undefined);
                         if (effectiveRamp == null && effectiveAmort == null) return null;
                         return (
                           <span

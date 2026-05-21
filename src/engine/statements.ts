@@ -11,12 +11,6 @@ import {
   projectLicenseBillings,
   projectPlatformLicense,
 } from "./platformLicenses";
-import { programBalanceFactor } from "./programFactor";
-import {
-  type ProgramUpfrontFeeInput,
-  projectUpfrontFeeAmortisation,
-  projectUpfrontFeeCashOutflow,
-} from "./programUpfrontFees";
 import {
   type CapexStraightLineDriverInput,
   computePnL,
@@ -26,8 +20,14 @@ import {
   type PnL,
   projectCapexDepreciation,
 } from "./pnl";
+import { programBalanceFactor } from "./programFactor";
 import type { ProgramLiabilityInput } from "./programLiabilities";
 import type { ProgramFeeInput } from "./programs";
+import {
+  type ProgramUpfrontFeeInput,
+  projectUpfrontFeeAmortisation,
+  projectUpfrontFeeCashOutflow,
+} from "./programUpfrontFees";
 
 export interface ScenarioAssumptions {
   dsoDays?: Decimal.Value;

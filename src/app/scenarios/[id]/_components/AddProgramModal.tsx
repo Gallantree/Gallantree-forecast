@@ -457,10 +457,7 @@ export function AddProgramModal({
                   className="rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
                 />
               </Field>
-              <Field
-                label="Ramp-up (months)"
-                hint="stepped monthly fill; e.g. 3 = 90 days"
-              >
+              <Field label="Ramp-up (months)" hint="stepped monthly fill; e.g. 3 = 90 days">
                 <input
                   type="number"
                   min={0}
@@ -471,10 +468,7 @@ export function AddProgramModal({
                   className="rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
                 />
               </Field>
-              <Field
-                label="Amortisation (months)"
-                hint="linear paydown over the final N months"
-              >
+              <Field label="Amortisation (months)" hint="linear paydown over the final N months">
                 <input
                   type="number"
                   min={0}
@@ -659,8 +653,7 @@ export function AddProgramModal({
                           <select
                             value={u.category}
                             onChange={(e) => {
-                              const newCat = e.target
-                                .value as ProgramUpfrontFeePayload["category"];
+                              const newCat = e.target.value as ProgramUpfrontFeePayload["category"];
                               const def = UPFRONT_FEE_CATEGORIES.find((c) => c.value === newCat);
                               updateUpfrontFee(i, {
                                 category: newCat,
@@ -687,9 +680,7 @@ export function AddProgramModal({
                         <td className="px-2 py-1">
                           <input
                             value={u.accountCode ?? ""}
-                            onChange={(e) =>
-                              updateUpfrontFee(i, { accountCode: e.target.value })
-                            }
+                            onChange={(e) => updateUpfrontFee(i, { accountCode: e.target.value })}
                             placeholder="6900"
                             className="w-full rounded border border-zinc-300 px-2 py-1 font-mono"
                           />

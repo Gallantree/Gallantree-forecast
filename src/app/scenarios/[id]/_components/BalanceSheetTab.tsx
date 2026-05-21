@@ -66,7 +66,7 @@ export function BalanceSheetTab({
   scenarioId: string;
   data: BalanceSheetData;
 }) {
-  const { horizon, groups } = data;
+  const { groups } = data;
   const drift = maxDrift(data);
   const drifted = drift > 1; // > $1 over any month means the model doesn't balance
 

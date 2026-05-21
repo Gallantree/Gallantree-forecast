@@ -21,7 +21,6 @@ import {
   PlatformLicense,
   Scenario,
 } from "@/models";
-import { fmtMoney2 } from "@/utils/format";
 import { addDriver } from "./_actions";
 import {
   type BalanceSheetData,
@@ -364,7 +363,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
   for (const l of loanRows) {
     const pid = l.capitalProgramId;
     if (!pid) continue;
-    const bucket = (programAggregates[pid] ??= {
+    programAggregates[pid] ??= {
       loanCount: 0,
       totalBalance: 0,
       weightSumScore: 0,
@@ -376,7 +375,8 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
       weightBalanceForDscr: 0,
       weightBalanceForSpread: 0,
       fundingWasBps: programFundingBpsById[pid] ?? 0,
-    });
+    };
+    const bucket = programAggregates[pid];
     const bal = Number(l.balance.toString());
     bucket.loanCount += 1;
     bucket.totalBalance += bal;

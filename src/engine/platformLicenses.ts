@@ -110,10 +110,7 @@ export function projectPlatformLicense(l: PlatformLicenseInput, horizon: string[
 // this matches recognition; for annual billing it lumps 12 months of recognised
 // revenue into the anniversary month (start, +12, +24, …). The gap between
 // billings and recognition is deferred revenue (a current liability).
-export function projectLicenseBillings(
-  l: PlatformLicenseInput,
-  horizon: string[],
-): MonthlyValue[] {
+export function projectLicenseBillings(l: PlatformLicenseInput, horizon: string[]): MonthlyValue[] {
   const recognised = projectPlatformLicense(l, horizon);
   if (l.type !== "compliance" || l.billingFrequency !== "annual") return recognised;
   const startIdx = horizon.indexOf(l.startPeriodKey);

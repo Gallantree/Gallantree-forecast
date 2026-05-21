@@ -3,16 +3,13 @@ import type { CapitalRaiseInput } from "./capitalRaises";
 import { dateToPeriodKey, type LoanInput, PROGRAM_TYPE_ACCOUNT, type ProgramType } from "./loans";
 import type { PlatformLicenseInput } from "./platformLicenses";
 import type { DriverInput, HeadcountInput } from "./pnl";
-import {
-  DEFAULT_UPFRONT_FEE_ACCOUNT,
-  type ProgramUpfrontFeeInput,
-} from "./programUpfrontFees";
 import type {
   LiabilityCalculationMethod,
   LiabilityRateType,
   ProgramLiabilityInput,
 } from "./programLiabilities";
 import type { FeeCategory, ProgramFeeInput } from "./programs";
+import { DEFAULT_UPFRONT_FEE_ACCOUNT, type ProgramUpfrontFeeInput } from "./programUpfrontFees";
 
 type D128 = { toString: () => string };
 

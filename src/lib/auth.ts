@@ -201,6 +201,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       from: process.env.SENDGRID_FROM_EMAIL,
       maxAge: 60 * 60, // 1-hour link validity
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // biome-ignore lint/suspicious/noExplicitAny: next-auth EmailConfig type signature for sendVerificationRequest is not exported cleanly
       sendVerificationRequest: sendMagicLink as any,
       server: {}, // unused — sendVerificationRequest handles delivery
       options: {},
