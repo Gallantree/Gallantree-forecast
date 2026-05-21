@@ -118,7 +118,6 @@ export function SeedLoansModal({
   // biome-ignore lint/correctness/useExhaustiveDependencies: buildDefaultRows is intentionally not a dep — we only want to rebuild on matchingPrograms changes
   useEffect(() => {
     setRows(buildDefaultRows(matchingPrograms));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchingPrograms]);
 
   const total = rows.reduce((acc, r) => acc + (Number(r.count) || 0), 0);
