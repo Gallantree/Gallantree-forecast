@@ -1,6 +1,11 @@
 export { type AccountType, default as Account, type IAccount } from "./account.model";
 export { default as Assumption, type IAssumption } from "./assumption.model";
 export {
+  type AuditAction,
+  default as AuditLog,
+  type IAuditLog,
+} from "./auditLog.model";
+export {
   type CapitalProgramType,
   default as CapitalProgram,
   type ICapitalProgram,

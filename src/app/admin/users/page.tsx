@@ -1,15 +1,21 @@
 import { connectToDatabase } from "@/lib/db";
 import { Organisation, User } from "@/models";
 import { AddUserModal } from "../_components/AddUserModal";
+import { EditUserModal } from "../_components/EditUserModal";
 
 export const dynamic = "force-dynamic";
 
 interface UserRow {
   _id: string;
   name: string;
+  firstName?: string;
+  lastName?: string;
   email: string;
   userType: string;
   status: string;
+  designation?: string;
+  organisationId?: string;
+  membershipRole?: string;
   lastLogin?: string;
   createdAt?: string;
 }
@@ -34,7 +40,9 @@ export default async function UsersPage() {
   await connectToDatabase();
   const [usersRaw, orgsRaw] = await Promise.all([
     User.find({})
-      .select("firstName lastName name email userType status lastLogin createdAt")
+      .select(
+        "firstName lastName name email userType status designation organisationId membershipRole lastLogin createdAt",
+      )
       .sort({ createdAt: -1 })
       .lean<
         Array<{
@@ -45,6 +53,9 @@ export default async function UsersPage() {
           email: string;
           userType: string;
           status: string;
+          designation?: string;
+          organisationId?: { toString: () => string };
+          membershipRole?: string;
           lastLogin?: Date;
           createdAt?: Date;
         }>
@@ -58,9 +69,14 @@ export default async function UsersPage() {
   const users: UserRow[] = usersRaw.map((u) => ({
     _id: u._id.toString(),
     name: [u.firstName, u.lastName].filter(Boolean).join(" ") || u.name || u.email,
+    firstName: u.firstName,
+    lastName: u.lastName,
     email: u.email,
     userType: u.userType,
     status: u.status,
+    designation: u.designation,
+    organisationId: u.organisationId?.toString(),
+    membershipRole: u.membershipRole,
     lastLogin: u.lastLogin ? u.lastLogin.toISOString() : undefined,
     createdAt: u.createdAt ? u.createdAt.toISOString() : undefined,
   }));
@@ -95,12 +111,13 @@ export default async function UsersPage() {
               <Th>Status</Th>
               <Th>Last login</Th>
               <Th>Created</Th>
+              <Th className="text-right">Actions</Th>
             </tr>
           </thead>
           <tbody>
             {users.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-12 text-center text-sm text-zinc-500">
+                <td colSpan={7} className="px-4 py-12 text-center text-sm text-zinc-500">
                   No users yet. Add your first one.
                 </td>
               </tr>
@@ -120,6 +137,9 @@ export default async function UsersPage() {
                   </Td>
                   <Td className="text-zinc-500">{fmtDate(u.lastLogin)}</Td>
                   <Td className="text-zinc-500">{fmtDate(u.createdAt)}</Td>
+                  <Td className="text-right">
+                    <EditUserModal user={u} orgs={orgs} />
+                  </Td>
                 </tr>
               ))
             )}
@@ -142,9 +162,11 @@ function statusTone(s: string): "green" | "amber" | "zinc" {
   return "zinc";
 }
 
-function Th({ children }: { children: React.ReactNode }) {
+function Th({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider">
+    <th
+      className={`px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider ${className}`}
+    >
       {children}
     </th>
   );

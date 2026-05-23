@@ -31,6 +31,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     .join("")
     .toUpperCase();
   const userType = me?.userType ?? "viewer";
+  if (userType !== "superadmin") redirect("/");
 
   return (
     <div className="flex h-screen flex-col bg-zinc-50 font-sans">
@@ -62,7 +63,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        <nav className="w-64 shrink-0 border-r border-zinc-200 bg-white px-3 py-4">
+        <nav className="flex w-64 shrink-0 flex-col border-r border-zinc-200 bg-white px-3 py-4">
           <div className="mb-3 flex items-center gap-2 px-2">
             <span className="text-sm font-semibold tracking-tight text-zinc-900">Admin</span>
             <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-indigo-700">
@@ -74,6 +75,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <NavLink href="/admin/organisations" label="Organisations" icon="◫" />
             <NavLink href="/admin/users" label="Users" icon="👥" />
           </ul>
+          <div className="mt-auto border-t border-zinc-200 pt-3">
+            <Link
+              href="/"
+              className="flex items-center gap-2 rounded-md px-3 py-2 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+            >
+              ← Back to app
+            </Link>
+          </div>
         </nav>
 
         <main className="flex-1 overflow-auto">{children}</main>

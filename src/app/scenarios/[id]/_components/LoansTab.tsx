@@ -347,9 +347,14 @@ export function LoansTab({
       {/* Loan list */}
       <div className="flex-1 overflow-auto">
         {loans.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-zinc-500">
-            <div>No loans yet.</div>
-            <div className="text-xs">Upload a Gallantree Loan Tape .xlsx to populate the book.</div>
+          <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
+            <p className="text-sm font-medium text-zinc-700">No loans in this scenario yet</p>
+            <p className="max-w-sm text-xs text-zinc-500">
+              Upload a Gallantree Loan Tape .xlsx using the{" "}
+              <span className="font-medium text-zinc-700">Import tape</span> button above, or use{" "}
+              <span className="font-medium text-zinc-700">Seed loans</span> to generate a sample
+              portfolio.
+            </p>
           </div>
         ) : (
           <table className="w-full border-collapse text-xs">

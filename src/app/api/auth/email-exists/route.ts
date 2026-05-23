@@ -9,7 +9,30 @@ import { User } from "@/models";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// In-process rate limiter: 10 requests per minute per IP.
+// Best-effort — resets on dyno restart, but sufficient to deter casual abuse.
+const rl = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const entry = rl.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rl.set(ip, { count: 1, resetAt: now + 60_000 });
+    return true;
+  }
+  entry.count += 1;
+  return entry.count <= 10;
+}
+
 export async function POST(req: NextRequest) {
+  const ip =
+    req.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
+    req.headers.get("x-real-ip") ??
+    "unknown";
+  if (!checkRateLimit(ip)) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
+
   let email: string;
   try {
     const body = (await req.json()) as { email?: unknown };

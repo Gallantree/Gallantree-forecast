@@ -163,7 +163,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, user, trigger }) {
       // `user` is only populated on the initial sign-in callback. After that,
       // subsequent invocations just have `token`.
-      if (user || trigger === "signIn") {
+      const t = token as Record<string, unknown>;
+      const isSignIn = Boolean(user) || trigger === "signIn";
+
+      if (isSignIn) {
         const email = user?.email ?? token.email;
         if (email) {
           const client = await authClientPromise;
@@ -175,15 +178,43 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               { projection: { _id: 1, userType: 1, status: 1 } },
             );
           if (doc) {
-            const t = token as Record<string, unknown>;
             t.id = String(doc._id);
             t.userType = doc.userType;
             t.status = doc.status;
+            t.statusCheckedAt = Date.now();
             // Stamp lastLogin (best-effort, don't block sign-in if it fails).
             await db
               .collection("users")
               .updateOne({ _id: doc._id }, { $set: { lastLogin: new Date() } })
               .catch(() => {});
+          }
+        }
+      } else {
+        // On subsequent token reads, re-verify user status every 5 minutes.
+        // This ensures a disabled account is kicked out within 5 min rather
+        // than waiting the full 2-hour session maxAge.
+        const checkedAt = (t.statusCheckedAt as number | undefined) ?? 0;
+        if (Date.now() - checkedAt > 5 * 60 * 1000) {
+          const email = token.email;
+          if (email) {
+            try {
+              const client = await authClientPromise;
+              const db = client.db();
+              const doc = await db
+                .collection("users")
+                .findOne(
+                  { email: String(email).toLowerCase() },
+                  { projection: { _id: 1, status: 1 } },
+                );
+              if (!doc || doc.status === "disabled") {
+                // Return null to invalidate the session immediately.
+                return null;
+              }
+              t.statusCheckedAt = Date.now();
+            } catch {
+              // DB unreachable — let the existing token stand rather than
+              // kicking out all active users during an outage.
+            }
           }
         }
       }

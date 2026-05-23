@@ -1,6 +1,7 @@
 import { connectToDatabase } from "@/lib/db";
 import { Organisation, User } from "@/models";
 import { AddOrganisationModal } from "../_components/AddOrganisationModal";
+import { EditOrganisationModal } from "../_components/EditOrganisationModal";
 
 export const dynamic = "force-dynamic";
 
@@ -64,12 +65,13 @@ export default async function OrganisationsPage() {
               <Th>Members</Th>
               <Th>Notes</Th>
               <Th>Created</Th>
+              <Th className="text-right">Actions</Th>
             </tr>
           </thead>
           <tbody>
             {orgs.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-12 text-center text-sm text-zinc-500">
+                <td colSpan={6} className="px-4 py-12 text-center text-sm text-zinc-500">
                   No organisations yet.
                 </td>
               </tr>
@@ -88,6 +90,11 @@ export default async function OrganisationsPage() {
                     <Td className="tabular-nums text-zinc-700">{countByOrg.get(id) ?? 0}</Td>
                     <Td className="text-zinc-500">{o.notes || "—"}</Td>
                     <Td className="text-zinc-500">{fmtDate(o.createdAt)}</Td>
+                    <Td className="text-right">
+                      <EditOrganisationModal
+                        org={{ _id: id, name: o.name, status: o.status, notes: o.notes }}
+                      />
+                    </Td>
                   </tr>
                 );
               })
@@ -105,9 +112,11 @@ function statusTone(s: string): "green" | "amber" | "zinc" {
   return "zinc";
 }
 
-function Th({ children }: { children: React.ReactNode }) {
+function Th({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider">
+    <th
+      className={`px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider ${className}`}
+    >
       {children}
     </th>
   );

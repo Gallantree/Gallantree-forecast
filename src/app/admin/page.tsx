@@ -1,16 +1,17 @@
 import Link from "next/link";
 import { connectToDatabase } from "@/lib/db";
-import { Organisation, User } from "@/models";
+import { Organisation, Scenario, User } from "@/models";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminOverviewPage() {
   await connectToDatabase();
-  const [userCount, activeUsers, orgCount, pendingUsers] = await Promise.all([
+  const [userCount, activeUsers, orgCount, pendingUsers, scenarioCount] = await Promise.all([
     User.countDocuments({}),
     User.countDocuments({ status: "active" }),
     Organisation.countDocuments({}),
     User.countDocuments({ status: "pending" }),
+    Scenario.countDocuments({ deletedAt: null }),
   ]);
 
   return (
@@ -22,7 +23,7 @@ export default async function AdminOverviewPage() {
         <Tile label="Users" value={userCount} sub={`${activeUsers} active`} href="/admin/users" />
         <Tile label="Organisations" value={orgCount} href="/admin/organisations" />
         <Tile label="Pending invites" value={pendingUsers} />
-        <Tile label="Modules" value="—" sub="Coming soon" />
+        <Tile label="Scenarios" value={scenarioCount} />
       </div>
     </div>
   );

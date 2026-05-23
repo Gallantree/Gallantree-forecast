@@ -65,3 +65,29 @@ export function mockAuth(
     handlers: { GET: vi.fn(), POST: vi.fn() },
   }));
 }
+
+/**
+ * Mock `@/lib/currentUser` to return a deterministic superadmin.
+ * Prevents the next-auth → next/server import chain from blowing up in Vitest.
+ */
+export function mockCurrentUser(): void {
+  vi.mock("@/lib/currentUser", () => ({
+    getCurrentUser: vi.fn().mockResolvedValue({
+      id: "000000000000000000000001",
+      email: "test@example.com",
+      userType: "superadmin",
+      status: "active",
+    }),
+  }));
+}
+
+/**
+ * Mock `@/lib/assertScenarioAccess` so all scenario access checks pass in
+ * unit/integration tests. Tests that specifically exercise access control
+ * should override this mock inline.
+ */
+export function mockScenarioAccess(): void {
+  vi.mock("@/lib/assertScenarioAccess", () => ({
+    assertScenarioAccess: vi.fn().mockResolvedValue({ ok: true, scenario: {} }),
+  }));
+}

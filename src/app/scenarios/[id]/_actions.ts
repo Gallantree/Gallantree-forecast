@@ -3,6 +3,8 @@
 import { Types } from "mongoose";
 import { revalidatePath } from "next/cache";
 import { generateStructured, isAnthropicConfigured } from "@/lib/anthropic";
+import { assertScenarioAccess } from "@/lib/assertScenarioAccess";
+import { getCurrentUser } from "@/lib/currentUser";
 import { connectToDatabase } from "@/lib/db";
 import { parseLoanTape } from "@/lib/parseLoanTape";
 import {
@@ -76,8 +78,20 @@ export type ProgramPayload = {
 
 const PERIOD_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
+// Private guard: resolves the current user and verifies they have access to
+// the given scenario. Returns the user on success, null on failure (caller
+// should silently return — same pattern as an invalid ObjectId early-out).
+async function checkAccess(scenarioId: string) {
+  const me = await getCurrentUser();
+  await connectToDatabase();
+  const result = await assertScenarioAccess(scenarioId, me);
+  if (!result.ok) return null;
+  return me;
+}
+
 export async function addDriver(scenarioId: string, formData: FormData): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId)) return;
+  if (!(await checkAccess(scenarioId))) return;
   const type = String(formData.get("type") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim();
   const accountCode = String(formData.get("accountCode") ?? "").trim();
@@ -111,6 +125,7 @@ export async function addDriver(scenarioId: string, formData: FormData): Promise
 
 export async function addStaff(scenarioId: string, formData: FormData): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId)) return;
+  if (!(await checkAccess(scenarioId))) return;
 
   const personName = String(formData.get("personName") ?? "").trim() || undefined;
   const role = String(formData.get("role") ?? "").trim();
@@ -184,6 +199,7 @@ export async function updateStaff(
   formData: FormData,
 ): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId) || !Types.ObjectId.isValid(headcountId)) return;
+  if (!(await checkAccess(scenarioId))) return;
 
   const personName = String(formData.get("personName") ?? "").trim() || undefined;
   const role = String(formData.get("role") ?? "").trim();
@@ -253,6 +269,7 @@ export async function updateStaff(
 
 export async function importLoanTape(scenarioId: string, formData: FormData): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId)) return;
+  if (!(await checkAccess(scenarioId))) return;
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) return;
   const mode = String(formData.get("mode") ?? "merge");
@@ -326,6 +343,7 @@ function sanitiseLiabilities(payload: ProgramPayload) {
 
 export async function createProgram(scenarioId: string, payload: ProgramPayload): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId)) return;
+  if (!(await checkAccess(scenarioId))) return;
   if (!payload.name || !PROGRAM_TYPES.has(payload.type)) return;
   if (!PERIOD_RE.test(payload.startPeriodKey)) return;
   if (payload.endPeriodKey && !PERIOD_RE.test(payload.endPeriodKey)) return;
@@ -383,6 +401,7 @@ export async function updateProgram(
   payload: ProgramPayload,
 ): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId) || !Types.ObjectId.isValid(programId)) return;
+  if (!(await checkAccess(scenarioId))) return;
   if (!payload.name || !PROGRAM_TYPES.has(payload.type)) return;
   if (!PERIOD_RE.test(payload.startPeriodKey)) return;
   if (payload.endPeriodKey && !PERIOD_RE.test(payload.endPeriodKey)) return;
@@ -454,6 +473,7 @@ export async function updateProgram(
 
 export async function deleteProgram(scenarioId: string, programId: string): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId) || !Types.ObjectId.isValid(programId)) return;
+  if (!(await checkAccess(scenarioId))) return;
   await connectToDatabase();
   await CapitalProgram.deleteOne({ _id: programId, scenarioId });
   revalidatePath(`/scenarios/${scenarioId}`);
@@ -461,6 +481,7 @@ export async function deleteProgram(scenarioId: string, programId: string): Prom
 
 export async function cloneProgram(scenarioId: string, programId: string): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId) || !Types.ObjectId.isValid(programId)) return;
+  if (!(await checkAccess(scenarioId))) return;
   await connectToDatabase();
   const src = await CapitalProgram.findOne({ _id: programId, scenarioId }).lean();
   if (!src) return;
@@ -503,6 +524,7 @@ export async function calibrateProgram(
   if (!Types.ObjectId.isValid(scenarioId) || !Types.ObjectId.isValid(programId)) {
     return { ok: false, error: "invalid id" };
   }
+  if (!(await checkAccess(scenarioId))) return { ok: false, error: "not authorized" };
   await connectToDatabase();
   const program = await CapitalProgram.findOne({
     _id: programId,
@@ -587,6 +609,7 @@ export async function updateValuationAssumptions(
   payload: ValuationAssumptionsPayload,
 ): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId)) return;
+  if (!(await checkAccess(scenarioId))) return;
   await connectToDatabase();
   const update: Record<string, unknown> = {};
   const unset: Record<string, ""> = {};
@@ -619,6 +642,7 @@ export async function updateValuationAssumptions(
 
 export async function updateLoanBookGrowth(scenarioId: string, formData: FormData): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId)) return;
+  if (!(await checkAccess(scenarioId))) return;
   // Form sends loanBookGrowthPctY0, …Y1, … one entry per FY in the horizon.
   const raws: string[] = [];
   for (const [key, val] of formData.entries()) {
@@ -684,6 +708,7 @@ export async function addBookGrowthProfile(
   payload: BookGrowthProfilePayload,
 ): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId)) return;
+  if (!(await checkAccess(scenarioId))) return;
   const sanitised = sanitiseGrowthProfile(payload);
   if (!sanitised) return;
   await connectToDatabase();
@@ -699,6 +724,7 @@ export async function updateBookGrowthProfile(
   if (!Types.ObjectId.isValid(scenarioId) || !Types.ObjectId.isValid(profileId)) {
     return;
   }
+  if (!(await checkAccess(scenarioId))) return;
   const sanitised = sanitiseGrowthProfile(payload);
   if (!sanitised) return;
   await connectToDatabase();
@@ -724,6 +750,7 @@ export async function deleteBookGrowthProfile(
   if (!Types.ObjectId.isValid(scenarioId) || !Types.ObjectId.isValid(profileId)) {
     return;
   }
+  if (!(await checkAccess(scenarioId))) return;
   await connectToDatabase();
   await Scenario.updateOne(
     { _id: scenarioId },
@@ -738,6 +765,7 @@ export async function toggleLoanIncluded(
   include: boolean,
 ): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId) || !Types.ObjectId.isValid(loanId)) return;
+  if (!(await checkAccess(scenarioId))) return;
   await connectToDatabase();
   await Loan.updateOne({ _id: loanId, scenarioId }, { $set: { includeInRevenue: include } });
   revalidatePath(`/scenarios/${scenarioId}`);
@@ -749,6 +777,7 @@ export async function setLoanProgram(
   formData: FormData,
 ): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId) || !Types.ObjectId.isValid(loanId)) return;
+  if (!(await checkAccess(scenarioId))) return;
   const programId = String(formData.get("capitalProgramId") ?? "").trim();
   await connectToDatabase();
   if (!programId) {
@@ -784,6 +813,7 @@ export async function updateLoan(
   payload: LoanEditPayload,
 ): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId) || !Types.ObjectId.isValid(loanId)) return;
+  if (!(await checkAccess(scenarioId))) return;
   if (!payload.loanId.trim()) return;
   const origination = new Date(payload.originationDate);
   const maturity = new Date(payload.maturityDate);
@@ -887,6 +917,7 @@ export async function createOpexDriver(
   payload: OpexDriverPayload,
 ): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId)) return;
+  if (!(await checkAccess(scenarioId))) return;
   if (!OPEX_DRIVER_TYPES.has(payload.type)) return;
   if (!payload.name?.trim() || !payload.accountCode) return;
   if (!PERIOD_RE.test(payload.startPeriodKey)) return;
@@ -904,6 +935,7 @@ export async function updateOpexDriver(
   payload: OpexDriverPayload,
 ): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId) || !Types.ObjectId.isValid(driverId)) return;
+  if (!(await checkAccess(scenarioId))) return;
   if (!OPEX_DRIVER_TYPES.has(payload.type)) return;
   if (!payload.name?.trim() || !payload.accountCode) return;
   if (!PERIOD_RE.test(payload.startPeriodKey)) return;
@@ -931,6 +963,7 @@ export async function updateOpexDriver(
 
 export async function deleteOpexDriver(scenarioId: string, driverId: string): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId) || !Types.ObjectId.isValid(driverId)) return;
+  if (!(await checkAccess(scenarioId))) return;
   await connectToDatabase();
   await Driver.deleteOne({ _id: driverId, scenarioId });
   revalidatePath(`/scenarios/${scenarioId}`);
@@ -994,6 +1027,7 @@ export async function createPlatformLicense(
   payload: PlatformLicensePayload,
 ): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId)) return;
+  if (!(await checkAccess(scenarioId))) return;
   if (!payload.name?.trim() || !LICENSE_TYPES.has(payload.type)) return;
   if (!PERIOD_RE.test(payload.startPeriodKey)) return;
   await connectToDatabase();
@@ -1010,6 +1044,7 @@ export async function updatePlatformLicense(
   payload: PlatformLicensePayload,
 ): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId) || !Types.ObjectId.isValid(licenseId)) return;
+  if (!(await checkAccess(scenarioId))) return;
   if (!payload.name?.trim() || !LICENSE_TYPES.has(payload.type)) return;
   if (!PERIOD_RE.test(payload.startPeriodKey)) return;
   await connectToDatabase();
@@ -1037,6 +1072,7 @@ export async function updatePlatformLicense(
 
 export async function deletePlatformLicense(scenarioId: string, licenseId: string): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId) || !Types.ObjectId.isValid(licenseId)) return;
+  if (!(await checkAccess(scenarioId))) return;
   await connectToDatabase();
   await PlatformLicense.deleteOne({ _id: licenseId, scenarioId });
   revalidatePath(`/scenarios/${scenarioId}`);
@@ -1044,6 +1080,7 @@ export async function deletePlatformLicense(scenarioId: string, licenseId: strin
 
 export async function deleteLoan(scenarioId: string, loanId: string): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId) || !Types.ObjectId.isValid(loanId)) return;
+  if (!(await checkAccess(scenarioId))) return;
   await connectToDatabase();
   await Loan.deleteOne({ _id: loanId, scenarioId });
   revalidatePath(`/scenarios/${scenarioId}`);
@@ -1063,6 +1100,7 @@ export async function updateScenarioMeta(
   payload: ScenarioMetaPayload,
 ): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId)) return;
+  if (!(await checkAccess(scenarioId))) return;
   const name = payload.name?.trim();
   if (!name || name.length > 120) return;
   if (!SCENARIO_STATUSES.has(payload.status)) return;
@@ -1088,6 +1126,7 @@ export async function updateControlPanel(
   payload: ControlPanelPayload,
 ): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId)) return;
+  if (!(await checkAccess(scenarioId))) return;
   const set: Record<string, unknown> = {};
   const unset: Record<string, ""> = {};
   if (payload.baseRateType && BASE_RATE_TYPES.has(payload.baseRateType)) {
@@ -1131,6 +1170,7 @@ export async function updateControlPanel(
 
 export async function clearLoanTape(scenarioId: string): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId)) return;
+  if (!(await checkAccess(scenarioId))) return;
   await connectToDatabase();
   await Loan.deleteMany({ scenarioId });
   revalidatePath(`/scenarios/${scenarioId}`);
@@ -1142,6 +1182,7 @@ export async function clearLoanTape(scenarioId: string): Promise<void> {
 // re-seed programs and re-link loans without losing the loan tape.
 export async function clearAllPrograms(scenarioId: string): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId)) return;
+  if (!(await checkAccess(scenarioId))) return;
   await connectToDatabase();
   await CapitalProgram.deleteMany({ scenarioId });
   revalidatePath(`/scenarios/${scenarioId}`);
@@ -1161,6 +1202,7 @@ export async function clearAllPrograms(scenarioId: string): Promise<void> {
  */
 export async function setStaffGrowthTargets(scenarioId: string, targets: number[]): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId)) return;
+  if (!(await checkAccess(scenarioId))) return;
   if (!Array.isArray(targets) || targets.length === 0) return;
 
   await connectToDatabase();
@@ -1247,6 +1289,7 @@ export async function setStaffGrowthTargets(scenarioId: string, targets: number[
 
 export async function deleteStaff(scenarioId: string, headcountId: string): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId) || !Types.ObjectId.isValid(headcountId)) return;
+  if (!(await checkAccess(scenarioId))) return;
   await connectToDatabase();
   await Headcount.deleteOne({ _id: headcountId, scenarioId });
   revalidatePath(`/scenarios/${scenarioId}`);
@@ -1297,6 +1340,7 @@ function persistSeededPrograms(scenarioId: string, programs: SeedProgram[]): Pro
 
 export async function seedCreCloPrograms(scenarioId: string): Promise<SeedResult> {
   if (!Types.ObjectId.isValid(scenarioId)) return { ok: false, error: "invalid scenario" };
+  if (!(await checkAccess(scenarioId))) return { ok: false, error: "not authorized" };
   if (!isAnthropicConfigured()) return { ok: false, error: "ANTHROPIC_API_KEY is not set" };
   try {
     const { programs } = await generateStructured({
@@ -1316,6 +1360,7 @@ export async function seedCreCloPrograms(scenarioId: string): Promise<SeedResult
 
 export async function seedCmbsPrograms(scenarioId: string): Promise<SeedResult> {
   if (!Types.ObjectId.isValid(scenarioId)) return { ok: false, error: "invalid scenario" };
+  if (!(await checkAccess(scenarioId))) return { ok: false, error: "not authorized" };
   if (!isAnthropicConfigured()) return { ok: false, error: "ANTHROPIC_API_KEY is not set" };
   try {
     const { programs } = await generateStructured({
@@ -1335,6 +1380,7 @@ export async function seedCmbsPrograms(scenarioId: string): Promise<SeedResult> 
 
 export async function seedLoanBook(scenarioId: string): Promise<SeedResult> {
   if (!Types.ObjectId.isValid(scenarioId)) return { ok: false, error: "invalid scenario" };
+  if (!(await checkAccess(scenarioId))) return { ok: false, error: "not authorized" };
   if (!isAnthropicConfigured()) return { ok: false, error: "ANTHROPIC_API_KEY is not set" };
   try {
     await connectToDatabase();
@@ -1461,6 +1507,7 @@ export async function seedLoansByFy(
   params: SeedLoansByFyParams,
 ): Promise<SeedResult> {
   if (!Types.ObjectId.isValid(scenarioId)) return { ok: false, error: "invalid scenario" };
+  if (!(await checkAccess(scenarioId))) return { ok: false, error: "not authorized" };
   if (!isAnthropicConfigured()) return { ok: false, error: "ANTHROPIC_API_KEY is not set" };
 
   // Validate every program ID up front.
@@ -1735,6 +1782,7 @@ export async function createCapitalRaise(
   payload: CapitalRaisePayload,
 ): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId)) return;
+  if (!(await checkAccess(scenarioId))) return;
   if (!payload.name?.trim() || !RAISE_TYPES.has(payload.type)) return;
   const raiseDate = parseDate(payload.raiseDate);
   if (!raiseDate) return;
@@ -1761,6 +1809,7 @@ export async function updateCapitalRaise(
   payload: CapitalRaisePayload,
 ): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId) || !Types.ObjectId.isValid(raiseId)) return;
+  if (!(await checkAccess(scenarioId))) return;
   if (!payload.name?.trim() || !RAISE_TYPES.has(payload.type)) return;
   const raiseDate = parseDate(payload.raiseDate);
   if (!raiseDate) return;
@@ -1791,6 +1840,7 @@ export async function updateCapitalRaise(
 
 export async function deleteCapitalRaise(scenarioId: string, raiseId: string): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId) || !Types.ObjectId.isValid(raiseId)) return;
+  if (!(await checkAccess(scenarioId))) return;
   await connectToDatabase();
   await CapitalRaise.deleteOne({ _id: raiseId, scenarioId });
   revalidatePath(`/scenarios/${scenarioId}`);
@@ -1802,6 +1852,7 @@ export async function addInvestor(
   payload: InvestorPayload,
 ): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId) || !Types.ObjectId.isValid(raiseId)) return;
+  if (!(await checkAccess(scenarioId))) return;
   if (!payload.name?.trim()) return;
   if (!INVESTOR_STATUSES.has(payload.status)) return;
   const fundingDate = parseDate(payload.fundingDate);
@@ -1839,6 +1890,7 @@ export async function updateInvestor(
     !Types.ObjectId.isValid(investorId)
   )
     return;
+  if (!(await checkAccess(scenarioId))) return;
   if (!payload.name?.trim() || !INVESTOR_STATUSES.has(payload.status)) return;
   const fundingDate = parseDate(payload.fundingDate);
   if (!fundingDate) return;
@@ -1872,6 +1924,7 @@ export async function deleteInvestor(
     !Types.ObjectId.isValid(investorId)
   )
     return;
+  if (!(await checkAccess(scenarioId))) return;
   await connectToDatabase();
   await CapitalRaise.updateOne(
     { _id: raiseId, scenarioId },
@@ -2099,6 +2152,7 @@ const INITIAL_CN_INVESTORS: SeedInvestorRow[] = [
 
 export async function seedInitialConvertibleNote(scenarioId: string): Promise<SeedResult> {
   if (!Types.ObjectId.isValid(scenarioId)) return { ok: false, error: "invalid scenario" };
+  if (!(await checkAccess(scenarioId))) return { ok: false, error: "not authorized" };
 
   try {
     await connectToDatabase();
@@ -2131,6 +2185,7 @@ export async function seedInitialConvertibleNote(scenarioId: string): Promise<Se
 
 export async function updateOpeningCash(scenarioId: string, value: string): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId)) return;
+  if (!(await checkAccess(scenarioId))) return;
   const cleaned = parseDecimalInput(value);
   await connectToDatabase();
   await Scenario.updateOne({ _id: scenarioId }, { $set: { openingCash: toDecimal128(cleaned) } });
@@ -2142,6 +2197,7 @@ export async function updateWorkingCapitalDays(
   payload: { dsoDays: string; dpoDays: string },
 ): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId)) return;
+  if (!(await checkAccess(scenarioId))) return;
   const dso = parseDecimalInput(payload.dsoDays);
   const dpo = parseDecimalInput(payload.dpoDays);
   if (Number(dso) < 0 || Number(dpo) < 0) return;
