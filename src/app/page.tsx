@@ -51,7 +51,9 @@ export default async function Home() {
     updatedAt: Date;
   };
 
-  const scenarios = await Scenario.find({}).sort({ updatedAt: -1 }).lean<LeanScenario[]>();
+  const scenarios = await Scenario.find({ deletedAt: null })
+    .sort({ updatedAt: -1 })
+    .lean<LeanScenario[]>();
 
   // Aggregate per-scenario counts in a single query each.
   const ids = scenarios.map((s) => s._id.toString());

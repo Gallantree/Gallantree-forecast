@@ -7,6 +7,7 @@ import { loadEngineInputs } from "@/engine/inputs";
 import { computePnL, type MonthlyValue } from "@/engine/pnl";
 import { computeStatements } from "@/engine/statements";
 import { computeValuation } from "@/engine/valuation";
+import { assertScenarioAccess } from "@/lib/assertScenarioAccess";
 import { getCurrentUser } from "@/lib/currentUser";
 import { connectToDatabase } from "@/lib/db";
 import {
@@ -112,6 +113,11 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
   const tab: TabKey = isTabKey(rawTab) ? rawTab : "overview";
 
   await connectToDatabase();
+
+  const me = await getCurrentUser();
+  const access = await assertScenarioAccess(id, me);
+  if (!access.ok) notFound();
+
   const scenario = await Scenario.findById(id).lean<{
     name: string;
     status: string;
@@ -143,8 +149,6 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
     netDebt?: { toString: () => string };
   }>();
   if (!scenario) notFound();
-
-  const me = await getCurrentUser();
 
   const [
     periods,

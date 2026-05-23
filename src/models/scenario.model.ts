@@ -23,6 +23,8 @@ export interface IScenario {
   status: "draft" | "active" | "archived";
   lockedAt?: Date;
   createdBy?: Types.ObjectId;
+  organisationId?: Types.ObjectId;
+  deletedAt?: Date;
   dsoDays?: Types.Decimal128;
   dpoDays?: Types.Decimal128;
   taxRatePct?: Types.Decimal128;
@@ -84,6 +86,8 @@ const scenarioSchema = new Schema<IScenario>(
     status: { type: String, enum: ["draft", "active", "archived"], default: "draft" },
     lockedAt: { type: Date },
     createdBy: { type: Schema.Types.ObjectId, ref: "User" },
+    organisationId: { type: Schema.Types.ObjectId, ref: "Organisation" },
+    deletedAt: { type: Date, default: null },
     dsoDays: { type: Schema.Types.Decimal128 },
     dpoDays: { type: Schema.Types.Decimal128 },
     taxRatePct: { type: Schema.Types.Decimal128 },
@@ -109,6 +113,8 @@ const scenarioSchema = new Schema<IScenario>(
 
 scenarioSchema.index({ parentId: 1 });
 scenarioSchema.index({ status: 1, updatedAt: -1 });
+scenarioSchema.index({ organisationId: 1, deletedAt: 1 });
+scenarioSchema.index({ deletedAt: 1 });
 // Sparse partial index so we can ensure at most one base scenario, while
 // allowing many non-base rows (isBase=false / unset).
 scenarioSchema.index({ isBase: 1 }, { unique: true, partialFilterExpression: { isBase: true } });

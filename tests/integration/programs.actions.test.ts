@@ -14,6 +14,19 @@ vi.mock("next/cache", () => ({
   revalidateTag: vi.fn(),
 }));
 
+// Bypass the auth/session stack that is unavailable in the Vitest environment.
+vi.mock("@/lib/currentUser", () => ({
+  getCurrentUser: vi.fn().mockResolvedValue({
+    id: "000000000000000000000001",
+    email: "test@example.com",
+    userType: "superadmin",
+    status: "active",
+  }),
+}));
+vi.mock("@/lib/assertScenarioAccess", () => ({
+  assertScenarioAccess: vi.fn().mockResolvedValue({ ok: true, scenario: {} }),
+}));
+
 import { revalidatePath } from "next/cache";
 import { CapitalProgram } from "@/models";
 import {

@@ -3,14 +3,31 @@
 import { Types } from "mongoose";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { writeAudit } from "@/lib/auditLog";
+import { getCurrentUser } from "@/lib/currentUser";
 import { connectToDatabase } from "@/lib/db";
 import { CapitalProgram, Driver, Headcount, Loan, Scenario } from "@/models";
 
 export async function createScenario(formData: FormData): Promise<void> {
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return;
+  const me = await getCurrentUser();
   await connectToDatabase();
-  const s = await Scenario.create({ name });
+  const s = await Scenario.create({
+    name,
+    ...(me?.id && Types.ObjectId.isValid(me.id) ? { createdBy: new Types.ObjectId(me.id) } : {}),
+    ...(me?.organisationId && Types.ObjectId.isValid(me.organisationId)
+      ? { organisationId: new Types.ObjectId(me.organisationId) }
+      : {}),
+  });
+  await writeAudit({
+    userId: me?.id,
+    userEmail: me?.email,
+    action: "create",
+    modelName: "Scenario",
+    documentId: s._id.toString(),
+    after: { name },
+  });
   revalidatePath("/");
   redirect(`/scenarios/${s._id.toString()}`);
 }
@@ -18,6 +35,8 @@ export async function createScenario(formData: FormData): Promise<void> {
 export async function setBaseScenario(scenarioId: string): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId)) return;
   await connectToDatabase();
+  const s = await Scenario.findOne({ _id: scenarioId, deletedAt: null }).select("_id").lean();
+  if (!s) return;
   // Atomic-ish: unset any existing base, then set the new one.
   await Scenario.updateMany({ isBase: true }, { $set: { isBase: false } });
   await Scenario.updateOne({ _id: scenarioId }, { $set: { isBase: true } });
@@ -27,25 +46,30 @@ export async function setBaseScenario(scenarioId: string): Promise<void> {
 export async function unsetBaseScenario(scenarioId: string): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId)) return;
   await connectToDatabase();
-  await Scenario.updateOne({ _id: scenarioId }, { $set: { isBase: false } });
+  await Scenario.updateOne({ _id: scenarioId, deletedAt: null }, { $set: { isBase: false } });
   revalidatePath("/");
 }
 
 export async function deleteScenario(scenarioId: string): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId)) return;
+  const me = await getCurrentUser();
   await connectToDatabase();
-  const s = await Scenario.findById(scenarioId).select("isBase").lean<{
+  const s = await Scenario.findById(scenarioId).select("isBase name").lean<{
     isBase?: boolean;
+    name: string;
   }>();
   if (!s) return;
   if (s.isBase) return; // refuse to delete the base scenario
-  await Promise.all([
-    Driver.deleteMany({ scenarioId }),
-    Headcount.deleteMany({ scenarioId }),
-    Loan.deleteMany({ scenarioId }),
-    CapitalProgram.deleteMany({ scenarioId }),
-    Scenario.deleteOne({ _id: scenarioId }),
-  ]);
+  // Soft-delete: stamp deletedAt so data is recoverable.
+  await Scenario.updateOne({ _id: scenarioId }, { $set: { deletedAt: new Date() } });
+  await writeAudit({
+    userId: me?.id,
+    userEmail: me?.email,
+    action: "delete",
+    modelName: "Scenario",
+    documentId: scenarioId,
+    before: { name: s.name },
+  });
   revalidatePath("/");
 }
 
@@ -59,7 +83,8 @@ export async function branchFromBase(formData: FormData): Promise<void> {
   if (!name) return;
   await connectToDatabase();
 
-  const base = await Scenario.findOne({ isBase: true });
+  const me = await getCurrentUser();
+  const base = await Scenario.findOne({ isBase: true, deletedAt: null });
   if (!base) return;
   const baseId = base._id as Types.ObjectId;
 
@@ -77,6 +102,8 @@ export async function branchFromBase(formData: FormData): Promise<void> {
     openingEquity: base.openingEquity,
     defaultCpiPct: base.defaultCpiPct,
     defaultSuperPct: base.defaultSuperPct,
+    organisationId: base.organisationId,
+    ...(me?.id && Types.ObjectId.isValid(me.id) ? { createdBy: new Types.ObjectId(me.id) } : {}),
   });
   const childId = child._id as Types.ObjectId;
 

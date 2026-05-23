@@ -14,6 +14,7 @@ export interface CurrentUser {
   lastName?: string;
   userType: "superadmin" | "admin" | "viewer";
   status: "active" | "pending" | "disabled";
+  organisationId?: string;
 }
 
 export async function getCurrentUser(): Promise<CurrentUser | null> {
@@ -22,7 +23,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   if (!email) return null;
   await connectToDatabase();
   const u = await User.findOne({ email: email.toLowerCase() })
-    .select("email firstName lastName name userType status")
+    .select("email firstName lastName name userType status organisationId")
     .lean<{
       _id: { toString: () => string };
       email: string;
@@ -31,6 +32,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       name?: string;
       userType?: string;
       status?: string;
+      organisationId?: { toString: () => string };
     }>();
   if (!u) return null;
   return {
@@ -41,5 +43,6 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     lastName: u.lastName,
     userType: (u.userType ?? "viewer") as CurrentUser["userType"],
     status: (u.status ?? "active") as CurrentUser["status"],
+    organisationId: u.organisationId?.toString(),
   };
 }
