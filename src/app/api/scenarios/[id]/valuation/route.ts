@@ -18,8 +18,8 @@ interface FYGroup {
   months: string[];
 }
 
-function fiscalYear(year: number, month: number): number {
-  return month >= 7 ? year + 1 : year;
+function fiscalYear(year: number, _month: number): number {
+  return year;
 }
 
 function buildFYGroups(periods: { key: string; fiscalYear?: number }[]): FYGroup[] {

@@ -11,6 +11,7 @@ import {
   deleteInvestor,
   type InvestorPayload,
   type InvestorStatus,
+  markAllInvestorsFunded,
   seedInitialConvertibleNote,
   updateCapitalRaise,
   updateInvestor,
@@ -26,6 +27,13 @@ export interface InvestorRow {
   notes?: string;
 }
 
+export interface UseOfFundsPlanRow {
+  coverMonths: number;
+  contingencyPct: number;
+  includeRevenue: boolean;
+  manualLines: Array<{ label: string; amount: number }>;
+}
+
 export interface CapitalRaiseRow {
   _id: string;
   name: string;
@@ -36,6 +44,7 @@ export interface CapitalRaiseRow {
   valuationCap?: string;
   pricePerUnit?: string;
   investors: InvestorRow[];
+  useOfFundsPlan?: UseOfFundsPlanRow;
 }
 
 const TYPE_LABEL: Record<CapitalRaiseType, string> = {
@@ -172,6 +181,27 @@ export function CapitalRaisesTab({
                       className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-[11px] font-medium text-zinc-700 hover:bg-zinc-100"
                     >
                       + Investor
+                    </button>
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => {
+                        const n = r.investors.filter((i) => i.status === "committed").length;
+                        if (n === 0) return;
+                        if (
+                          !confirm(
+                            `Mark all ${n} committed investor${n === 1 ? "" : "s"} on "${r.name}" as funded?`,
+                          )
+                        )
+                          return;
+                        startTransition(async () => {
+                          await markAllInvestorsFunded(scenarioId, r._id);
+                        });
+                      }}
+                      title="Flip every committed investor on this raise to funded"
+                      className="rounded-md border border-emerald-300 bg-white px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                    >
+                      Mark all funded
                     </button>
                     <button
                       type="button"

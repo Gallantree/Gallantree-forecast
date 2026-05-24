@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import type { ControlPanelPayload } from "../_actions";
-import { updateControlPanel, updateScenarioMeta } from "../_actions";
+import { updateControlPanel, updateScenarioMeta, wipeScenarioData } from "../_actions";
 
 export interface ControlPanelInitial {
   name: string;
@@ -47,6 +47,7 @@ export function ControlPanelTab({
 }) {
   const [pending, startTransition] = useTransition();
   const [metaPending, startMetaTransition] = useTransition();
+  const [wipePending, startWipeTransition] = useTransition();
   const [name, setName] = useState(initial.name);
   const [status, setStatus] = useState<"draft" | "active" | "archived">(initial.status);
   const [baseRateType, setBaseRateType] = useState<"BBSW" | "BBSY" | "SOFR">(
@@ -275,6 +276,37 @@ export function ControlPanelTab({
             {pending ? "Saving…" : "Save control panel"}
           </button>
         </div>
+
+        {/* Danger zone */}
+        <section className="rounded-md border border-rose-200 bg-rose-50">
+          <header className="border-b border-rose-100 bg-rose-100/60 px-4 py-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-rose-800">
+              Danger zone
+            </h3>
+            <p className="mt-0.5 text-[11px] text-rose-700">
+              Wipe drivers, headcount, loans, capital programs, platform licenses, and capital
+              raises for this scenario. Use this when reseeding under a new period convention.
+              Scenario-level settings (assumptions, control panel, view mode) are kept.
+            </p>
+          </header>
+          <div className="flex items-center justify-end gap-3 p-4">
+            <span className="text-[11px] text-rose-700">This cannot be undone.</span>
+            <button
+              type="button"
+              onClick={() => {
+                if (!confirm("Wipe all operational data for this scenario? This cannot be undone."))
+                  return;
+                startWipeTransition(async () => {
+                  await wipeScenarioData(scenarioId);
+                });
+              }}
+              disabled={wipePending}
+              className="rounded-md border border-rose-300 bg-white px-4 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+            >
+              {wipePending ? "Wiping…" : "Wipe scenario data"}
+            </button>
+          </div>
+        </section>
       </div>
     </div>
   );

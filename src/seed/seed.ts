@@ -13,9 +13,9 @@ import { toDecimal128 } from "@/utils/money";
 import { DEFAULT_COA } from "./coa";
 import { DEFAULT_PAYBANDS } from "./paybands";
 
-// Gallantree fiscal year: July–June (Australian standard).
-function fiscalYear(year: number, month: number): number {
-  return month >= 7 ? year + 1 : year;
+// Gallantree calendar year basis: CY{N} covers Jan–Dec {N}.
+function fiscalYear(year: number, _month: number): number {
+  return year;
 }
 
 async function seedAccounts() {
@@ -34,7 +34,7 @@ async function seedAccounts() {
   );
 }
 
-async function seedPeriods(startYear = 2026, startMonth = 7) {
+async function seedPeriods(startYear = 2026, startMonth = 1) {
   const ops: Parameters<typeof Period.bulkWrite>[0] = [];
   let y = startYear;
   let m = startMonth;

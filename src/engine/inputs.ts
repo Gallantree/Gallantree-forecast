@@ -108,6 +108,9 @@ function toDriverInput(d: DriverDoc): DriverInput {
         kind: "opex_per_fte",
         ...baseFields,
         costPerFteMonthly: d.costPerFteMonthly!.toString(),
+        ...(d.monthlyGrowthPct !== undefined
+          ? { monthlyGrowthPct: d.monthlyGrowthPct.toString() }
+          : {}),
       };
     case "capex_straight_line":
       return {

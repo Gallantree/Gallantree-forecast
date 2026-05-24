@@ -271,7 +271,7 @@ function TrusteeBody({ license: l, fys }: { license: PlatformLicenseRow; fys: nu
       </div>
       <div>
         <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
-          AUM & fee % by FY
+          AUM & fee % by CY
         </div>
         <table className="w-full border-collapse text-[11px]">
           <thead className="bg-zinc-50 text-zinc-500">
@@ -279,7 +279,7 @@ function TrusteeBody({ license: l, fys }: { license: PlatformLicenseRow; fys: nu
               <th className="px-2 py-1 text-left font-medium">Metric</th>
               {fys.map((fy) => (
                 <th key={fy} className="px-2 py-1 text-right font-medium">
-                  FY{String(fy).slice(-2)}
+                  CY{String(fy).slice(-2)}
                 </th>
               ))}
             </tr>

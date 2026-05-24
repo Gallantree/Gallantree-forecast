@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ScenarioViewMode } from "@/models/scenario.model";
 
 export type TabKey =
   | "overview"
@@ -16,6 +17,7 @@ export type TabKey =
   | "balance-sheet"
   | "cashflow"
   | "valuation"
+  | "use-of-funds"
   | "control-panel";
 
 export const TABS: { key: TabKey; label: string }[] = [
@@ -34,17 +36,84 @@ export const TABS: { key: TabKey; label: string }[] = [
   { key: "balance-sheet", label: "Balance Sheet" },
   { key: "cashflow", label: "Cashflow" },
   { key: "valuation", label: "Valuation" },
+  { key: "use-of-funds", label: "Use of Funds" },
   { key: "control-panel", label: "Control Panel" },
 ];
+
+// 'all' shows the full consolidated workspace minus the Gallantree-only tabs
+// (which are reserved for the Gallantree-only profile, so the two scenarios
+// are visually distinct).
+const ALL_TABS: TabKey[] = [
+  "overview",
+  "revenue",
+  "loan-book",
+  "loan-book-analysis",
+  "capital-programs",
+  "capital-raises",
+  "platform-revenues",
+  "opex-general",
+  "opex-staffing",
+  "pnl",
+  "balance-sheet",
+  "cashflow",
+  "valuation",
+  "use-of-funds",
+  "control-panel",
+];
+
+// 'gallantree' shows only Gallantree's own operating economics.
+const GALLANTREE_TABS: TabKey[] = [
+  "overview-gallantree",
+  "capital-programs",
+  "loan-book",
+  "loan-book-analysis",
+  "platform-revenues",
+  "capital-raises",
+  "opex-general",
+  "opex-staffing",
+  "pnl-gallantree",
+  "balance-sheet",
+  "cashflow",
+  "valuation",
+  "use-of-funds",
+  "control-panel",
+];
+
+export function tabsFor(viewMode: ScenarioViewMode | undefined): { key: TabKey; label: string }[] {
+  const allowed = new Set<TabKey>(viewMode === "gallantree" ? GALLANTREE_TABS : ALL_TABS);
+  return TABS.filter((t) => allowed.has(t.key));
+}
+
+export function defaultTabFor(viewMode: ScenarioViewMode | undefined): TabKey {
+  return viewMode === "gallantree" ? "overview-gallantree" : "overview";
+}
 
 export function isTabKey(value: string | undefined): value is TabKey {
   return !!value && TABS.some((t) => t.key === value);
 }
 
-export function TabBar({ scenarioId, active }: { scenarioId: string; active: TabKey }) {
+export function isTabKeyForMode(
+  value: string | undefined,
+  viewMode: ScenarioViewMode | undefined,
+): value is TabKey {
+  if (!value) return false;
+  const allowed = new Set<TabKey>(viewMode === "gallantree" ? GALLANTREE_TABS : ALL_TABS);
+  return allowed.has(value as TabKey);
+}
+
+export function TabBar({
+  scenarioId,
+  active,
+  viewMode,
+}: {
+  scenarioId: string;
+  active: TabKey;
+  viewMode?: ScenarioViewMode;
+}) {
+  const visible = tabsFor(viewMode);
   return (
     <nav className="flex items-stretch gap-px overflow-x-auto border-t border-zinc-300 bg-zinc-100 px-2">
-      {TABS.map((t) => {
+      {visible.map((t) => {
         const isActive = t.key === active;
         return (
           <Link

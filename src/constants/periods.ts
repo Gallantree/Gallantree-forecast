@@ -23,16 +23,19 @@ export function generateHorizon(
   return keys;
 }
 
-// Australian fiscal-year convention: FY{N} covers Jul {N-1} → Jun {N}.
-// e.g. month 7 of CY 2026 is FY27; month 6 of CY 2027 is FY27.
-export function fiscalYearOf(year: number, month: number): number {
-  return month >= 7 ? year + 1 : year;
+// Calendar-year convention: CY{N} covers Jan {N} → Dec {N}.
+// The function name and `fiscalYear` field are kept for back-compat with
+// engine/aggregator code that consumes period descriptors, but the value
+// returned is the calendar year of the period.
+export function fiscalYearOf(year: number, _month: number): number {
+  return year;
 }
 
 /**
  * Construct an array of period descriptors for a scenario whose Year 1
- * starts in July of `firstCalendarYear` (Australian FY convention).
- * The shape matches what buildFYGroups + the engine consume.
+ * starts in January of `firstCalendarYear`. The shape matches what
+ * buildFYGroups + the engine consume; the `fiscalYear` field carries the
+ * calendar year of each period.
  */
 export function buildScenarioPeriods(
   firstCalendarYear: number,
@@ -40,7 +43,7 @@ export function buildScenarioPeriods(
 ): Array<{ key: string; fiscalYear: number; index: number }> {
   const out: Array<{ key: string; fiscalYear: number; index: number }> = [];
   let y = firstCalendarYear;
-  let m = 7;
+  let m = 1;
   for (let i = 0; i < months; i++) {
     out.push({
       key: periodKey(y, m),

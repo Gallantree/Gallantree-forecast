@@ -5,6 +5,7 @@ import type { OpexDriverFormInitial, OpexDriverType } from "./AddOpexDriverModal
 import { AddOpexDriverModal } from "./AddOpexDriverModal";
 import type { OpexItemEditTarget } from "./PnlClientTable";
 import { type FYGroup, PnlTable } from "./PnlTable";
+import { SeedOpexButton } from "./SeedOpexButton";
 
 export interface OpexDriverRow {
   _id: string;
@@ -135,7 +136,8 @@ export function OpexGeneralTab({
             </div>
           )}
         </div>
-        <div className="flex items-center px-4">
+        <div className="flex items-center gap-2 px-4">
+          <SeedOpexButton scenarioId={scenarioId} />
           <AddOpexDriverModal
             defaultStartPeriod={defaultStartPeriod}
             expenseAccounts={expenseAccounts}

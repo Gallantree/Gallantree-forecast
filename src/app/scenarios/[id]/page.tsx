@@ -32,6 +32,7 @@ import { type CapitalRaiseRow, CapitalRaisesTab } from "./_components/CapitalRai
 import { type CashflowData, CashflowTab } from "./_components/CashflowTab";
 import { ConsolidatedModal } from "./_components/ConsolidatedModal";
 import { ControlPanelTab } from "./_components/ControlPanelTab";
+import { buildGallantreeStatements } from "./_components/gallantreeStatements";
 import { LoanBookAnalysisTab } from "./_components/LoanBookAnalysisTab";
 import {
   type BookGrowthProfileRow,
@@ -45,6 +46,7 @@ import { type OpexDriverRow, OpexGeneralTab } from "./_components/OpexGeneralTab
 import { type OverviewData, OverviewTab } from "./_components/OverviewTab";
 import { buildOverviewData, toGallantreeOverview } from "./_components/overviewData";
 import { type PlatformLicenseRow, PlatformRevenuesTab } from "./_components/PlatformRevenuesTab";
+import { PnlAnalysisModal } from "./_components/PnlAnalysisModal";
 import { buildFYGroups, PnlTable, toGallantreePnl } from "./_components/PnlTable";
 import {
   isFundingTranche,
@@ -54,7 +56,12 @@ import {
 } from "./_components/ProgramsTab";
 import { buildProgramAnalysisData } from "./_components/programAnalysisData";
 import { type PaybandRow, StaffingTab, type StaffRow } from "./_components/StaffingTab";
-import { isTabKey, TabBar, type TabKey } from "./_components/TabBar";
+import { defaultTabFor, isTabKeyForMode, TabBar, type TabKey } from "./_components/TabBar";
+import {
+  type UofMonthlyByAccount,
+  type UseOfFundsData,
+  UseOfFundsTab,
+} from "./_components/UseOfFundsTab";
 import { type ValuationData, ValuationTab } from "./_components/ValuationTab";
 
 function serializeSeries(series: MonthlyValue[]): SerializedSeries {
@@ -110,8 +117,6 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
   const { tab: rawTab } = await searchParams;
   if (!Types.ObjectId.isValid(id)) notFound();
 
-  const tab: TabKey = isTabKey(rawTab) ? rawTab : "overview";
-
   await connectToDatabase();
 
   const me = await getCurrentUser();
@@ -121,6 +126,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
   const scenario = await Scenario.findById(id).lean<{
     name: string;
     status: string;
+    viewMode?: "all" | "gallantree";
     defaultCpiPct?: { toString: () => string };
     defaultSuperPct?: { toString: () => string };
     loanBookGrowthPctByYear?: Array<{ toString: () => string }>;
@@ -149,6 +155,9 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
     netDebt?: { toString: () => string };
   }>();
   if (!scenario) notFound();
+
+  const viewMode = scenario.viewMode ?? "all";
+  const tab: TabKey = isTabKeyForMode(rawTab, viewMode) ? rawTab : defaultTabFor(viewMode);
 
   const [
     periods,
@@ -443,6 +452,11 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
       gallantreeSharePct?: { toString: () => string };
       rampUpMonths?: number;
       amortisationMonths?: number;
+      captiveEquityHoldings?: Array<{
+        _id?: { toString: () => string };
+        programId: { toString: () => string };
+        trancheName: string;
+      }>;
     }>
   ).map((p) => ({
     _id: p._id.toString(),
@@ -487,6 +501,10 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
       : undefined,
     rampUpMonths: p.rampUpMonths,
     amortisationMonths: p.amortisationMonths,
+    captiveEquityHoldings: (p.captiveEquityHoldings ?? []).map((h) => ({
+      programId: h.programId.toString(),
+      trancheName: h.trancheName,
+    })),
   }));
 
   const raiseRows: CapitalRaiseRow[] = (
@@ -508,6 +526,12 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
         status: "committed" | "funded" | "withdrawn";
         notes?: string;
       }>;
+      useOfFundsPlan?: {
+        coverMonths: number;
+        contingencyPct: { toString: () => string };
+        includeRevenue: boolean;
+        manualLines?: Array<{ label: string; amount: { toString: () => string } }>;
+      };
     }>
   ).map((r) => ({
     _id: r._id.toString(),
@@ -527,6 +551,17 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
       status: inv.status,
       notes: inv.notes,
     })),
+    useOfFundsPlan: r.useOfFundsPlan
+      ? {
+          coverMonths: r.useOfFundsPlan.coverMonths,
+          contingencyPct: Number(r.useOfFundsPlan.contingencyPct.toString()),
+          includeRevenue: !!r.useOfFundsPlan.includeRevenue,
+          manualLines: (r.useOfFundsPlan.manualLines ?? []).map((l) => ({
+            label: l.label,
+            amount: Number(l.amount.toString()),
+          })),
+        }
+      : undefined,
   }));
 
   // Year 1 calendar year from the Control Panel — drives the horizon across
@@ -740,6 +775,98 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
         },
       }
     : null;
+
+  // Gallantree-only variants of BS / CF / Valuation. Recomputed from the
+  // engine output by stripping NIM revenue, program-tranche debt, and
+  // program-issuance items. See gallantreeStatements.ts.
+  const gallantreeStatements =
+    viewMode === "gallantree" && statements
+      ? buildGallantreeStatements({
+          statements,
+          groups: buildFYGroups(scenarioPeriods),
+          scenarioAssumptions: {
+            dsoDays: scenario.dsoDays?.toString(),
+            dpoDays: scenario.dpoDays?.toString(),
+            taxRatePct: scenario.taxRatePct?.toString(),
+            openingCash: scenario.openingCash?.toString(),
+            openingEquity: scenario.openingEquity?.toString(),
+          },
+          valuationAssumptions: {
+            waccPct: scenario.waccPct?.toString(),
+            terminalGrowthPct: scenario.terminalGrowthPct?.toString(),
+            evEbitdaMultiple: scenario.evEbitdaMultiple?.toString(),
+            evRevenueMultiple: scenario.evRevenueMultiple?.toString(),
+            peMultiple: scenario.peMultiple?.toString(),
+            netDebt: scenario.netDebt?.toString(),
+          },
+        })
+      : null;
+  const effectiveBalanceSheetData = gallantreeStatements?.balanceSheet ?? balanceSheetData;
+  const effectiveCashflowData = gallantreeStatements?.cashflow ?? cashflowData;
+  const effectiveValuationData = gallantreeStatements?.valuation ?? valuationData;
+
+  // ── Use of Funds tab data ──────────────────────────────────────────────
+  const useOfFundsData: UseOfFundsData | null = statements
+    ? (() => {
+        const opexLinesByAccount: UofMonthlyByAccount[] = statements.pnl.opex.lines.map((l) => {
+          const monthly: Record<string, number> = {};
+          for (const m of l.monthly) monthly[m.periodKey] = Number(m.value.toString());
+          return {
+            accountCode: l.accountCode,
+            accountName: accountByCode.get(l.accountCode) ?? l.accountCode,
+            monthly,
+          };
+        });
+        const revenueLinesByAccount: UofMonthlyByAccount[] = statements.pnl.revenue.lines.map(
+          (l) => {
+            const monthly: Record<string, number> = {};
+            for (const m of l.monthly) monthly[m.periodKey] = Number(m.value.toString());
+            return {
+              accountCode: l.accountCode,
+              accountName: accountByCode.get(l.accountCode) ?? l.accountCode,
+              monthly,
+            };
+          },
+        );
+        const issuanceCostByMonth: Record<string, number> = {};
+        for (const m of statements.cf.issuanceCostOutflow) {
+          issuanceCostByMonth[m.periodKey] = Number(m.value.toString());
+        }
+        const raises = raiseRows.map((r) => {
+          const raiseDateObj = new Date(r.raiseDate);
+          const y = raiseDateObj.getUTCFullYear();
+          const mo = raiseDateObj.getUTCMonth() + 1;
+          const raisePeriodKey = `${y}-${String(mo).padStart(2, "0")}`;
+          let fundedAmount = 0;
+          let committedAmount = 0;
+          for (const inv of r.investors) {
+            const v = Number(inv.commitment);
+            if (!Number.isFinite(v)) continue;
+            if (inv.status === "funded") fundedAmount += v;
+            else if (inv.status === "committed") committedAmount += v;
+          }
+          return {
+            _id: r._id,
+            name: r.name,
+            type: r.type,
+            raiseDate: r.raiseDate,
+            raisePeriodKey,
+            targetSize: Number(r.targetSize),
+            fundedAmount,
+            committedAmount,
+            plan: r.useOfFundsPlan ?? null,
+          };
+        });
+        return {
+          raises,
+          horizon: statements.horizon,
+          opexLinesByAccount,
+          revenueLinesByAccount,
+          issuanceCostByMonth,
+        };
+      })()
+    : null;
+
   const firstPeriod = horizon[0] ?? "";
   const revenueAccounts = accounts.filter((a) => a.type === "revenue");
   const expenseAccounts = accounts.filter((a) => a.type === "expense");
@@ -788,16 +915,18 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
           <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600">
             {scenario.status}
           </span>
+          <span
+            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
+              viewMode === "gallantree"
+                ? "bg-indigo-100 text-indigo-800"
+                : "bg-zinc-200 text-zinc-700"
+            }`}
+            title="Scenario profile"
+          >
+            {viewMode === "gallantree" ? "Gallantree view" : "All"}
+          </span>
         </div>
         <div className="flex items-center gap-6 text-xs">
-          {overviewData ? (
-            <ConsolidatedModal
-              data={toGallantreeOverview(overviewData)}
-              triggerLabel="Profit & Loss — Gallantree"
-              title="Profit & Loss — Gallantree"
-              subtitle="Gallantree's own operating economics · NIM revenue and capital-program interest expense excluded"
-            />
-          ) : null}
           <div className="ml-2 border-l border-zinc-200 pl-4">
             <UserMenu user={me} />
           </div>
@@ -891,22 +1020,78 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
         )}
 
         {tab === "pnl" && (
-          <div className="h-full overflow-auto bg-white">
-            {!pnl ? (
-              <div className="flex h-full items-center justify-center text-sm text-zinc-500">
-                Seed periods first.
+          <div className="flex h-full flex-col bg-white">
+            {overviewData ? (
+              <div className="flex items-center gap-2 border-b border-zinc-200 bg-zinc-50 px-4 py-2">
+                <PnlAnalysisModal data={overviewData} />
+                <ConsolidatedModal data={overviewData} />
               </div>
-            ) : pnl.revenue.lines.length + pnl.opex.lines.length === 0 ? (
-              <div className="flex h-full items-center justify-center text-sm text-zinc-500">
-                Add a driver or staff to see the P&amp;L.
+            ) : null}
+            <div className="flex-1 overflow-auto">
+              {!pnl ? (
+                <div className="flex h-full items-center justify-center text-sm text-zinc-500">
+                  Seed periods first.
+                </div>
+              ) : pnl.revenue.lines.length + pnl.opex.lines.length === 0 ? (
+                <div className="flex h-full items-center justify-center text-sm text-zinc-500">
+                  Add a driver or staff to see the P&amp;L.
+                </div>
+              ) : (
+                <PnlTable
+                  pnl={pnl}
+                  groups={groups}
+                  accountByCode={accountByCode}
+                  cascade={
+                    statements
+                      ? {
+                          ebitda: monthlyMap(statements.pnl.ebitda),
+                          depreciation: monthlyMap(statements.pnl.depreciation),
+                          issuanceAmortisation: monthlyMap(statements.pnl.issuanceAmortisation),
+                          ebit: monthlyMap(statements.pnl.ebit),
+                          interestExpense: monthlyMap(statements.pnl.interestExpense),
+                          pretaxIncome: monthlyMap(statements.pnl.pretaxIncome),
+                          taxExpense: monthlyMap(statements.pnl.taxExpense),
+                          netIncome: monthlyMap(statements.pnl.netIncome),
+                        }
+                      : undefined
+                  }
+                />
+              )}
+            </div>
+          </div>
+        )}
+
+        {tab === "pnl-gallantree" && (
+          <div className="flex h-full flex-col bg-white">
+            {overviewData ? (
+              <div className="flex items-center gap-2 border-b border-zinc-200 bg-zinc-50 px-4 py-2">
+                <PnlAnalysisModal
+                  data={toGallantreeOverview(overviewData)}
+                  title="P&L analysis — Gallantree"
+                  subtitle="Gallantree's own operating economics — NIM revenue & program interest excluded"
+                />
+                <ConsolidatedModal
+                  data={toGallantreeOverview(overviewData)}
+                  title="Consolidated five-year view — Gallantree"
+                  subtitle="Gallantree's own operating economics — NIM revenue & program interest excluded"
+                />
               </div>
-            ) : (
-              <PnlTable
-                pnl={pnl}
-                groups={groups}
-                accountByCode={accountByCode}
-                cascade={
-                  statements
+            ) : null}
+            <div className="flex-1 overflow-auto">
+              {!pnl ? (
+                <div className="flex h-full items-center justify-center text-sm text-zinc-500">
+                  Seed periods first.
+                </div>
+              ) : pnl.revenue.lines.length + pnl.opex.lines.length === 0 ? (
+                <div className="flex h-full items-center justify-center text-sm text-zinc-500">
+                  Add a driver or staff to see the P&amp;L.
+                </div>
+              ) : (
+                (() => {
+                  // Filter out NIM revenue (accounts 4100-4499) + zero out
+                  // capital-program interest expense. Same data shape, same
+                  // renderer — just Gallantree's operating economics.
+                  const standardCascade = statements
                     ? {
                         ebitda: monthlyMap(statements.pnl.ebitda),
                         depreciation: monthlyMap(statements.pnl.depreciation),
@@ -917,51 +1102,19 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
                         taxExpense: monthlyMap(statements.pnl.taxExpense),
                         netIncome: monthlyMap(statements.pnl.netIncome),
                       }
-                    : undefined
-                }
-              />
-            )}
-          </div>
-        )}
-
-        {tab === "pnl-gallantree" && (
-          <div className="h-full overflow-auto bg-white">
-            {!pnl ? (
-              <div className="flex h-full items-center justify-center text-sm text-zinc-500">
-                Seed periods first.
-              </div>
-            ) : pnl.revenue.lines.length + pnl.opex.lines.length === 0 ? (
-              <div className="flex h-full items-center justify-center text-sm text-zinc-500">
-                Add a driver or staff to see the P&amp;L.
-              </div>
-            ) : (
-              (() => {
-                // Filter out NIM revenue (accounts 4100-4499) + zero out
-                // capital-program interest expense. Same data shape, same
-                // renderer — just Gallantree's operating economics.
-                const standardCascade = statements
-                  ? {
-                      ebitda: monthlyMap(statements.pnl.ebitda),
-                      depreciation: monthlyMap(statements.pnl.depreciation),
-                      issuanceAmortisation: monthlyMap(statements.pnl.issuanceAmortisation),
-                      ebit: monthlyMap(statements.pnl.ebit),
-                      interestExpense: monthlyMap(statements.pnl.interestExpense),
-                      pretaxIncome: monthlyMap(statements.pnl.pretaxIncome),
-                      taxExpense: monthlyMap(statements.pnl.taxExpense),
-                      netIncome: monthlyMap(statements.pnl.netIncome),
-                    }
-                  : undefined;
-                const filtered = toGallantreePnl(pnl, standardCascade);
-                return (
-                  <PnlTable
-                    pnl={filtered.pnl}
-                    groups={groups}
-                    accountByCode={accountByCode}
-                    cascade={filtered.cascade}
-                  />
-                );
-              })()
-            )}
+                    : undefined;
+                  const filtered = toGallantreePnl(pnl, standardCascade);
+                  return (
+                    <PnlTable
+                      pnl={filtered.pnl}
+                      groups={groups}
+                      accountByCode={accountByCode}
+                      cascade={filtered.cascade}
+                    />
+                  );
+                })()
+              )}
+            </div>
           </div>
         )}
 
@@ -1059,24 +1212,31 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
         )}
 
         {tab === "balance-sheet" &&
-          (balanceSheetData ? (
-            <BalanceSheetTab scenarioId={id} data={balanceSheetData} />
+          (effectiveBalanceSheetData ? (
+            <BalanceSheetTab scenarioId={id} data={effectiveBalanceSheetData} />
           ) : (
             <Stub title="Balance Sheet" message="Seed periods first — run `npm run seed`." />
           ))}
 
         {tab === "cashflow" &&
-          (cashflowData ? (
-            <CashflowTab scenarioId={id} data={cashflowData} />
+          (effectiveCashflowData ? (
+            <CashflowTab scenarioId={id} data={effectiveCashflowData} />
           ) : (
             <Stub title="Cashflow" message="Seed periods first — run `npm run seed`." />
           ))}
 
         {tab === "valuation" &&
-          (valuationData ? (
-            <ValuationTab scenarioId={id} data={valuationData} />
+          (effectiveValuationData ? (
+            <ValuationTab scenarioId={id} data={effectiveValuationData} />
           ) : (
             <Stub title="Valuation" message="Seed periods first — run `npm run seed`." />
+          ))}
+
+        {tab === "use-of-funds" &&
+          (useOfFundsData ? (
+            <UseOfFundsTab scenarioId={id} data={useOfFundsData} />
+          ) : (
+            <Stub title="Use of Funds" message="Seed periods + add a capital raise first." />
           ))}
 
         {tab === "control-panel" && (
@@ -1096,7 +1256,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
       </div>
 
       {/* Bottom tab bar — spreadsheet-style */}
-      <TabBar scenarioId={id} active={tab} />
+      <TabBar scenarioId={id} active={tab} viewMode={viewMode} />
     </div>
   );
 }

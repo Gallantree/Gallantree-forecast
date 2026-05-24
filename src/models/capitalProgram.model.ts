@@ -41,6 +41,17 @@ export interface IProgramUpfrontFee {
   accountCode?: string;
 }
 
+// Captive equity-tranche holdings — used by MIT_FUND programs (e.g. the
+// Gallantree Enhanced Income Funds) that acquire the equity tranches of
+// other capital programs in the same scenario. Each entry pins the source
+// program + the tranche name being held; the fund itself decides how many
+// units / what share it owns via its own liability line.
+export interface IProgramEquityHolding {
+  _id?: Types.ObjectId;
+  programId: Types.ObjectId;
+  trancheName: string;
+}
+
 export interface ICapitalProgram {
   scenarioId: Types.ObjectId;
   name: string;
@@ -74,6 +85,10 @@ export interface ICapitalProgram {
   // program (ending at `endPeriodKey`), loan revenue, fees, and notes wind
   // down to zero. Absent or 0 → bullet maturity.
   amortisationMonths?: number;
+  // Equity tranches of OTHER programs that this program (typically a
+  // MIT_FUND like the Gallantree Enhanced Income Fund) holds. Empty for
+  // standard CRE CLO / CMBS / BSL / Warehouse programs.
+  captiveEquityHoldings?: IProgramEquityHolding[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -131,6 +146,14 @@ const programLiabilitySchema = new Schema<IProgramLiability>(
   { _id: true },
 );
 
+const programEquityHoldingSchema = new Schema<IProgramEquityHolding>(
+  {
+    programId: { type: Schema.Types.ObjectId, ref: "CapitalProgram", required: true },
+    trancheName: { type: String, required: true, trim: true },
+  },
+  { _id: true },
+);
+
 const capitalProgramSchema = new Schema<ICapitalProgram>(
   {
     scenarioId: { type: Schema.Types.ObjectId, ref: "Scenario", required: true },
@@ -152,6 +175,7 @@ const capitalProgramSchema = new Schema<ICapitalProgram>(
     gallantreeSharePct: { type: Schema.Types.Decimal128 },
     rampUpMonths: { type: Number, min: 0 },
     amortisationMonths: { type: Number, min: 0 },
+    captiveEquityHoldings: { type: [programEquityHoldingSchema], default: [] },
   },
   { timestamps: true },
 );

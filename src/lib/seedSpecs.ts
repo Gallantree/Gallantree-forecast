@@ -152,13 +152,19 @@ const programInputSchema = {
 
 const CRE_CLO_SYSTEM = `You are a CRE CLO structuring assistant for Gallantree, an Australian non-bank CRE lender. You generate realistic capital program specifications for a financial model.
 
-GENERATE EXACTLY 5 CRE CLO PROGRAMS — one fresh issuance per fiscal year across the 5-year model horizon (FY27 through FY31).
+GENERATE EXACTLY 6 CRE CLO PROGRAMS — one fresh issuance every 5 months across the model horizon. Use these EXACT start dates, in order:
+  1. 2026-01
+  2. 2026-06
+  3. 2026-11
+  4. 2027-04
+  5. 2027-09
+  6. 2028-02
 
 Program 1 — anchor deal (use these EXACT values):
   - name: "Gallantree CRE CLO 2026 FL-1"
   - type: "CRE_CLO"
-  - startPeriodKey: "2026-07"
-  - endPeriodKey: "2029-07"
+  - startPeriodKey: "2026-01"
+  - endPeriodKey: "2029-01"
   - dealSize: "1161500000"
   - faceValuePerNote: "1000"
   - Fees: Senior management 20bps on $1,161,500,000 (account 4500); Subordinate management 50bps on $1,161,500,000 (account 4510); Servicing 50bps on $1,160,000,000 (account 4520)
@@ -169,10 +175,10 @@ Program 1 — anchor deal (use these EXACT values):
       { name: "Ratings agency presale + monitoring", category: "credit_rating", amount: "300000", accountCode: "6900" }
     ]
 
-Programs 2, 3, 4, 5 — follow-on deals, one per FY:
-  - Names: "Gallantree CRE CLO 2027 FL-1", "Gallantree CRE CLO 2028 FL-1", "Gallantree CRE CLO 2029 FL-1", "Gallantree CRE CLO 2030 FL-1"
-  - startPeriodKey, ONE PER FY (12 months apart): 2027-07, 2028-07, 2029-07, 2030-07
-  - endPeriodKey: 3 years after start (e.g. 2030-07, 2031-07, 2032-07, 2033-07)
+Programs 2, 3, 4, 5, 6 — follow-on deals, 5 months apart:
+  - Names: "Gallantree CRE CLO 2026 FL-2", "Gallantree CRE CLO 2026 FL-3", "Gallantree CRE CLO 2027 FL-1", "Gallantree CRE CLO 2027 FL-2", "Gallantree CRE CLO 2028 FL-1" (one per start date above)
+  - startPeriodKey: 2026-06, 2026-11, 2027-04, 2027-09, 2028-02
+  - endPeriodKey: 3 years after start (e.g. 2029-06, 2029-11, 2030-04, 2030-09, 2031-02)
   - faceValuePerNote: always "1000"
   - dealSize: pick a randomized total between 800,000,000 and 1,200,000,000 for each (different value each time)
   - Same fee structure as Program 1 (Senior 20bps, Sub 50bps, Servicing 50bps; basisAmount = dealSize for senior/sub, dealSize − 1.5m for servicing)
@@ -215,20 +221,30 @@ export const CRE_CLO_SEED = {
   systemPrompt: CRE_CLO_SYSTEM,
   tool: CRE_CLO_TOOL,
   userMessage:
-    "Generate exactly 5 CRE CLO programs (one fresh issuance per fiscal year FY27 through FY31) per the specification. Vary the dealSize, numNotes, and tranche spreads as instructed. Include the upfront fees on every deal.",
+    "Generate exactly 6 CRE CLO programs at the prescribed start dates (5 months apart: 2026-01, 2026-06, 2026-11, 2027-04, 2027-09, 2028-02). Vary the dealSize, numNotes, and tranche spreads as instructed. Include the upfront fees on every deal.",
 } as const;
 
 // ── CMBS seed ───────────────────────────────────────────────────────────────
 
-const CMBS_SYSTEM = `You are a CMBS structuring assistant for Gallantree, an Australian non-bank CRE lender. You generate realistic capital program specifications.
+const CMBS_SYSTEM = `You are a CMBS structuring assistant for Gallantree, an Australian non-bank lender. You generate realistic capital program specifications.
 
-GENERATE EXACTLY 5 CMBS PROGRAMS — one fresh issuance per fiscal year across the 5-year model horizon (FY27 through FY31). Do NOT generate any warehouse facilities.
+GENERATE EXACTLY 8 CMBS PROGRAMS — fresh issuances every 4 months. The first 4 are backed by CRE collateral; the last 4 are backed by corporate credit collateral. Use these EXACT start dates and collateral types, in order:
+  1. 2026-01 — CRE-backed CMBS
+  2. 2026-05 — CRE-backed CMBS
+  3. 2026-09 — CRE-backed CMBS
+  4. 2027-01 — CRE-backed CMBS
+  5. 2027-05 — Corporate-credit-backed CMBS
+  6. 2027-09 — Corporate-credit-backed CMBS
+  7. 2028-01 — Corporate-credit-backed CMBS
+  8. 2028-05 — Corporate-credit-backed CMBS
 
-CMBS Program 1 — anchor deal (use these EXACT values):
+Do NOT generate any warehouse facilities, CRE CLOs, or BSL deals from this prompt.
+
+CMBS Program 1 — anchor CRE-backed deal (use these EXACT values):
   - name: "Gallantree CRE CMBS 2026-1"
   - type: "CMBS"
-  - startPeriodKey: "2026-07"
-  - endPeriodKey: "2031-07"
+  - startPeriodKey: "2026-01"
+  - endPeriodKey: "2031-01"
   - dealSize: "500000000"
   - faceValuePerNote: "1000"
   - Fees: Senior management 15bps on $500,000,000 (account 4500); Subordinate management 35bps on $500,000,000 (account 4510); Servicing 25bps on $499,500,000 (account 4520)
@@ -248,20 +264,11 @@ CMBS Program 1 — anchor deal (use these EXACT values):
       { name: "Ratings agency presale + monitoring", category: "credit_rating", amount: "300000", accountCode: "6900" }
     ]
 
-CMBS Programs 2, 3, 4, 5 — follow-on deals, one per FY:
-  - Names: "Gallantree CRE CMBS 2027-1", "Gallantree CRE CMBS 2028-1", "Gallantree CRE CMBS 2029-1", "Gallantree CRE CMBS 2030-1"
-  - startPeriodKey, ONE PER FY (12 months apart): 2027-07, 2028-07, 2029-07, 2030-07
-  - endPeriodKey: 5 years after start (e.g. 2032-07, 2033-07, 2034-07, 2035-07)
-  - faceValuePerNote: always "1000"
+CMBS Programs 2, 3, 4 — follow-on CRE-backed deals at 2026-05, 2026-09, 2027-01:
+  - Names: "Gallantree CRE CMBS 2026-2", "Gallantree CRE CMBS 2026-3", "Gallantree CRE CMBS 2027-1"
+  - endPeriodKey: 5 years after start
   - dealSize: pick a randomized total between 400,000,000 and 800,000,000 (different value each deal)
-  - Same fee structure as Program 1 (Senior 15bps, Sub 35bps, Servicing 25bps; servicing basis = dealSize − 500,000)
-  - Same tranche structure (X, A, A-S, B, C, D, Equity)
-  - Tranche numNotes: scale proportionally with dealSize so each tranche's share matches Program 1
-    (X 0.10%, A 70.00%, A-S 10.00%, B 6.00%, C 4.00%, D 2.00%, Equity 7.90%).
-    Compute: numNotes = round((share × dealSize) / 1000). Sum must equal dealSize / 1000.
-    DO NOT return numNotes = 0 for any tranche.
-  - Tranche spreads — pick a randomized integer in each band, vary across the deals.
-    CMBS pricing is much tighter than CRE CLO because the collateral is stabilised:
+  - Spreads (CRE-backed): pick a randomized integer in each band, vary across the deals.
       X:   150-180
       A:   120-130
       A-S: 145-155
@@ -269,6 +276,29 @@ CMBS Programs 2, 3, 4, 5 — follow-on deals, one per FY:
       C:   200-215
       D:   240-260
       Equity: 0
+
+CMBS Programs 5, 6, 7, 8 — Corporate-credit-backed deals at 2027-05, 2027-09, 2028-01, 2028-05:
+  - Names: "Gallantree Corporate CMBS 2027-1", "Gallantree Corporate CMBS 2027-2", "Gallantree Corporate CMBS 2028-1", "Gallantree Corporate CMBS 2028-2"
+  - endPeriodKey: 5 years after start
+  - dealSize: pick a randomized total between 350,000,000 and 700,000,000
+  - Spreads (Corporate-credit-backed are wider than CRE-backed because corporate-credit CLO/CMBS typically prices wider than commercial real estate):
+      X:   190-220
+      A:   145-160
+      A-S: 170-185
+      B:   200-220
+      C:   235-260
+      D:   280-310
+      Equity: 0
+  - Note in the "notes" field that the collateral is "Corporate credit (BSL / middle-market term loans)".
+
+ALL Programs 2–8 (both CRE-backed and Corporate-credit-backed):
+  - faceValuePerNote: always "1000"
+  - Same fee structure as Program 1 (Senior 15bps, Sub 35bps, Servicing 25bps; servicing basis = dealSize − 500,000)
+  - Same 7-tranche structure (X, A, A-S, B, C, D, Equity)
+  - Tranche numNotes: scale proportionally with dealSize so each tranche's share matches Program 1
+    (X 0.10%, A 70.00%, A-S 10.00%, B 6.00%, C 4.00%, D 2.00%, Equity 7.90%).
+    Compute: numNotes = round((share × dealSize) / 1000). Sum must equal dealSize / 1000.
+    DO NOT return numNotes = 0 for any tranche.
   - upfrontFees: SAME three items as Program 1 ($500k underwriter, $900k legal, $300k ratings, all accountCode "6900"). Use identical amounts on every deal.
 
 For EVERY CMBS tranche:
@@ -282,7 +312,131 @@ export const CMBS_SEED = {
   systemPrompt: CMBS_SYSTEM,
   tool: CRE_CLO_TOOL, // same tool, different prompt
   userMessage:
-    "Generate exactly 5 CMBS programs (one per fiscal year FY27-FY31) per the specification. Do NOT generate any warehouse facilities.",
+    "Generate exactly 8 CMBS programs at the prescribed start dates (4 months apart, 4 CRE-backed then 4 Corporate-credit-backed): 2026-01, 2026-05, 2026-09, 2027-01 (CRE-backed) and 2027-05, 2027-09, 2028-01, 2028-05 (Corporate-credit-backed). Do NOT generate any warehouse facilities, CRE CLOs, or BSL deals.",
+} as const;
+
+// ── BSL CLO seed ────────────────────────────────────────────────────────────
+//
+// Broadly Syndicated Loan (BSL) CLO: a securitisation of pooled corporate
+// term loans. Structurally similar to a CRE CLO but the collateral is
+// corporate credit rather than commercial real estate. Modelled with
+// program type "OTHER" since the existing enum doesn't have a BSL slot.
+
+const BSL_SYSTEM = `You are a BSL CLO structuring assistant for Gallantree, an Australian non-bank lender entering corporate-credit securitisation. A BSL CLO is a securitisation of broadly syndicated corporate term loans — structurally similar to a CRE CLO but the collateral pool is corporate credit, not commercial real estate.
+
+GENERATE EXACTLY 5 BSL CLO PROGRAMS — one fresh issuance per calendar year. Use these EXACT start dates, in order:
+  1. 2026-01
+  2. 2027-01
+  3. 2028-01
+  4. 2029-01
+  5. 2030-01
+
+For EVERY program:
+  - type: "OTHER" (the model doesn't have a BSL slot — name distinguishes it)
+  - faceValuePerNote: "1000"
+  - endPeriodKey: 4 years after start (e.g. 2030-01, 2031-01, 2032-01, 2033-01, 2034-01)
+  - dealSize: pick a randomized total between 500,000,000 and 900,000,000 (different per deal)
+  - notes: "BSL CLO — pooled corporate term loans (broadly syndicated)"
+
+Program 1 — anchor BSL CLO (use these EXACT values):
+  - name: "Gallantree BSL CLO 2026-1"
+  - startPeriodKey: "2026-01"
+  - dealSize: "750000000"
+
+Programs 2–5 — annual issuances:
+  - Names: "Gallantree BSL CLO 2027-1", "Gallantree BSL CLO 2028-1", "Gallantree BSL CLO 2029-1", "Gallantree BSL CLO 2030-1"
+
+Fees (every deal): Senior management 18bps (account 4500); Subordinate management 45bps (account 4510); Servicing 30bps (account 4520). basisAmount = dealSize for senior/sub, dealSize − 1,000,000 for servicing.
+
+Tranches (every deal — 8-tranche stack typical of BSL CLOs):
+  - Names + spread bands:
+      X     0.15% of notes / 350-400
+      AAA   62.00% / 145-165
+      AA    11.00% / 195-215
+      A     7.00%  / 245-265
+      BBB   5.00%  / 320-345
+      BB    3.50%  / 525-565
+      B     2.50%  / 720-770
+      Equity 8.85% / 0
+  - numNotes per tranche: numNotes = round((share × dealSize) / 1000). Sum must equal dealSize / 1000. DO NOT return 0 for any tranche.
+  - calculationMethod: "monthly"
+  - rateType: "variable" for debt tranches (X through B); "fixed" for Equity
+  - accountCode: "6800"
+
+upfrontFees (every deal): same three items as CRE CLO ($500k underwriter, $900k legal, $300k ratings, accountCode "6900"). Use identical amounts on every deal.
+
+Return the structured result via the create_capital_programs tool. Do not return prose.`;
+
+export const BSL_SEED = {
+  systemPrompt: BSL_SYSTEM,
+  tool: CRE_CLO_TOOL, // same tool, different prompt
+  userMessage:
+    "Generate exactly 5 BSL CLO programs (one per calendar year, starting 2026-01, 2027-01, 2028-01, 2029-01, 2030-01) per the specification.",
+} as const;
+
+// ── Warehouse seed ──────────────────────────────────────────────────────────
+//
+// Warehouse facilities are revolving credit lines used to fund loans before
+// they are securitised. They run for the full horizon (no fixed maturity);
+// pricing is simpler than a tranched securitisation. Modelled as one liability
+// row per facility (the warehouse line itself).
+
+const WAREHOUSE_SYSTEM = `You are a warehouse-facility structuring assistant for Gallantree, an Australian non-bank lender. A warehouse facility is a revolving senior secured credit line provided by a bank to fund loan originations before they are termed-out via CMBS / CRE CLO / BSL.
+
+GENERATE EXACTLY 3 WAREHOUSE FACILITIES. Use these EXACT values:
+
+Facility 1 — CRE warehouse:
+  - name: "Gallantree CRE Warehouse"
+  - type: "WAREHOUSE"
+  - startPeriodKey: "2026-01"
+  - endPeriodKey: "2031-01"
+  - dealSize: "500000000"
+  - faceValuePerNote: "1000"
+  - notes: "Senior secured revolving warehouse line for CRE loan originations pre-securitisation."
+
+Facility 2 — Corporate credit warehouse:
+  - name: "Gallantree Corporate Credit Warehouse"
+  - type: "WAREHOUSE"
+  - startPeriodKey: "2026-01"
+  - endPeriodKey: "2031-01"
+  - dealSize: "400000000"
+  - faceValuePerNote: "1000"
+  - notes: "Senior secured revolving warehouse line for corporate (BSL) loan originations pre-securitisation."
+
+Facility 3 — SRT (Significant Risk Transfer) warehouse:
+  - name: "Gallantree SRT Warehouse"
+  - type: "WAREHOUSE"
+  - startPeriodKey: "2026-10"
+  - endPeriodKey: "2031-10"
+  - dealSize: "300000000"
+  - faceValuePerNote: "1000"
+  - notes: "Significant Risk Transfer warehouse — synthetic securitisation referencing a corporate / CRE loan pool, with credit risk transferred to third-party protection sellers."
+
+For EVERY facility, return ONE liability row representing the warehouse line:
+  - name: same as the facility name + " — warehouse line"
+  - numNotes: dealSize / 1000 (so dealSize / faceValuePerNote = numNotes)
+  - returnProfileBps:
+      • CRE warehouse: 225 bps over base
+      • Corporate credit warehouse: 250 bps over base
+      • SRT warehouse: 380 bps over base (synthetic SRT pricing is wider)
+  - calculationMethod: "monthly"
+  - rateType: "variable"
+  - accountCode: "6800"
+
+Fees (every facility):
+  - Senior management 10bps on dealSize (account 4500)
+  - Servicing 15bps on dealSize (account 4520)
+  - DO NOT include a subordinate management fee on warehouses.
+
+upfrontFees (every facility): $250k underwriter retainer + $500k legal counsel, both accountCode "6900". (No ratings agency fee — warehouses aren't rated.)
+
+Return the structured result via the create_capital_programs tool. Do not return prose.`;
+
+export const WAREHOUSE_SEED = {
+  systemPrompt: WAREHOUSE_SYSTEM,
+  tool: CRE_CLO_TOOL, // same tool, different prompt
+  userMessage:
+    "Generate exactly 3 warehouse facilities per the specification: CRE warehouse (2026-01), Corporate Credit warehouse (2026-01), and SRT warehouse (2026-10).",
 } as const;
 
 // ── Loan-book seed ──────────────────────────────────────────────────────────
@@ -436,7 +590,7 @@ REALISM:
   - lenderOfRecord: leave blank
   - state distribution: NSW ~35%, VIC ~25%, QLD ~20%, WA ~10%, SA ~5%, others ~5%
   - assetClass distribution: Office ~30%, Industrial ~25%, Retail ~15%, Multi-Family ~10%, Mixed-Use ~10%, others ~10%
-  - originationPeriod: spread across the first 12 months ("2026-07" through "2027-06")
+  - originationPeriod: spread across the first 12 months ("2026-01" through "2027-06")
 
 Return the structured result via the create_loans tool. Do not return prose. Return exactly 250 loans.`;
 
@@ -578,7 +732,7 @@ const fyLoansInputSchema = {
 
 const FY_LOANS_SYSTEM = `You are a CRE loan-origination assistant for Gallantree, an Australian non-bank CRE lender. You generate realistic individual loans for a synthetic loan book.
 
-You receive parameters in the user message: a target fiscal year, a count, a style preset (CRE_CLO or CMBS), a target capital program name, and the list of valid origination period keys for that FY.
+You receive parameters in the user message: a target calendar year, a count, a style preset (CRE_CLO or CMBS), a target capital program name, and the list of valid origination period keys for that CY.
 
 PER-LOAN PROFILE — STYLE: CRE_CLO (transitional / value-add deals)
   - propertyStatus: ~85% "Transitional", ~15% "Stabilised"
@@ -602,7 +756,7 @@ INTERNAL GRADE (derive from internalScore for both styles, Gallantree's 15-tier 
   ≥195 A+ · ≥180 A · ≥165 A · ≥150 A- · ≥135 A- · ≥120 B+ · ≥105 B · ≥90 B- · ≥80 C+ · ≥70 C · ≥60 C- · ≥55 D+ · ≥50 D · ≥45 D- · ≥40 E+ · ≥30 E · else E-
 
 REALISM RULES (apply to every loan):
-  - loanId: format "LOAN-{FY2}-{####}" with FY2 = last two digits of the fiscal year and #### = 4-digit zero-padded sequential within this FY (0001, 0002, …)
+  - loanId: format "LOAN-{FY2}-{####}" with FY2 = last two digits of the calendar year and #### = 4-digit zero-padded sequential within this CY (0001, 0002, …)
   - borrower: realistic Australian sponsor / REIT / trust / fund-manager names (e.g. "Harbour REIT", "Westwind Funds Management", "Concord Estates Trust", "Aurora Realty Capital", "Beacon Property Partners", "Drayton Investments Group", "Ironbark Estates", "Summit Trust", "Parkside Capital", "Riverview Partners", "Northgate Property Trust", "Highland Capital", "Cardinal Estates"). Distinct names per loan but ~20% repeat-sponsor rate is realistic — same sponsor can hold multiple loans.
   - state distribution: NSW ~35%, VIC ~25%, QLD ~20%, WA ~10%, SA ~5%, TAS/ACT/NT ~5%
   - postcode: 4-digit Australian postcode that matches the state (NSW 2xxx, VIC 3xxx, QLD 4xxx, WA 6xxx, SA 5xxx, TAS 7xxx, ACT 26xx, NT 08xx)
@@ -615,7 +769,7 @@ Return all loans via the generate_fy_loans tool in a single call. Return EXACTLY
 export const FY_LOANS_TOOL: ToolDef<{ loans: FySeedLoanRow[] }> = {
   name: "generate_fy_loans",
   description:
-    "Generate a batch of realistic CRE loans for a single fiscal year and assign them to one capital program.",
+    "Generate a batch of realistic CRE loans for a single calendar year and assign them to one capital program.",
   input_schema: fyLoansInputSchema,
   parse: (input) => FyLoansResultSchema.parse(input),
 };
@@ -660,7 +814,7 @@ export function buildFyLoansUserMessage(opts: {
   const risk = opts.riskLevel ?? 3;
   return [
     `Generate exactly ${opts.count} loans.`,
-    `Fiscal year: FY${String(opts.fy).slice(-2)} (i.e. ${opts.monthKeys[0]} through ${opts.monthKeys[opts.monthKeys.length - 1]})`,
+    `Fiscal year: CY${String(opts.fy).slice(-2)} (i.e. ${opts.monthKeys[0]} through ${opts.monthKeys[opts.monthKeys.length - 1]})`,
     `Style preset: ${opts.style}`,
     `Capital program (informational, code will assign): "${opts.programName}"`,
     `Risk profile: ${risk}/5 — ${RISK_LABEL[risk]}`,

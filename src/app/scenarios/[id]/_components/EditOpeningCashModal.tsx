@@ -50,7 +50,7 @@ export function EditOpeningCashModal({
             <header className="flex items-baseline justify-between">
               <h2 className="text-base font-semibold">Opening cash</h2>
               <span className="text-[10px] uppercase tracking-wider text-zinc-400">
-                FY-start balance
+                CY-start balance
               </span>
             </header>
             <label className="flex flex-col gap-1">

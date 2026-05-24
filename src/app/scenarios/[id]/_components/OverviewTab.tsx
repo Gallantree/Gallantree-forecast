@@ -46,7 +46,7 @@ export function OverviewTab({ data }: { data: OverviewData }) {
       </div>
 
       <div className="border-b border-zinc-200 bg-zinc-50 px-4 py-2 text-[11px] text-zinc-500">
-        Consolidated by fiscal year (Jul → Jun). Each column is the FY total; the right column is
+        Consolidated by calendar year (Jan → Dec). Each column is the CY total; the right column is
         the 5y total.
       </div>
 
@@ -62,7 +62,7 @@ export function OverviewTab({ data }: { data: OverviewData }) {
                   key={fy}
                   className="min-w-[120px] border-b border-zinc-300 px-3 py-2 text-right text-xs font-semibold uppercase tracking-wider"
                 >
-                  FY{String(fy).slice(-2)}
+                  CY{String(fy).slice(-2)}
                 </th>
               ))}
               <th className="min-w-[140px] border-b border-l border-zinc-300 bg-zinc-200 px-3 py-2 text-right text-xs font-bold uppercase tracking-wider">

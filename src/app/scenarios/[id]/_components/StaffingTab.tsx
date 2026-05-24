@@ -4,6 +4,7 @@ import { addStaff, deleteStaff, updateStaff } from "../_actions";
 import { AddStaffForm, type PlainPayband } from "./AddStaffForm";
 import { EditStaffButton, type EditStaffData } from "./EditStaffButton";
 import { PlanStaffGrowthModal } from "./PlanStaffGrowthModal";
+import { SeedStaffButton } from "./SeedStaffButton";
 
 export interface StaffRow {
   _id: string;
@@ -105,11 +106,30 @@ export function StaffingTab({
     caseByCase: p.caseByCase,
   }));
 
-  // Headline stats
-  const headCount = staff.length;
+  // Group key for collapsing repeated-person phase rows. Anonymous rows
+  // (no personName) and Plan-growth placeholders stay ungrouped — each
+  // counts as its own block.
+  const groupKey = (r: StaffRow): string =>
+    r.isGrowth || !r.personName ? `__row_${r._id}` : `${r.personName}|${r.role}|${r.accountCode}`;
+
+  // Sort so phase rows for the same person are adjacent and chronological.
+  // Original ordering (createdAt) is preserved within ungrouped rows by
+  // tie-breaking on _id.
+  const sortedStaff = [...staff].sort((a, b) => {
+    const ka = groupKey(a);
+    const kb = groupKey(b);
+    if (ka !== kb) return ka.localeCompare(kb);
+    return a.startPeriodKey.localeCompare(b.startPeriodKey);
+  });
+
+  // Headline stats — count DISTINCT people (group keys), not phase rows.
+  const distinctGroups = new Set(staff.map(groupKey));
+  const phaseRowCount = staff.length;
+  const headCount = distinctGroups.size;
   const realStaff = staff.filter((s) => !s.isGrowth);
+  const realDistinctGroups = new Set(realStaff.map(groupKey));
   const growthCount = staff.length - realStaff.length;
-  const realHeadCount = realStaff.length;
+  const realHeadCount = realDistinctGroups.size;
   const totalFteRounded = totalFte.toString();
   const monthlyCost = totalAnnualCost.div(12);
 
@@ -130,6 +150,14 @@ export function StaffingTab({
                   title={`${realHeadCount} real + ${growthCount} planned growth hires`}
                 >
                   ({fmtNum0(realHeadCount)} + {fmtNum0(growthCount)})
+                </span>
+              ) : null}
+              {phaseRowCount > headCount ? (
+                <span
+                  className="ml-1 text-[11px] font-normal text-zinc-500"
+                  title={`${phaseRowCount} phase rows across ${headCount} people`}
+                >
+                  · {phaseRowCount} phase rows
                 </span>
               ) : null}
             </div>
@@ -160,6 +188,7 @@ export function StaffingTab({
           </div>
         </div>
         <div className="flex items-end gap-2">
+          <SeedStaffButton scenarioId={scenarioId} />
           <PlanStaffGrowthModal
             scenarioId={scenarioId}
             fys={fys}
@@ -208,16 +237,18 @@ export function StaffingTab({
               </tr>
             </thead>
             <tbody>
-              {staff.map((r) => {
+              {sortedStaff.map((r, i) => {
                 const fte = new Decimal(r.ftePct?.toString() ?? "1");
                 const effective = effectiveAnnual(r);
                 const bandTier =
                   r.band !== undefined && r.tier !== undefined ? `B${r.band} · T${r.tier}` : "—";
+                const prev = i > 0 ? sortedStaff[i - 1] : null;
+                const isContinuation = prev !== null && groupKey(prev) === groupKey(r);
                 return (
                   <tr
                     key={r._id}
                     className={`border-b border-zinc-100 hover:bg-yellow-50/40 ${
-                      r.isGrowth ? "bg-amber-50/50" : ""
+                      r.isGrowth ? "bg-amber-50/50" : isContinuation ? "bg-zinc-50/60" : ""
                     }`}
                   >
                     <Td>
@@ -228,11 +259,20 @@ export function StaffingTab({
                         >
                           Growth
                         </span>
+                      ) : isContinuation ? (
+                        <span
+                          className="pl-3 text-[11px] text-zinc-400"
+                          title={`Continuation of ${r.personName} — phase change`}
+                        >
+                          ↳ from {r.startPeriodKey}
+                        </span>
                       ) : (
                         (r.personName ?? <span className="text-zinc-400">—</span>)
                       )}
                     </Td>
-                    <Td className="font-medium">{r.role}</Td>
+                    <Td className={`font-medium ${isContinuation ? "text-zinc-500" : ""}`}>
+                      {isContinuation ? <span className="text-[11px]">{r.role}</span> : r.role}
+                    </Td>
                     <Td>{EMPLOYMENT_LABEL[r.employmentType ?? "full_time"]}</Td>
                     <Td className="text-right tabular-nums">{fte.toFixed(2)}</Td>
                     <Td className="font-mono text-zinc-600">{bandTier}</Td>

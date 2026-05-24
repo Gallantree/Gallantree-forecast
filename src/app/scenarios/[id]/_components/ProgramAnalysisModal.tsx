@@ -157,7 +157,7 @@ export function ProgramAnalysisModal({ data }: { data: ProgramAnalysisData }) {
                 {/* 1. Active deal size by FY (year-on-year growth) */}
                 <Card
                   title="Year-on-year capital deployment"
-                  subtitle="Active program principal per FY (bars) + active program count (line)"
+                  subtitle="Active program principal per CY (bars) + active program count (line)"
                 >
                   <ResponsiveContainer width="100%" height={280}>
                     <ComposedChart
@@ -216,9 +216,9 @@ export function ProgramAnalysisModal({ data }: { data: ProgramAnalysisData }) {
                   </ResponsiveContainer>
                 </Card>
 
-                {/* 2. New deals launched per FY */}
+                {/* 2. New deals launched per CY */}
                 <Card
-                  title="New programs launched per FY"
+                  title="New programs launched per CY"
                   subtitle="$ volume of deals coming online each year"
                 >
                   <ResponsiveContainer width="100%" height={280}>

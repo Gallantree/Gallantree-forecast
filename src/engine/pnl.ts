@@ -55,6 +55,9 @@ export interface OpexPctRevenueDriverInput extends DriverBase {
 export interface OpexPerFteDriverInput extends DriverBase {
   kind: "opex_per_fte";
   costPerFteMonthly: Decimal.Value;
+  // Optional monthly compounded growth on the per-FTE rate. When unset the
+  // rate is flat for the life of the driver.
+  monthlyGrowthPct?: Decimal.Value;
 }
 export interface CapexStraightLineDriverInput extends DriverBase {
   kind: "capex_straight_line";
@@ -225,7 +228,11 @@ export function projectOpexPerFte(
   return horizon.map((pk, i) => {
     const idx = activeIndex(horizon, d.startPeriodKey, d.endPeriodKey, pk);
     if (idx < 0) return { periodKey: pk, value: ZERO };
-    return { periodKey: pk, value: per.times(money(fteCountByPeriod[i])) };
+    const rate =
+      d.monthlyGrowthPct === undefined
+        ? per
+        : compoundedMonthly(d.costPerFteMonthly, d.monthlyGrowthPct, idx);
+    return { periodKey: pk, value: rate.times(money(fteCountByPeriod[i])) };
   });
 }
 

@@ -61,17 +61,17 @@ export function ValuationTab({ scenarioId, data }: { scenarioId: string; data: V
           tone={lastDcf.invalidReason ? "warn" : "ok"}
         />
         <Tile
-          label={`EV/EBITDA · FY${String(lastEvEbitda.fy).slice(-2)}`}
+          label={`EV/EBITDA · CY${String(lastEvEbitda.fy).slice(-2)}`}
           value={fmtMoney2(lastEvEbitda.equityValue)}
           sub={`${data.assumptions.evEbitdaMultiple}x · EV ${fmtMoney2(lastEvEbitda.enterpriseValue)}`}
         />
         <Tile
-          label={`EV/Revenue · FY${String(lastEvRevenue.fy).slice(-2)}`}
+          label={`EV/Revenue · CY${String(lastEvRevenue.fy).slice(-2)}`}
           value={fmtMoney2(lastEvRevenue.equityValue)}
           sub={`${data.assumptions.evRevenueMultiple}x · EV ${fmtMoney2(lastEvRevenue.enterpriseValue)}`}
         />
         <Tile
-          label={`P/E · FY${String(lastPe.fy).slice(-2)}`}
+          label={`P/E · CY${String(lastPe.fy).slice(-2)}`}
           value={fmtMoney2(lastPe.equityValue)}
           sub={`${data.assumptions.peMultiple}x · NI ${fmtMoney2(lastPe.metric)}`}
         />
@@ -94,16 +94,16 @@ export function ValuationTab({ scenarioId, data }: { scenarioId: string; data: V
       </div>
 
       <div className="flex-1 overflow-auto">
-        {/* FY aggregates */}
+        {/* CY aggregates */}
         <section className="border-b border-zinc-200">
-          <SectionHeader label="FY aggregates (computed)" color="bg-zinc-50 text-zinc-700" />
+          <SectionHeader label="CY aggregates (computed)" color="bg-zinc-50 text-zinc-700" />
           <table className="w-full border-collapse text-xs">
             <thead className="bg-zinc-100 text-zinc-600">
               <tr>
                 <Th>Metric</Th>
                 {data.fys.map((fy) => (
                   <Th key={fy} className="text-right">
-                    FY{String(fy).slice(-2)}
+                    CY{String(fy).slice(-2)}
                   </Th>
                 ))}
               </tr>
@@ -237,7 +237,7 @@ function MultiplesSection({
         <tbody>
           {rows.map((r) => (
             <tr key={r.fy} className="border-b border-zinc-100 hover:bg-yellow-50/40">
-              <Td className="font-medium">FY{String(r.fy).slice(-2)}</Td>
+              <Td className="font-medium">CY{String(r.fy).slice(-2)}</Td>
               <Td className="text-right tabular-nums">{fmtMoney2(r.metric)}</Td>
               <Td className="text-right tabular-nums text-zinc-500">
                 {Number(r.multiple).toFixed(1)}x
