@@ -531,7 +531,7 @@ function _ProfileCard({
   const summaryYears = fys
     .map((fy, i) => {
       const pct = Number(cleanDecimal(profile.fyGrowthPcts[i] ?? "0") || "0");
-      return pct > 0 ? `FY${String(fy).slice(-2)} ${pct}%` : null;
+      return pct > 0 ? `CY${String(fy).slice(-2)} ${pct}%` : null;
     })
     .filter(Boolean)
     .join(" · ");

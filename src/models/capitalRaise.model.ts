@@ -14,6 +14,24 @@ export interface IInvestor {
   notes?: string;
 }
 
+export interface IUseOfFundsManualLine {
+  _id?: Types.ObjectId;
+  label: string;
+  amount: Types.Decimal128;
+}
+
+// A saved "Use of Funds" plan attached to a capital raise. Captures the
+// runway window (coverMonths) and the user's view choices (contingency %,
+// whether revenue offsets uses, ad-hoc manual line items). The actual
+// staff/OPEX/issuance totals are recomputed live from the engine — only
+// the dials and ad-hoc adjustments persist.
+export interface IUseOfFundsPlan {
+  coverMonths: number;
+  contingencyPct: Types.Decimal128;
+  includeRevenue: boolean;
+  manualLines: IUseOfFundsManualLine[];
+}
+
 export interface ICapitalRaise {
   scenarioId: Types.ObjectId;
   name: string;
@@ -27,6 +45,7 @@ export interface ICapitalRaise {
   // Per-share (equity) or per-note (convertible) price.
   pricePerUnit?: Types.Decimal128;
   investors: IInvestor[];
+  useOfFundsPlan?: IUseOfFundsPlan;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -48,6 +67,24 @@ const investorSchema = new Schema<IInvestor>(
   { _id: true },
 );
 
+const useOfFundsManualLineSchema = new Schema<IUseOfFundsManualLine>(
+  {
+    label: { type: String, required: true, trim: true },
+    amount: { type: Schema.Types.Decimal128, required: true },
+  },
+  { _id: true },
+);
+
+const useOfFundsPlanSchema = new Schema<IUseOfFundsPlan>(
+  {
+    coverMonths: { type: Number, required: true, min: 1, max: 60 },
+    contingencyPct: { type: Schema.Types.Decimal128, required: true },
+    includeRevenue: { type: Boolean, required: true, default: false },
+    manualLines: { type: [useOfFundsManualLineSchema], default: [] },
+  },
+  { _id: false },
+);
+
 const capitalRaiseSchema = new Schema<ICapitalRaise>(
   {
     scenarioId: { type: Schema.Types.ObjectId, ref: "Scenario", required: true },
@@ -59,6 +96,7 @@ const capitalRaiseSchema = new Schema<ICapitalRaise>(
     valuationCap: { type: Schema.Types.Decimal128 },
     pricePerUnit: { type: Schema.Types.Decimal128 },
     investors: { type: [investorSchema], default: [] },
+    useOfFundsPlan: { type: useOfFundsPlanSchema, default: undefined },
   },
   { timestamps: true },
 );

@@ -3,10 +3,12 @@ import Link from "next/link";
 import { getCurrentUser } from "@/lib/currentUser";
 import { connectToDatabase } from "@/lib/db";
 import { CapitalProgram, Driver, Headcount, Loan, Scenario } from "@/models";
+import type { ScenarioViewMode } from "@/models/scenario.model";
 import {
   branchFromBase,
   createScenario,
   deleteScenario,
+  duplicateScenarioAsProfile,
   setBaseScenario,
   unsetBaseScenario,
 } from "./_actions";
@@ -19,6 +21,7 @@ interface ScenarioRow {
   name: string;
   status: string;
   isBase: boolean;
+  viewMode: ScenarioViewMode;
   parentName?: string;
   updatedAt: string;
   counts: {
@@ -47,6 +50,7 @@ export default async function Home() {
     name: string;
     status: string;
     isBase?: boolean;
+    viewMode?: ScenarioViewMode;
     parentId?: { toString: () => string };
     updatedAt: Date;
   };
@@ -96,6 +100,7 @@ export default async function Home() {
       name: s.name,
       status: s.status,
       isBase: s.isBase ?? false,
+      viewMode: s.viewMode ?? "all",
       parentName: s.parentId ? nameById.get(s.parentId.toString()) : undefined,
       updatedAt: fmtDate(s.updatedAt),
       counts: {
@@ -107,8 +112,12 @@ export default async function Home() {
     };
   });
 
-  const base = rows.find((r) => r.isBase) ?? null;
+  const baseAll = rows.find((r) => r.isBase && r.viewMode === "all") ?? null;
+  const baseGallantree = rows.find((r) => r.isBase && r.viewMode === "gallantree") ?? null;
   const branches = rows.filter((r) => !r.isBase);
+  // For the branch form: default to the All base if present, otherwise Gallantree.
+  const branchBaseAll = baseAll;
+  const branchBaseGallantree = baseGallantree;
 
   return (
     <div className="min-h-screen bg-zinc-50 font-sans text-zinc-900">
@@ -141,20 +150,35 @@ export default async function Home() {
       </header>
 
       <main className="mx-auto max-w-6xl space-y-10 px-6 py-10">
-        {/* Base scenario */}
+        {/* Base scenarios — one per profile */}
         <section>
           <div className="mb-3 flex items-baseline justify-between">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-600">
-              Base scenario
+              Base scenarios
             </h2>
-            {base ? (
-              <span className="text-xs text-zinc-500">
-                The unmodified baseline. Branches inherit and override.
-              </span>
-            ) : null}
+            <span className="text-xs text-zinc-500">
+              Two profiles · the consolidated &ldquo;All&rdquo; view and the Gallantree-only view.
+            </span>
           </div>
 
-          {base ? <BaseCard row={base} /> : <NoBaseCard candidates={rows} />}
+          <div className="grid gap-4 lg:grid-cols-2">
+            <BaseSlot
+              viewMode="all"
+              label="All"
+              description="Full consolidated workspace · revenue, loan book, capital programs, full P&amp;L."
+              row={baseAll}
+              candidates={rows.filter((r) => r.viewMode === "all")}
+              counterpart={baseGallantree}
+            />
+            <BaseSlot
+              viewMode="gallantree"
+              label="Gallantree"
+              description="Gallantree's own operating economics · platform revenues, OPEX, Gallantree P&amp;L."
+              row={baseGallantree}
+              candidates={rows.filter((r) => r.viewMode === "gallantree")}
+              counterpart={baseAll}
+            />
+          </div>
         </section>
 
         {/* Branches */}
@@ -166,40 +190,22 @@ export default async function Home() {
             <span className="text-xs text-zinc-500">Edit freely — the base stays untouched.</span>
           </div>
 
-          {base ? (
-            <form
-              action={branchFromBase}
-              className="mb-4 flex items-end gap-2 rounded-md border border-zinc-200 bg-white px-4 py-3 text-xs"
-            >
-              <label className="flex flex-1 flex-col gap-1">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
-                  Branch name
-                </span>
-                <input
-                  type="text"
-                  name="name"
-                  required
-                  placeholder="e.g. Aggressive hiring · Downside NIM · Conservative loan growth"
-                  className="rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
-                />
-              </label>
-              <button
-                type="submit"
-                className="rounded-md bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-zinc-700"
-              >
-                Branch from {base.name}
-              </button>
-            </form>
-          ) : (
-            <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900">
-              Pick a base scenario above before branching.
-            </div>
-          )}
+          <div className="mb-4 grid gap-3 lg:grid-cols-2">
+            {branchBaseAll ? (
+              <BranchForm base={branchBaseAll} viewMode="all" />
+            ) : (
+              <BranchPlaceholder label="All" />
+            )}
+            {branchBaseGallantree ? (
+              <BranchForm base={branchBaseGallantree} viewMode="gallantree" />
+            ) : (
+              <BranchPlaceholder label="Gallantree" />
+            )}
+          </div>
 
           {branches.length === 0 ? (
             <div className="rounded-md border border-dashed border-zinc-300 bg-white px-6 py-10 text-center text-sm text-zinc-500">
               No branches yet.
-              {base ? " Create one above." : ""}
             </div>
           ) : (
             <BranchTable rows={branches} />
@@ -234,76 +240,195 @@ export default async function Home() {
   );
 }
 
-function BaseCard({ row }: { row: ScenarioRow }) {
+function BaseSlot({
+  viewMode,
+  label,
+  description,
+  row,
+  candidates,
+  counterpart,
+}: {
+  viewMode: ScenarioViewMode;
+  label: string;
+  description: string;
+  row: ScenarioRow | null;
+  candidates: ScenarioRow[];
+  counterpart: ScenarioRow | null;
+}) {
+  const accent = viewMode === "gallantree" ? "border-indigo-300" : "border-emerald-300";
+  const chip =
+    viewMode === "gallantree" ? "bg-indigo-100 text-indigo-800" : "bg-emerald-100 text-emerald-800";
+
   return (
-    <div className="flex items-stretch justify-between rounded-md border-2 border-emerald-300 bg-white shadow-sm">
-      <div className="flex-1 px-5 py-4">
-        <div className="flex items-baseline gap-3">
-          <Link
-            href={`/scenarios/${row._id}`}
-            className="text-base font-semibold tracking-tight hover:underline"
+    <div className={`rounded-md border-2 ${accent} bg-white shadow-sm`}>
+      <div className="border-b border-zinc-100 px-5 py-2">
+        <div className="flex items-baseline gap-2">
+          <span
+            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${chip}`}
           >
-            {row.name}
-          </Link>
-          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-800">
-            Base
+            {label}
           </span>
-          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-600">
-            {row.status}
-          </span>
+          <span className="text-[10px] uppercase tracking-wider text-zinc-500">profile</span>
         </div>
-        <div className="mt-2 flex gap-5 text-xs text-zinc-600">
-          <Stat label="Drivers" value={row.counts.drivers} />
-          <Stat label="Staff" value={row.counts.staff} />
-          <Stat label="Loans" value={row.counts.loans} />
-          <Stat label="Capital programs" value={row.counts.programs} />
-          <span className="ml-auto text-zinc-400">Updated {row.updatedAt}</span>
+        <p className="mt-1 text-xs text-zinc-500">{description}</p>
+      </div>
+
+      {row ? (
+        <div className="flex items-stretch justify-between">
+          <div className="flex-1 px-5 py-4">
+            <div className="flex items-baseline gap-3">
+              <Link
+                href={`/scenarios/${row._id}`}
+                className="text-base font-semibold tracking-tight hover:underline"
+              >
+                {row.name}
+              </Link>
+              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-600">
+                {row.status}
+              </span>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-5 text-xs text-zinc-600">
+              <Stat label="Drivers" value={row.counts.drivers} />
+              <Stat label="Staff" value={row.counts.staff} />
+              <Stat label="Loans" value={row.counts.loans} />
+              <Stat label="Capital programs" value={row.counts.programs} />
+              <span className="ml-auto text-zinc-400">Updated {row.updatedAt}</span>
+            </div>
+          </div>
+          <div className="flex flex-col items-stretch justify-center gap-2 border-l border-zinc-200 px-4 py-4">
+            <Link
+              href={`/scenarios/${row._id}`}
+              className="rounded-md bg-zinc-900 px-4 py-1.5 text-center text-xs font-medium text-white hover:bg-zinc-700"
+            >
+              Open →
+            </Link>
+            <form action={unsetBaseScenario.bind(null, row._id)}>
+              <button
+                type="submit"
+                className="w-full rounded-md border border-zinc-300 bg-white px-4 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-100"
+              >
+                Unset base
+              </button>
+            </form>
+          </div>
         </div>
-      </div>
-      <div className="flex flex-col items-stretch justify-center gap-2 border-l border-zinc-200 px-4 py-4">
-        <Link
-          href={`/scenarios/${row._id}`}
-          className="rounded-md bg-zinc-900 px-4 py-1.5 text-center text-xs font-medium text-white hover:bg-zinc-700"
-        >
-          Open →
-        </Link>
-        <form action={unsetBaseScenario.bind(null, row._id)}>
-          <button
-            type="submit"
-            className="w-full rounded-md border border-zinc-300 bg-white px-4 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-100"
-          >
-            Unset base
-          </button>
-        </form>
-      </div>
+      ) : (
+        <EmptyBaseSlot
+          viewMode={viewMode}
+          label={label}
+          candidates={candidates}
+          counterpart={counterpart}
+        />
+      )}
     </div>
   );
 }
 
-function NoBaseCard({ candidates }: { candidates: ScenarioRow[] }) {
+function EmptyBaseSlot({
+  viewMode,
+  label,
+  candidates,
+  counterpart,
+}: {
+  viewMode: ScenarioViewMode;
+  label: string;
+  candidates: ScenarioRow[];
+  counterpart: ScenarioRow | null;
+}) {
+  const defaultName = viewMode === "gallantree" ? "Base Model — Gallantree" : "Base Model — All";
   return (
-    <div className="rounded-md border border-dashed border-zinc-300 bg-white px-5 py-4">
+    <div className="px-5 py-4">
       <p className="text-sm text-zinc-700">
-        No base scenario is set. Pick one to designate as the baseline that branches will fork from.
+        No <strong>{label}</strong> base set yet.
       </p>
-      {candidates.length === 0 ? (
-        <p className="mt-2 text-xs text-zinc-500">Create a scenario first — see below.</p>
-      ) : (
-        <ul className="mt-3 flex flex-wrap gap-2">
-          {candidates.map((c) => (
-            <li key={c._id}>
-              <form action={setBaseScenario.bind(null, c._id)}>
-                <button
-                  type="submit"
-                  className="rounded-md border border-zinc-300 bg-white px-3 py-1 text-xs font-medium text-zinc-700 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-800"
-                >
-                  Set {c.name} as base
-                </button>
-              </form>
-            </li>
-          ))}
-        </ul>
-      )}
+      {counterpart ? (
+        <form action={duplicateScenarioAsProfile} className="mt-3 flex flex-wrap items-end gap-2">
+          <input type="hidden" name="sourceId" value={counterpart._id} />
+          <input type="hidden" name="viewMode" value={viewMode} />
+          <label className="flex flex-1 flex-col gap-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+              Name
+            </span>
+            <input
+              type="text"
+              name="name"
+              required
+              defaultValue={defaultName}
+              className="rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
+            />
+          </label>
+          <button
+            type="submit"
+            className="rounded-md bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-zinc-700"
+          >
+            Duplicate {counterpart.name} as {label}
+          </button>
+        </form>
+      ) : null}
+      {candidates.length > 0 ? (
+        <div className="mt-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+            Or promote an existing {label} scenario
+          </p>
+          <ul className="mt-2 flex flex-wrap gap-2">
+            {candidates.map((c) => (
+              <li key={c._id}>
+                <form action={setBaseScenario.bind(null, c._id)}>
+                  <button
+                    type="submit"
+                    className="rounded-md border border-zinc-300 bg-white px-3 py-1 text-xs font-medium text-zinc-700 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-800"
+                  >
+                    Set {c.name} as base
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function BranchForm({ base, viewMode }: { base: ScenarioRow; viewMode: ScenarioViewMode }) {
+  const accent =
+    viewMode === "gallantree" ? "border-indigo-200 bg-indigo-50/30" : "border-zinc-200 bg-white";
+  return (
+    <form
+      action={branchFromBase}
+      className={`flex items-end gap-2 rounded-md border ${accent} px-4 py-3 text-xs`}
+    >
+      <input type="hidden" name="viewMode" value={viewMode} />
+      <label className="flex flex-1 flex-col gap-1">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+          Branch from {viewMode === "gallantree" ? "Gallantree" : "All"} · {base.name}
+        </span>
+        <input
+          type="text"
+          name="name"
+          required
+          placeholder={
+            viewMode === "gallantree"
+              ? "e.g. Tight OPEX · Faster license ramp"
+              : "e.g. Aggressive hiring · Downside NIM"
+          }
+          className="rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
+        />
+      </label>
+      <button
+        type="submit"
+        className="rounded-md bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-zinc-700"
+      >
+        Branch
+      </button>
+    </form>
+  );
+}
+
+function BranchPlaceholder({ label }: { label: string }) {
+  return (
+    <div className="rounded-md border border-dashed border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+      Set a {label} base above to enable branching from it.
     </div>
   );
 }
@@ -315,6 +440,7 @@ function BranchTable({ rows }: { rows: ScenarioRow[] }) {
         <thead className="bg-zinc-50 text-xs uppercase tracking-wider text-zinc-500">
           <tr>
             <Th>Name</Th>
+            <Th>Profile</Th>
             <Th>Parent</Th>
             <Th>Status</Th>
             <Th className="text-right">Drivers</Th>
@@ -335,6 +461,17 @@ function BranchTable({ rows }: { rows: ScenarioRow[] }) {
                 >
                   {r.name}
                 </Link>
+              </Td>
+              <Td>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
+                    r.viewMode === "gallantree"
+                      ? "bg-indigo-100 text-indigo-800"
+                      : "bg-zinc-200 text-zinc-700"
+                  }`}
+                >
+                  {r.viewMode === "gallantree" ? "Gallantree" : "All"}
+                </span>
               </Td>
               <Td className="text-zinc-600">{r.parentName ?? "—"}</Td>
               <Td>

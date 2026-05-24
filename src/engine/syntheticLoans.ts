@@ -291,7 +291,7 @@ export function generateSyntheticLoans(
         // ── Property status biased by program type ──
         const propertyStatus = sampleStatus(profile.programType, statusSeed);
 
-        const loanId = `SYN-${profile.capitalProgramId.slice(-6)}-FY${String(fyGroups[k].fy).slice(-2)}-${String(i + 1).padStart(4, "0")}`;
+        const loanId = `SYN-${profile.capitalProgramId.slice(-6)}-CY${String(fyGroups[k].fy).slice(-2)}-${String(i + 1).padStart(4, "0")}`;
 
         out.push({
           synthetic: true,

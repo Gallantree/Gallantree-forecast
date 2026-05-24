@@ -285,7 +285,7 @@ export function PnlClientTable(props: PnlClientTableProps) {
               colSpan={g.months.length + 1}
               className="border-b border-r border-zinc-300 bg-zinc-100 px-3 py-1.5 text-center font-semibold tracking-wide"
             >
-              FY{String(g.fy).slice(-2)}
+              CY{String(g.fy).slice(-2)}
             </th>
           ))}
         </tr>
@@ -308,7 +308,7 @@ export function PnlClientTable(props: PnlClientTableProps) {
                 </th>
               ))}
               <th className="min-w-[96px] border-b border-r border-zinc-300 bg-zinc-100 px-2 py-1.5 text-right font-semibold text-zinc-700">
-                FY{String(g.fy).slice(-2)} total
+                CY{String(g.fy).slice(-2)} total
               </th>
             </Fragment>
           ))}

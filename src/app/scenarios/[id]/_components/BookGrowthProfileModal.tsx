@@ -169,7 +169,7 @@ export function BookGrowthProfileModal({
 
             <div>
               <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
-                Growth % per FY
+                Growth % per CY
                 <span className="ml-1 font-normal lowercase text-zinc-400">
                   · compounds against the running book
                 </span>
@@ -178,7 +178,7 @@ export function BookGrowthProfileModal({
                 {fys.map((fy, i) => (
                   <label key={fy} className="flex flex-col items-center gap-0.5">
                     <span className="text-[9px] font-mono text-zinc-500">
-                      FY{String(fy).slice(-2)}
+                      CY{String(fy).slice(-2)}
                     </span>
                     <input
                       inputMode="decimal"
@@ -197,7 +197,7 @@ export function BookGrowthProfileModal({
             </div>
 
             <div className="rounded-md bg-zinc-50 px-3 py-2 text-[11px] text-zinc-600">
-              Synthetic loans will be injected each FY at deterministic-random months, assigned to
+              Synthetic loans will be injected each CY at deterministic-random months, assigned to
               the selected program. Count = round(running book size × growth %). Loan size equals
               the average of existing loans in this program.
             </div>

@@ -16,10 +16,16 @@ export interface IBookGrowthProfile {
   riskLevel: GrowthRiskLevel;
 }
 
+export type ScenarioViewMode = "all" | "gallantree";
+
 export interface IScenario {
   name: string;
   parentId?: Types.ObjectId;
   isBase?: boolean;
+  // Which tab profile this scenario uses. 'all' shows the full consolidated
+  // workspace; 'gallantree' shows only the Gallantree-specific operating view
+  // (overview-gallantree, pnl-gallantree, opex, platform revenues, capital raises).
+  viewMode?: ScenarioViewMode;
   status: "draft" | "active" | "archived";
   lockedAt?: Date;
   createdBy?: Types.ObjectId;
@@ -83,6 +89,7 @@ const scenarioSchema = new Schema<IScenario>(
     name: { type: String, required: true, trim: true },
     parentId: { type: Schema.Types.ObjectId, ref: "Scenario" },
     isBase: { type: Boolean, default: false },
+    viewMode: { type: String, enum: ["all", "gallantree"], default: "all" },
     status: { type: String, enum: ["draft", "active", "archived"], default: "draft" },
     lockedAt: { type: Date },
     createdBy: { type: Schema.Types.ObjectId, ref: "User" },
@@ -115,9 +122,12 @@ scenarioSchema.index({ parentId: 1 });
 scenarioSchema.index({ status: 1, updatedAt: -1 });
 scenarioSchema.index({ organisationId: 1, deletedAt: 1 });
 scenarioSchema.index({ deletedAt: 1 });
-// Sparse partial index so we can ensure at most one base scenario, while
-// allowing many non-base rows (isBase=false / unset).
-scenarioSchema.index({ isBase: 1 }, { unique: true, partialFilterExpression: { isBase: true } });
+// Sparse partial index so we can ensure at most one base scenario per
+// viewMode, while allowing many non-base rows (isBase=false / unset).
+scenarioSchema.index(
+  { viewMode: 1, isBase: 1 },
+  { unique: true, partialFilterExpression: { isBase: true } },
+);
 
 const Scenario = defineModel<IScenario>("Scenario", scenarioSchema);
 

@@ -8,6 +8,7 @@ import { getCurrentUser } from "@/lib/currentUser";
 import { connectToDatabase } from "@/lib/db";
 import { parseLoanTape } from "@/lib/parseLoanTape";
 import {
+  BSL_SEED,
   CMBS_SEED,
   CRE_CLO_SEED,
   FY_LOANS_SEED,
@@ -16,6 +17,7 @@ import {
   type LoanStyle,
   type SeedLoan,
   type SeedProgram,
+  WAREHOUSE_SEED,
 } from "@/lib/seedSpecs";
 import {
   CapitalProgram,
@@ -28,6 +30,18 @@ import {
   Scenario,
 } from "@/models";
 import type { ArrearsStatus } from "@/models/loan.model";
+import {
+  ENHANCED_FUND_MGMT_FEE_BPS,
+  ENHANCED_FUND_UNIT_RETURN_BPS,
+  GALLANTREE_ENHANCED_FUNDS,
+} from "@/seed/gallantreeEnhancedFunds";
+import { GALLANTREE_OPEX_SEED } from "@/seed/gallantreeOpex";
+import {
+  GALLANTREE_STAFF_SEED,
+  STAFF_BUMP_PRECEDING_PERIOD_KEY,
+  STAFF_BUMP_START_PERIOD_KEY,
+  STAFF_PHASE_1_START_PERIOD_KEY,
+} from "@/seed/gallantreeStaff";
 import { parseDecimalInput } from "@/utils/format";
 import { toDecimal128 } from "@/utils/money";
 
@@ -392,6 +406,34 @@ export async function createProgram(scenarioId: string, payload: ProgramPayload)
     liabilities: sanitiseLiabilities(payload),
     upfrontFees: sanitiseUpfrontFees(payload),
   });
+  revalidatePath(`/scenarios/${scenarioId}`);
+}
+
+/**
+ * Replace a fund's captive equity-tranche holdings. `holdings` is the
+ * full new list — anything not in it is removed. Each item references a
+ * program by ID and the exact tranche name (case-sensitive) on that
+ * program. Only valid for MIT_FUND programs; calls on other types
+ * silently no-op.
+ */
+export async function updateEquityHoldings(
+  scenarioId: string,
+  programId: string,
+  holdings: Array<{ programId: string; trancheName: string }>,
+): Promise<void> {
+  if (!Types.ObjectId.isValid(scenarioId) || !Types.ObjectId.isValid(programId)) return;
+  if (!(await checkAccess(scenarioId))) return;
+  await connectToDatabase();
+  const docs = holdings
+    .filter((h) => Types.ObjectId.isValid(h.programId) && h.trancheName.trim())
+    .map((h) => ({
+      programId: new Types.ObjectId(h.programId),
+      trancheName: h.trancheName.trim(),
+    }));
+  await CapitalProgram.updateOne(
+    { _id: programId, scenarioId, type: "MIT_FUND" },
+    { $set: { captiveEquityHoldings: docs } },
+  );
   revalidatePath(`/scenarios/${scenarioId}`);
 }
 
@@ -1168,6 +1210,30 @@ export async function updateControlPanel(
   revalidatePath(`/scenarios/${scenarioId}`);
 }
 
+/**
+ * Wipe every scenario-scoped collection so the user can reseed cleanly
+ * — used after switching the fiscal/calendar-year convention so existing
+ * period keys don't end up mid-column under the new grouping.
+ *
+ * Scenario-level assumptions (openingCash, viewMode, firstYearLabel, etc.)
+ * are kept. Only the bulk operational data is dropped.
+ */
+export async function wipeScenarioData(scenarioId: string): Promise<void> {
+  if (!Types.ObjectId.isValid(scenarioId)) return;
+  if (!(await checkAccess(scenarioId))) return;
+  await connectToDatabase();
+  const oid = new Types.ObjectId(scenarioId);
+  await Promise.all([
+    Driver.deleteMany({ scenarioId: oid }),
+    Headcount.deleteMany({ scenarioId: oid }),
+    Loan.deleteMany({ scenarioId: oid }),
+    CapitalProgram.deleteMany({ scenarioId: oid }),
+    PlatformLicense.deleteMany({ scenarioId: oid }),
+    CapitalRaise.deleteMany({ scenarioId: oid }),
+  ]);
+  revalidatePath(`/scenarios/${scenarioId}`);
+}
+
 export async function clearLoanTape(scenarioId: string): Promise<void> {
   if (!Types.ObjectId.isValid(scenarioId)) return;
   if (!(await checkAccess(scenarioId))) return;
@@ -1219,25 +1285,50 @@ export async function setStaffGrowthTargets(scenarioId: string, targets: number[
   // Reference point: today's actual headcount + the scenario's CPI/super/
   // average salary. We use the average over real staff (isGrowth != true)
   // for the placeholder salary so the cost line stays believable.
-  const realStaff = await Headcount.find({
+  //
+  // A single person can have multiple phase rows (e.g. a salary bump split
+  // into Jan–Jul and Aug–onwards). Dedupe by (personName + role +
+  // accountCode) so headcount counts distinct people, and keep the LATEST
+  // phase per person for the salary average — that's what they'll be on
+  // when growth hires arrive in later years.
+  type StaffPhaseLean = {
+    personName?: string;
+    role: string;
+    accountCode: string;
+    startPeriodKey: string;
+    salaryAnnual: { toString: () => string };
+    superPct: { toString: () => string };
+    onCostPct: { toString: () => string };
+    salaryGrowthPctAnnual: { toString: () => string };
+    ftePct: { toString: () => string };
+  };
+  const allRealPhases = await Headcount.find({
     scenarioId: scenarioOid,
     isGrowth: { $ne: true },
   })
-    .select("salaryAnnual superPct onCostPct salaryGrowthPctAnnual ftePct")
-    .lean<
-      Array<{
-        salaryAnnual: { toString: () => string };
-        superPct: { toString: () => string };
-        onCostPct: { toString: () => string };
-        salaryGrowthPctAnnual: { toString: () => string };
-        ftePct: { toString: () => string };
-      }>
-    >();
+    .select(
+      "personName role accountCode startPeriodKey salaryAnnual superPct onCostPct salaryGrowthPctAnnual ftePct",
+    )
+    .lean<StaffPhaseLean[]>();
+
+  // Pick one row per person — the latest phase by startPeriodKey. Anonymous
+  // rows (no personName) each count as their own person.
+  const latestByPerson = new Map<string, StaffPhaseLean>();
+  for (const r of allRealPhases) {
+    const key = r.personName
+      ? `${r.personName}|${r.role}|${r.accountCode}`
+      : `__anon|${Math.random()}`;
+    const existing = latestByPerson.get(key);
+    if (!existing || r.startPeriodKey.localeCompare(existing.startPeriodKey) > 0) {
+      latestByPerson.set(key, r);
+    }
+  }
+  const realStaff = Array.from(latestByPerson.values());
   const currentHeadcount = realStaff.length;
-  const avg = (key: keyof (typeof realStaff)[number], fallback: number): number => {
+  const avg = (key: keyof StaffPhaseLean, fallback: number): number => {
     if (realStaff.length === 0) return fallback;
     let sum = 0;
-    for (const r of realStaff) sum += Number(r[key].toString());
+    for (const r of realStaff) sum += Number((r[key] as { toString: () => string }).toString());
     return sum / realStaff.length;
   };
   const avgSalary = avg("salaryAnnual", 200_000);
@@ -1250,8 +1341,8 @@ export async function setStaffGrowthTargets(scenarioId: string, targets: number[
     .select("firstYearLabel")
     .lean<{ firstYearLabel?: number }>();
   const firstYearLabel = scen?.firstYearLabel ?? 2026;
-  // Forecast year i (0-indexed) starts at firstYearLabel + i, July.
-  const startKeyForYear = (i: number) => `${firstYearLabel + i}-07` as const;
+  // Forecast year i (0-indexed) starts at firstYearLabel + i, January (CY).
+  const startKeyForYear = (i: number) => `${firstYearLabel + i}-01` as const;
 
   // Walk targets in order. Running total starts at today's real headcount.
   // Each year's delta = max(0, targets[i] - running). We don't shrink staff.
@@ -1266,7 +1357,7 @@ export async function setStaffGrowthTargets(scenarioId: string, targets: number[
       docsToCreate.push({
         scenarioId: scenarioOid,
         personName: undefined,
-        role: `Growth hire #${k} — FY${String(firstYearLabel + yearIdx + 1).slice(-2)}`,
+        role: `Growth hire #${k} — CY${String(firstYearLabel + yearIdx).slice(-2)}`,
         accountCode: "6000",
         employmentType: "full_time",
         ftePct: toDecimal128("1"),
@@ -1367,7 +1458,279 @@ export async function seedCmbsPrograms(scenarioId: string): Promise<SeedResult> 
       systemPrompt: CMBS_SEED.systemPrompt,
       tool: CMBS_SEED.tool,
       userMessage: CMBS_SEED.userMessage,
+      maxTokens: 24000,
+    });
+    await connectToDatabase();
+    await persistSeededPrograms(scenarioId, programs);
+    revalidatePath(`/scenarios/${scenarioId}`);
+    return { ok: true, created: programs.length };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+export async function seedBslPrograms(scenarioId: string): Promise<SeedResult> {
+  if (!Types.ObjectId.isValid(scenarioId)) return { ok: false, error: "invalid scenario" };
+  if (!(await checkAccess(scenarioId))) return { ok: false, error: "not authorized" };
+  if (!isAnthropicConfigured()) return { ok: false, error: "ANTHROPIC_API_KEY is not set" };
+  try {
+    const { programs } = await generateStructured({
+      systemPrompt: BSL_SEED.systemPrompt,
+      tool: BSL_SEED.tool,
+      userMessage: BSL_SEED.userMessage,
       maxTokens: 16000,
+    });
+    await connectToDatabase();
+    await persistSeededPrograms(scenarioId, programs);
+    revalidatePath(`/scenarios/${scenarioId}`);
+    return { ok: true, created: programs.length };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/**
+ * Seed the current Gallantree team (gallantree.com.au/team) as Headcount
+ * rows on a scenario. Deterministic — no AI call. All 17 staff get two
+ * rows:
+ *
+ *   • Phase 1 (current salary, off-grid) — Jan 2026 → Jul 2026
+ *   • Phase 2 (bumped salary, on-grid)  — Aug 2026 → ongoing
+ *
+ * Phase 2's band = max(1, phase1.band − bumpBands), same tier; salary
+ * hydrates from the payband grid. Advisors (Cissy Ma, Ivan Ritossa,
+ * Steve Toomey) are intentionally excluded.
+ *
+ * bumpBands defaults to 2 (preserves the original "two paybands up"
+ * behaviour). Pass any positive integer to vary the jump; 0 keeps everyone
+ * on their current pin (single phase, no bump).
+ */
+export async function seedGallantreeStaff(
+  scenarioId: string,
+  options?: { bumpBands?: number },
+): Promise<SeedResult> {
+  if (!Types.ObjectId.isValid(scenarioId)) return { ok: false, error: "invalid scenario" };
+  if (!(await checkAccess(scenarioId))) return { ok: false, error: "not authorized" };
+  const bumpBands = Math.max(0, Math.floor(options?.bumpBands ?? 2));
+  try {
+    await connectToDatabase();
+
+    const scen = await Scenario.findById(scenarioId).select("defaultCpiPct defaultSuperPct").lean<{
+      defaultCpiPct?: { toString: () => string };
+      defaultSuperPct?: { toString: () => string };
+    }>();
+    const cpi = scen?.defaultCpiPct?.toString() ?? "0";
+    const superPct = scen?.defaultSuperPct?.toString() ?? "12";
+
+    // Compute the on-grid (band, tier) pairs we'll need to hydrate salaries
+    // for. Always need every person's current pin; need the bumped pin only
+    // when bumpBands > 0.
+    const bandTiers: Array<{ band: number; tier: number }> = [];
+    for (const s of GALLANTREE_STAFF_SEED) {
+      bandTiers.push({ band: s.currentBand, tier: s.currentTier });
+      if (bumpBands > 0) {
+        bandTiers.push({ band: Math.max(1, s.currentBand - bumpBands), tier: s.currentTier });
+      }
+    }
+    const paybands = bandTiers.length
+      ? await Payband.find({ $or: bandTiers }).lean<
+          Array<{ band: number; tier: number; salaryAnnual?: { toString: () => string } }>
+        >()
+      : [];
+    const pbByKey = new Map<string, string | undefined>();
+    for (const p of paybands) pbByKey.set(`${p.band}-${p.tier}`, p.salaryAnnual?.toString());
+
+    const scenarioOid = new Types.ObjectId(scenarioId);
+    const docs: Record<string, unknown>[] = [];
+
+    for (const s of GALLANTREE_STAFF_SEED) {
+      const common = {
+        scenarioId: scenarioOid,
+        personName: s.personName,
+        role: s.role,
+        accountCode: s.accountCode ?? "6000",
+        employmentType: s.employmentType ?? "full_time",
+        ftePct: toDecimal128("1"),
+        superPct: toDecimal128(superPct),
+        onCostPct: toDecimal128("20"),
+        salaryGrowthPctAnnual: toDecimal128(cpi),
+      };
+
+      if (bumpBands === 0) {
+        // No bump — single row carrying current salary, running open-ended.
+        docs.push({
+          ...common,
+          band: s.currentBand,
+          tier: s.currentTier,
+          startPeriodKey: STAFF_PHASE_1_START_PERIOD_KEY,
+          salaryAnnual: toDecimal128(String(s.currentSalary)),
+        });
+        continue;
+      }
+
+      // Phase 1 — current pin + actual salary, Jan → Jul 2026.
+      docs.push({
+        ...common,
+        band: s.currentBand,
+        tier: s.currentTier,
+        startPeriodKey: STAFF_PHASE_1_START_PERIOD_KEY,
+        endPeriodKey: STAFF_BUMP_PRECEDING_PERIOD_KEY,
+        salaryAnnual: toDecimal128(String(s.currentSalary)),
+      });
+
+      // Phase 2 — bumped band/tier, grid salary, Aug 2026 → ongoing.
+      const newBand = Math.max(1, s.currentBand - bumpBands);
+      const newTier = s.currentTier;
+      const gridSalary = pbByKey.get(`${newBand}-${newTier}`);
+      docs.push({
+        ...common,
+        band: newBand,
+        tier: newTier,
+        startPeriodKey: STAFF_BUMP_START_PERIOD_KEY,
+        salaryAnnual: toDecimal128(gridSalary ?? "0"),
+      });
+    }
+
+    await Headcount.insertMany(docs);
+    revalidatePath(`/scenarios/${scenarioId}`);
+    return { ok: true, created: docs.length };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/**
+ * Seed Gallantree's recurring OPEX drivers (rent, utilities, insurance,
+ * software, hosting, AI, travel, etc.) onto a scenario. Deterministic — no
+ * AI call. Each item in GALLANTREE_OPEX_SEED becomes one Driver document.
+ */
+export async function seedGallantreeOpex(scenarioId: string): Promise<SeedResult> {
+  if (!Types.ObjectId.isValid(scenarioId)) return { ok: false, error: "invalid scenario" };
+  if (!(await checkAccess(scenarioId))) return { ok: false, error: "not authorized" };
+  try {
+    await connectToDatabase();
+    const scenarioOid = new Types.ObjectId(scenarioId);
+    const docs = GALLANTREE_OPEX_SEED.map((d) => ({
+      scenarioId: scenarioOid,
+      name: d.name,
+      accountCode: d.accountCode,
+      type: d.type,
+      startPeriodKey: d.startPeriodKey,
+      endPeriodKey: d.endPeriodKey,
+      ...(d.baseMonthly !== undefined ? { baseMonthly: toDecimal128(String(d.baseMonthly)) } : {}),
+      ...(d.monthlyGrowthPct !== undefined
+        ? { monthlyGrowthPct: toDecimal128(String(d.monthlyGrowthPct)) }
+        : {}),
+      ...(d.costPerFteMonthly !== undefined
+        ? { costPerFteMonthly: toDecimal128(String(d.costPerFteMonthly)) }
+        : {}),
+      ...(d.amount !== undefined ? { amount: toDecimal128(String(d.amount)) } : {}),
+      ...(d.periodKey !== undefined ? { periodKey: d.periodKey } : {}),
+    }));
+    await Driver.insertMany(docs);
+    revalidatePath(`/scenarios/${scenarioId}`);
+    return { ok: true, created: docs.length };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/**
+ * Seed the two Gallantree Enhanced Income Funds as MIT_FUND programs.
+ * Deterministic — no AI call. At seed time, the captiveEquityHoldings
+ * field on each fund is populated with every "Equity" tranche currently
+ * present on other CMBS / CRE CLO / BSL programs in the scenario. The
+ * user can adjust those selections via the holdings selector on the
+ * program card.
+ */
+export async function seedEnhancedIncomeFunds(scenarioId: string): Promise<SeedResult> {
+  if (!Types.ObjectId.isValid(scenarioId)) return { ok: false, error: "invalid scenario" };
+  if (!(await checkAccess(scenarioId))) return { ok: false, error: "not authorized" };
+  try {
+    await connectToDatabase();
+    const scenarioOid = new Types.ObjectId(scenarioId);
+
+    // Find all existing programs with an "Equity" tranche. Match the
+    // tranche name case-insensitively so "Equity tranche", "Equity", etc.
+    // all qualify.
+    type ProgramRef = {
+      _id: { toString: () => string };
+      type: string;
+      liabilities?: Array<{ name: string }>;
+    };
+    const existing = await CapitalProgram.find({ scenarioId: scenarioOid })
+      .select("_id type liabilities")
+      .lean<ProgramRef[]>();
+    const equityHoldings: Array<{ programId: Types.ObjectId; trancheName: string }> = [];
+    for (const p of existing) {
+      // Don't recurse into MIT_FUND or OTHER — equity tranches live on
+      // securitisations (CMBS / CRE_CLO / BSL=OTHER → we still want BSL,
+      // so allow OTHER too) and not on funds themselves.
+      if (p.type === "MIT_FUND") continue;
+      for (const l of p.liabilities ?? []) {
+        if (/equity/i.test(l.name)) {
+          equityHoldings.push({
+            programId: new Types.ObjectId(p._id.toString()),
+            trancheName: l.name,
+          });
+        }
+      }
+    }
+
+    const docs = GALLANTREE_ENHANCED_FUNDS.map((f) => {
+      const endYear = Number(f.startPeriodKey.slice(0, 4)) + f.termYears;
+      const endPeriodKey = `${endYear}-${f.startPeriodKey.slice(5)}`;
+      return {
+        scenarioId: scenarioOid,
+        name: f.name,
+        type: "MIT_FUND" as const,
+        dealSize: toDecimal128(String(f.dealSize)),
+        faceValuePerNote: toDecimal128("1000"),
+        startPeriodKey: f.startPeriodKey,
+        endPeriodKey,
+        notes: f.notes,
+        fees: [
+          {
+            name: "Senior management fee",
+            category: "senior_mgmt" as const,
+            basisAmount: toDecimal128(String(f.dealSize)),
+            feeBps: ENHANCED_FUND_MGMT_FEE_BPS,
+            accountCode: "4500",
+          },
+        ],
+        liabilities: [
+          {
+            name: "Units (BBSW + 700)",
+            numNotes: Math.round(f.dealSize / 1000),
+            returnProfileBps: ENHANCED_FUND_UNIT_RETURN_BPS,
+            calculationMethod: "monthly" as const,
+            rateType: "variable" as const,
+            accountCode: "6800",
+          },
+        ],
+        upfrontFees: [],
+        captiveEquityHoldings: equityHoldings,
+      };
+    });
+
+    await CapitalProgram.insertMany(docs);
+    revalidatePath(`/scenarios/${scenarioId}`);
+    return { ok: true, created: docs.length };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+export async function seedWarehousePrograms(scenarioId: string): Promise<SeedResult> {
+  if (!Types.ObjectId.isValid(scenarioId)) return { ok: false, error: "invalid scenario" };
+  if (!(await checkAccess(scenarioId))) return { ok: false, error: "not authorized" };
+  if (!isAnthropicConfigured()) return { ok: false, error: "ANTHROPIC_API_KEY is not set" };
+  try {
+    const { programs } = await generateStructured({
+      systemPrompt: WAREHOUSE_SEED.systemPrompt,
+      tool: WAREHOUSE_SEED.tool,
+      userMessage: WAREHOUSE_SEED.userMessage,
+      maxTokens: 8000,
     });
     await connectToDatabase();
     await persistSeededPrograms(scenarioId, programs);
@@ -1446,13 +1809,11 @@ export async function seedLoanBook(scenarioId: string): Promise<SeedResult> {
 
 // ── Per-FY loan seeding (parameterized modal) ───────────────────────────────
 
-// Australian FY → list of YYYY-MM keys (Jul (FY-1) through Jun FY).
+// Calendar year → list of YYYY-MM keys (Jan through Dec).
 function monthsForFy(fy: number): string[] {
   const months: string[] = [];
-  for (let i = 0; i < 12; i++) {
-    const m = ((6 + i) % 12) + 1; // 7..12, 1..6
-    const y = i < 6 ? fy - 1 : fy;
-    months.push(`${y}-${String(m).padStart(2, "0")}`);
+  for (let m = 1; m <= 12; m++) {
+    months.push(`${fy}-${String(m).padStart(2, "0")}`);
   }
   return months;
 }
@@ -1843,6 +2204,63 @@ export async function deleteCapitalRaise(scenarioId: string, raiseId: string): P
   if (!(await checkAccess(scenarioId))) return;
   await connectToDatabase();
   await CapitalRaise.deleteOne({ _id: raiseId, scenarioId });
+  revalidatePath(`/scenarios/${scenarioId}`);
+}
+
+/**
+ * Persist the Use-of-Funds plan for a capital raise. Stores the runway
+ * window, contingency %, revenue-toggle, and any manual line items. The
+ * Use of Funds tab recomputes the underlying staff / OPEX / issuance
+ * totals live from the engine — only the dials and ad-hoc rows persist.
+ */
+export async function saveUseOfFundsPlan(
+  scenarioId: string,
+  raiseId: string,
+  plan: {
+    coverMonths: number;
+    contingencyPct: number;
+    includeRevenue: boolean;
+    manualLines: Array<{ label: string; amount: number }>;
+  },
+): Promise<void> {
+  if (!Types.ObjectId.isValid(scenarioId) || !Types.ObjectId.isValid(raiseId)) return;
+  if (!(await checkAccess(scenarioId))) return;
+  const coverMonths = Math.max(1, Math.min(60, Math.floor(plan.coverMonths)));
+  const contingencyPct = Math.max(0, Math.min(100, Number(plan.contingencyPct) || 0));
+  const includeRevenue = !!plan.includeRevenue;
+  const manualLines = plan.manualLines
+    .filter((l) => l.label.trim() && Number.isFinite(l.amount))
+    .map((l) => ({ label: l.label.trim(), amount: toDecimal128(String(l.amount)) }));
+  await connectToDatabase();
+  await CapitalRaise.updateOne(
+    { _id: raiseId, scenarioId },
+    {
+      $set: {
+        useOfFundsPlan: {
+          coverMonths,
+          contingencyPct: toDecimal128(String(contingencyPct)),
+          includeRevenue,
+          manualLines,
+        },
+      },
+    },
+  );
+  revalidatePath(`/scenarios/${scenarioId}`);
+}
+
+/**
+ * Bulk-flip every "committed" investor on a raise to "funded". Withdrawn
+ * rows are untouched. Useful once a round has fully closed.
+ */
+export async function markAllInvestorsFunded(scenarioId: string, raiseId: string): Promise<void> {
+  if (!Types.ObjectId.isValid(scenarioId) || !Types.ObjectId.isValid(raiseId)) return;
+  if (!(await checkAccess(scenarioId))) return;
+  await connectToDatabase();
+  await CapitalRaise.updateOne(
+    { _id: raiseId, scenarioId },
+    { $set: { "investors.$[el].status": "funded" } },
+    { arrayFilters: [{ "el.status": "committed" }] },
+  );
   revalidatePath(`/scenarios/${scenarioId}`);
 }
 

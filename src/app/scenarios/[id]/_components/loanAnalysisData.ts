@@ -126,7 +126,7 @@ export function buildLoanAnalysisData(loans: LoanRow[]): LoanAnalysisData {
   const originationsByFy: BarPoint[] = Array.from(byFy.entries())
     .sort(([a], [b]) => a - b)
     .map(([fy, b]) => ({
-      label: `FY${String(fy).slice(-2)}`,
+      label: `CY${String(fy).slice(-2)}`,
       value: b.volume,
       value2: b.count,
     }));

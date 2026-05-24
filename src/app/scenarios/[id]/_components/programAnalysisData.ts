@@ -170,7 +170,7 @@ export function buildProgramAnalysisData(
       count += 1;
     }
     return {
-      label: `FY${String(fy).slice(-2)}`,
+      label: `CY${String(fy).slice(-2)}`,
       value: principal,
       value2: count,
     };
@@ -187,7 +187,7 @@ export function buildProgramAnalysisData(
       }
     }
     return {
-      label: `FY${String(fy).slice(-2)}`,
+      label: `CY${String(fy).slice(-2)}`,
       value: principal,
       value2: count,
     };

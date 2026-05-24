@@ -342,7 +342,7 @@ export function AddLicenseModal({
                 </div>
                 <div>
                   <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
-                    AUM ($) and fee % per FY
+                    AUM ($) and fee % per CY
                   </div>
                   <div
                     className="grid gap-1 text-[11px]"
@@ -351,7 +351,7 @@ export function AddLicenseModal({
                     <div />
                     {fys.map((fy) => (
                       <div key={fy} className="text-center font-mono text-zinc-500">
-                        FY{String(fy).slice(-2)}
+                        CY{String(fy).slice(-2)}
                       </div>
                     ))}
                     <div className="self-center text-zinc-600">AUM $</div>

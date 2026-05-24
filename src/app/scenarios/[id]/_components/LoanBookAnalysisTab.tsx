@@ -74,7 +74,7 @@ export function LoanBookAnalysisTab({ data }: { data: LoanAnalysisData }) {
         {/* 1. Originations by FY — volume bars + count line (composed) */}
         <Card
           title="Originations by fiscal year"
-          subtitle="Volume ($) and count of new loans booked each FY"
+          subtitle="Volume ($) and count of new loans booked each CY"
         >
           <ResponsiveContainer width="100%" height={260}>
             <ComposedChart

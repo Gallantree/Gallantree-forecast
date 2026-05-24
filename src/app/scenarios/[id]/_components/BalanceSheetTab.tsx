@@ -97,7 +97,7 @@ export function BalanceSheetTab({
         <Stat label="Opening cash" value={fmtMoney2(data.assumptions.openingCash ?? "0")} />
         <Stat label="Opening equity" value={fmtMoney2(data.assumptions.openingEquity ?? "0")} />
         <span className="ml-auto text-zinc-400">
-          BS values are period-end balances; FY columns show the FY-end balance.
+          BS values are period-end balances; CY columns show the CY-end balance.
         </span>
       </div>
 
@@ -115,7 +115,7 @@ export function BalanceSheetTab({
                   colSpan={g.months.length + 1}
                   className="border-b border-r border-zinc-300 bg-zinc-100 px-3 py-1.5 text-center font-semibold tracking-wide"
                 >
-                  FY{String(g.fy).slice(-2)}
+                  CY{String(g.fy).slice(-2)}
                 </th>
               ))}
             </tr>
@@ -132,7 +132,7 @@ export function BalanceSheetTab({
                     </th>
                   ))}
                   <th className="min-w-[96px] border-b border-r border-zinc-300 bg-zinc-100 px-2 py-1.5 text-right font-semibold text-zinc-700">
-                    FY{String(g.fy).slice(-2)} close
+                    CY{String(g.fy).slice(-2)} close
                   </th>
                 </Fragment>
               ))}

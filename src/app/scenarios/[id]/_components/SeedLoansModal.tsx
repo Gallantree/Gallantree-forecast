@@ -310,7 +310,7 @@ export function SeedLoansModal({
                       {/* Header row */}
                       <div className="grid grid-cols-[1fr_140px_180px_80px] items-center gap-3 border-b border-zinc-100 pb-1 text-[10px] font-medium uppercase tracking-wider text-zinc-400">
                         <span>Capital program</span>
-                        <span>Active FYs</span>
+                        <span>Active CYs</span>
                         <span>Risk profile</span>
                         <span className="text-right">Loans</span>
                       </div>
@@ -327,12 +327,12 @@ export function SeedLoansModal({
                           activeFys.length === 0
                             ? "—"
                             : activeFys.length === 1
-                              ? `FY${String(activeFys[0]).slice(-2)}`
-                              : `FY${String(activeFys[0]).slice(-2)} → FY${String(activeFys[activeFys.length - 1]).slice(-2)}`;
+                              ? `CY${String(activeFys[0]).slice(-2)}`
+                              : `CY${String(activeFys[0]).slice(-2)} → CY${String(activeFys[activeFys.length - 1]).slice(-2)}`;
                         const splitTitle =
                           split.length > 1
                             ? `Split: ${activeFys
-                                .map((fy, i) => `FY${String(fy).slice(-2)}=${split[i]}`)
+                                .map((fy, i) => `CY${String(fy).slice(-2)}=${split[i]}`)
                                 .join(", ")}`
                             : undefined;
                         const currentRisk = row?.riskLevel ?? DEFAULT_RISK;
@@ -377,14 +377,14 @@ export function SeedLoansModal({
                     Loans are distributed evenly across each program&apos;s active FYs based on its
                     start and end periods. Risk profile shifts the LVR / DSCR / spread / grade
                     distributions for that program&apos;s loans. The AI call is capped at 300 loans
-                    per FY-program slice.
+                    per CY-program slice.
                   </div>
                 </div>
 
                 <div className="rounded-md bg-zinc-50 px-3 py-2 text-[11px] text-zinc-600">
                   Loans will be deterministically populated for every field (borrower, state,
                   postcode, location, asset class, LVR, DSCR, NOI, NCF, ICR, WALE, internal grade,
-                  indicative ratings, all-in interest, etc.). One AI call per FY-program slice —
+                  indicative ratings, all-in interest, etc.). One AI call per CY-program slice —
                   expect ~10-30s each.
                 </div>
               </div>

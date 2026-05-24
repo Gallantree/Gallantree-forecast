@@ -16,7 +16,7 @@ interface PlanStaffGrowthModalProps {
   fys: number[];
   // Current actual head count (excluding existing growth placeholders).
   currentHeadcount: number;
-  // Previously-saved targets, one per FY. May be undefined or shorter than
+  // Previously-saved targets, one per CY. May be undefined or shorter than
   // fys; missing entries default to the previous running total.
   savedTargets?: number[];
   triggerClassName?: string;
@@ -135,7 +135,7 @@ export function PlanStaffGrowthModal({
                     Plan staff growth
                   </h2>
                   <p className="mt-0.5 text-[11px] text-zinc-500">
-                    Set the target end-of-FY headcount per year. New hires needed each year are
+                    Set the target end-of-CY headcount per year. New hires needed each year are
                     created as placeholder roles that flow into the staffing cost projection.
                   </p>
                 </div>
@@ -151,7 +151,7 @@ export function PlanStaffGrowthModal({
 
               <div className="flex-1 overflow-auto px-5 py-4 text-xs">
                 <div className="mb-2 grid grid-cols-[80px_1fr_1fr_1fr] items-center gap-3 border-b border-zinc-100 pb-1 text-[10px] font-medium uppercase tracking-wider text-zinc-400">
-                  <span>FY</span>
+                  <span>CY</span>
                   <span>Prior</span>
                   <span>Target EOY</span>
                   <span className="text-right">New hires</span>
@@ -163,7 +163,7 @@ export function PlanStaffGrowthModal({
                       className="grid grid-cols-[80px_1fr_1fr_1fr] items-center gap-3"
                     >
                       <span className="font-mono text-[11px] text-zinc-500">
-                        FY{String(r.fy).slice(-2)}
+                        CY{String(r.fy).slice(-2)}
                       </span>
                       <span className="tabular-nums text-zinc-700">{r.prior}</span>
                       <input
@@ -197,7 +197,7 @@ export function PlanStaffGrowthModal({
                     </span>
                   </div>
                   <div className="text-right">
-                    EOY {fys[fys.length - 1] ? `FY${String(fys[fys.length - 1]).slice(-2)}` : "—"}{" "}
+                    EOY {fys[fys.length - 1] ? `CY${String(fys[fys.length - 1]).slice(-2)}` : "—"}{" "}
                     <span className="ml-1 font-semibold tabular-nums">{finalHeadcount}</span>{" "}
                     <span className="text-zinc-400">staff</span>
                   </div>

@@ -210,7 +210,7 @@ export function ConsolidatedModal({
                       >
                         Year {i + 1}
                         <span className="ml-1 font-normal text-zinc-400">
-                          · FY{String(fy).slice(-2)}
+                          · CY{String(fy).slice(-2)}
                         </span>
                       </th>
                     ))}

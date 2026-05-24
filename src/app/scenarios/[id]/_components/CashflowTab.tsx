@@ -121,8 +121,8 @@ export function CashflowTab({ scenarioId, data }: { scenarioId: string; data: Ca
       </div>
 
       <div className="border-b border-zinc-200 bg-zinc-50 px-4 py-2 text-[11px] text-zinc-500">
-        Indirect method. Monthly cells show the movement that period; FY columns sum flows and show
-        the FY-end cash balance.
+        Indirect method. Monthly cells show the movement that period; CY columns sum flows and show
+        the CY-end cash balance.
       </div>
 
       <div className="flex-1 overflow-auto">
@@ -138,7 +138,7 @@ export function CashflowTab({ scenarioId, data }: { scenarioId: string; data: Ca
                   colSpan={g.months.length + 1}
                   className="border-b border-r border-zinc-300 bg-zinc-100 px-3 py-1.5 text-center font-semibold tracking-wide"
                 >
-                  FY{String(g.fy).slice(-2)}
+                  CY{String(g.fy).slice(-2)}
                 </th>
               ))}
             </tr>
@@ -155,7 +155,7 @@ export function CashflowTab({ scenarioId, data }: { scenarioId: string; data: Ca
                     </th>
                   ))}
                   <th className="min-w-[96px] border-b border-r border-zinc-300 bg-zinc-100 px-2 py-1.5 text-right font-semibold text-zinc-700">
-                    FY{String(g.fy).slice(-2)}
+                    CY{String(g.fy).slice(-2)}
                   </th>
                 </Fragment>
               ))}

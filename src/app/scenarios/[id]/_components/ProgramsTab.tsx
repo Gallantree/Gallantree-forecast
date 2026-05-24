@@ -5,14 +5,18 @@ import {
   cloneProgram,
   createProgram,
   deleteProgram,
+  seedBslPrograms,
   seedCmbsPrograms,
   seedCreCloPrograms,
+  seedEnhancedIncomeFunds,
   seedLoanBook,
+  seedWarehousePrograms,
   updateProgram,
 } from "../_actions";
 import { AddProgramModal, type ProgramFormInitial } from "./AddProgramModal";
 import { CalibrateProgramButton } from "./CalibrateProgramButton";
 import { ClearProgramsButton } from "./ClearProgramsButton";
+import { EquityHoldingsModal } from "./EquityHoldingsModal";
 import { ProgramAnalysisModal } from "./ProgramAnalysisModal";
 import type { ProgramAnalysisData } from "./programAnalysisData";
 import { SeedMenu } from "./SeedMenu";
@@ -78,6 +82,9 @@ export interface ProgramRow {
   gallantreeSharePct?: { toString: () => string };
   rampUpMonths?: number;
   amortisationMonths?: number;
+  // Captive equity tranches this program holds — populated only for
+  // MIT_FUND programs.
+  captiveEquityHoldings?: Array<{ programId: string; trancheName: string }>;
 }
 
 const TYPE_LABEL: Record<ProgramRow["type"], string> = {
@@ -231,17 +238,38 @@ export function ProgramsTab({
             options={[
               {
                 key: "cre-clo",
-                label: "CRE CLO programs (5)",
+                label: "CRE CLO programs (6)",
                 description:
-                  "5 CRE CLOs — one fresh issuance per FY (FY27 through FY31). FL-1 matches Gallantree's anchor deal; the rest randomize dealSize and spreads within the documented bands. Includes upfront issuance costs ($500k underwriter, $900k legal, $300k ratings) per deal.",
+                  "6 CRE CLOs, fresh issuances every 5 months from Jan 2026 through Feb 2028. FL-1 matches Gallantree's anchor deal; the rest randomize dealSize and spreads within the documented bands. Includes upfront issuance costs ($500k underwriter, $900k legal, $300k ratings) per deal.",
                 action: seedCreCloPrograms,
               },
               {
                 key: "cmbs",
-                label: "CMBS programs (5)",
+                label: "CMBS programs (8 — 4 CRE + 4 Corporate)",
                 description:
-                  "5 CMBS deals — one per FY, tighter spreads (A 120-130, A-S 145-155…). Same upfront-fee stack as CRE CLO ($500k / $900k / $300k).",
+                  "8 CMBS deals, fresh issuances every 4 months. Programs 1-4 are CRE-backed (Jan/May/Sep 2026, Jan 2027); programs 5-8 are corporate-credit-backed with wider spreads (May/Sep 2027, Jan/May 2028).",
                 action: seedCmbsPrograms,
+              },
+              {
+                key: "bsl",
+                label: "BSL CLOs (5 — one per CY)",
+                description:
+                  "5 BSL CLOs — broadly syndicated corporate loan securitisations, one per calendar year starting Jan 2026. Modelled with type=OTHER; 8-tranche AAA-through-B stack with Equity.",
+                action: seedBslPrograms,
+              },
+              {
+                key: "warehouses",
+                label: "Warehouses (3 — CRE + Corp + SRT)",
+                description:
+                  "3 revolving warehouse facilities: CRE Warehouse (Jan 2026, $500m), Corporate Credit Warehouse (Jan 2026, $400m), SRT Warehouse (Oct 2026, $300m). Single warehouse-line liability per facility.",
+                action: seedWarehousePrograms,
+              },
+              {
+                key: "enhanced-funds",
+                label: "Enhanced Income Funds (2 — $200m / $500m)",
+                description:
+                  "Gallantree Enhanced Income Fund I ($200m, 6y) and II ($500m, 7y). MIS unit class targets BBSW + 700 bps; 50 bps mgmt fee on notes; captiveEquityHoldings auto-pre-populated with every Equity tranche currently on CRE CLO / CMBS / BSL programs in the scenario.",
+                action: seedEnhancedIncomeFunds,
               },
               {
                 key: "loan-book",
@@ -383,6 +411,27 @@ export function ProgramsTab({
                           </span>
                         );
                       })()}
+                      {p.type === "MIT_FUND" ? (
+                        <EquityHoldingsModal
+                          scenarioId={scenarioId}
+                          fundId={p._id}
+                          fundName={p.name}
+                          available={programs
+                            .filter((q) => q._id !== p._id && q.type !== "MIT_FUND")
+                            .flatMap((q) =>
+                              (q.liabilities ?? [])
+                                .filter((l) => /equity/i.test(l.name))
+                                .map((l) => ({
+                                  programId: q._id,
+                                  programName: q.name,
+                                  programType: q.type,
+                                  trancheName: l.name,
+                                  numNotes: l.numNotes,
+                                })),
+                            )}
+                          initial={p.captiveEquityHoldings ?? []}
+                        />
+                      ) : null}
                       <AddProgramModal
                         defaultStartPeriod={defaultStartPeriod}
                         expenseAccountsForOverride={expenseAccounts}
