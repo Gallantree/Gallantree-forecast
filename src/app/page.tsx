@@ -1,3 +1,4 @@
+import { Types } from "mongoose";
 import Image from "next/image";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/currentUser";
@@ -115,6 +116,27 @@ export default async function Home() {
   const baseAll = rows.find((r) => r.isBase && r.viewMode === "all") ?? null;
   const baseGallantree = rows.find((r) => r.isBase && r.viewMode === "gallantree") ?? null;
   const branches = rows.filter((r) => !r.isBase);
+
+  // Capital programs for base scenarios
+  type ProgramLean = {
+    _id: { toString(): string };
+    scenarioId: { toString(): string };
+    name: string;
+    type: "CRE_CLO" | "CMBS" | "MIT_FUND" | "WAREHOUSE" | "OTHER";
+    dealSize?: { toString(): string };
+    startPeriodKey: string;
+    endPeriodKey?: string;
+    fees: Array<{ basisAmount: { toString(): string }; feeBps: number }>;
+  };
+  const baseScenarioIds = rows.filter((r) => r.isBase).map((r) => r._id);
+  const basePrograms =
+    baseScenarioIds.length > 0
+      ? await CapitalProgram.find({
+          scenarioId: { $in: baseScenarioIds.map((id) => new Types.ObjectId(id)) },
+        })
+          .sort({ scenarioId: 1, startPeriodKey: 1, name: 1 })
+          .lean<ProgramLean[]>()
+      : [];
   // For the branch form: default to the All base if present, otherwise Gallantree.
   const branchBaseAll = baseAll;
   const branchBaseGallantree = baseGallantree;
@@ -211,6 +233,19 @@ export default async function Home() {
             <BranchTable rows={branches} />
           )}
         </section>
+
+        {/* Capital Programs */}
+        {basePrograms.length > 0 ? (
+          <section>
+            <div className="mb-3 flex items-baseline justify-between">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-600">
+                Capital Programs
+              </h2>
+              <span className="text-xs text-zinc-500">Programs across base scenarios.</span>
+            </div>
+            <ProgramsTable programs={basePrograms} scenarioNameById={Object.fromEntries(rows.map((r) => [r._id, r.name]))} />
+          </section>
+        ) : null}
 
         {/* Fallback: create a brand-new scenario from scratch */}
         <section>
@@ -513,6 +548,113 @@ function BranchTable({ rows }: { rows: ScenarioRow[] }) {
               </Td>
             </tr>
           ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+const PROGRAM_TYPE_LABEL: Record<string, string> = {
+  CRE_CLO: "CRE CLO",
+  CMBS: "CMBS",
+  MIT_FUND: "MIT Fund",
+  WAREHOUSE: "Warehouse",
+  OTHER: "Other",
+};
+
+const PROGRAM_TYPE_COLOR: Record<string, string> = {
+  CRE_CLO: "bg-emerald-100 text-emerald-800",
+  CMBS: "bg-sky-100 text-sky-800",
+  MIT_FUND: "bg-violet-100 text-violet-800",
+  WAREHOUSE: "bg-amber-100 text-amber-800",
+  OTHER: "bg-zinc-100 text-zinc-700",
+};
+
+type HomeProgramRow = {
+  _id: { toString(): string };
+  scenarioId: { toString(): string };
+  name: string;
+  type: "CRE_CLO" | "CMBS" | "MIT_FUND" | "WAREHOUSE" | "OTHER";
+  dealSize?: { toString(): string };
+  startPeriodKey: string;
+  endPeriodKey?: string;
+  fees: Array<{ basisAmount: { toString(): string }; feeBps: number }>;
+};
+
+function programAnnualFees(p: HomeProgramRow): number {
+  return p.fees.reduce((acc, f) => acc + (Number(f.basisAmount.toString()) * f.feeBps) / 10000, 0);
+}
+
+function ProgramsTable({
+  programs,
+  scenarioNameById,
+}: {
+  programs: HomeProgramRow[];
+  scenarioNameById: Record<string, string>;
+}) {
+  const AUD2 = new Intl.NumberFormat("en-AU", {
+    style: "currency",
+    currency: "AUD",
+    maximumFractionDigits: 2,
+  });
+  return (
+    <div className="overflow-hidden rounded-md border border-zinc-200 bg-white">
+      <table className="w-full border-collapse text-sm">
+        <thead className="bg-zinc-50 text-xs uppercase tracking-wider text-zinc-500">
+          <tr>
+            <Th>Program</Th>
+            <Th>Type</Th>
+            <Th>Scenario</Th>
+            <Th className="text-right">Deal Size</Th>
+            <Th>Period</Th>
+            <Th className="text-right">Annual Fees</Th>
+            <Th className="text-right">Open</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {programs.map((p) => {
+            const sid = p.scenarioId.toString();
+            const pid = p._id.toString();
+            const annual = programAnnualFees(p);
+            return (
+              <tr key={pid} className="border-t border-zinc-100 hover:bg-yellow-50/40">
+                <Td>
+                  <Link
+                    href={`/scenarios/${sid}/programs/${pid}`}
+                    className="font-medium text-zinc-900 hover:underline"
+                  >
+                    {p.name}
+                  </Link>
+                </Td>
+                <Td>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${PROGRAM_TYPE_COLOR[p.type] ?? "bg-zinc-100 text-zinc-700"}`}
+                  >
+                    {PROGRAM_TYPE_LABEL[p.type] ?? p.type}
+                  </span>
+                </Td>
+                <Td className="text-zinc-600">{scenarioNameById[sid] ?? "—"}</Td>
+                <Td className="text-right tabular-nums text-zinc-600">
+                  {p.dealSize ? AUD2.format(Number(p.dealSize.toString())) : "—"}
+                </Td>
+                <Td className="font-mono text-[11px] text-zinc-500">
+                  {p.startPeriodKey}
+                  {p.endPeriodKey ? ` → ${p.endPeriodKey}` : ""}
+                </Td>
+                <Td className="text-right tabular-nums text-emerald-700">
+                  {annual > 0 ? AUD2.format(annual) : "—"}
+                </Td>
+                <Td className="text-right">
+                  <Link
+                    href={`/scenarios/${sid}/programs/${pid}`}
+                    className="rounded px-2 py-0.5 text-xs text-zinc-700 hover:bg-zinc-100"
+                  >
+                    Open →
+                  </Link>
+                </Td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
