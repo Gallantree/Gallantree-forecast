@@ -89,7 +89,7 @@ const programInputSchema = {
                 name: { type: "string" },
                 category: {
                   type: "string",
-                  enum: ["senior_mgmt", "subordinate_mgmt", "servicing", "other"],
+                  enum: ["senior_mgmt", "subordinate_mgmt", "servicing", "trustee", "other"],
                 },
                 basisAmount: { type: "string" },
                 feeBps: { type: "number" },
@@ -152,22 +152,24 @@ const programInputSchema = {
 
 const CRE_CLO_SYSTEM = `You are a CRE CLO structuring assistant for Gallantree, an Australian non-bank CRE lender. You generate realistic capital program specifications for a financial model.
 
-GENERATE EXACTLY 6 CRE CLO PROGRAMS — one fresh issuance every 5 months across the model horizon. Use these EXACT start dates, in order:
-  1. 2026-01
-  2. 2026-06
-  3. 2026-11
-  4. 2027-04
-  5. 2027-09
-  6. 2028-02
+GENERATE EXACTLY 8 CRE CLO PROGRAMS — one fresh issuance every 6 months across the 5-year model horizon. Use these EXACT start dates, in order:
+  1. 2026-08
+  2. 2027-02
+  3. 2027-08
+  4. 2028-02
+  5. 2028-08
+  6. 2029-02
+  7. 2029-08
+  8. 2030-02
 
 Program 1 — anchor deal (use these EXACT values):
   - name: "Gallantree CRE CLO 2026 FL-1"
   - type: "CRE_CLO"
-  - startPeriodKey: "2026-01"
-  - endPeriodKey: "2029-01"
+  - startPeriodKey: "2026-08"
+  - endPeriodKey: "2029-08"
   - dealSize: "1161500000"
   - faceValuePerNote: "1000"
-  - Fees: Senior management 20bps on $1,161,500,000 (account 4500); Subordinate management 50bps on $1,161,500,000 (account 4510); Servicing 50bps on $1,160,000,000 (account 4520)
+  - Fees: Senior management 20bps on $1,161,500,000 (account 4500); Subordinate management 50bps on $1,161,500,000 (account 4510); Servicing 50bps on $1,160,000,000 (account 4520); Trustee 5bps on $1,161,500,000 (category "trustee", account 6500) — trustee fee is a waterfall COST, not Gallantree revenue
   - Tranches (name, numNotes, spread bps): X 1500/400, A 658000/175, A-S 152000/205, B 80000/235, C 64000/295, D 40000/360, E 22000/405, F 38000/535, G 26000/675, Equity 80000/0
   - upfrontFees: [
       { name: "Credit underwriter retainer", category: "underwriter", amount: "500000", accountCode: "6900" },
@@ -175,13 +177,13 @@ Program 1 — anchor deal (use these EXACT values):
       { name: "Ratings agency presale + monitoring", category: "credit_rating", amount: "300000", accountCode: "6900" }
     ]
 
-Programs 2, 3, 4, 5, 6 — follow-on deals, 5 months apart:
-  - Names: "Gallantree CRE CLO 2026 FL-2", "Gallantree CRE CLO 2026 FL-3", "Gallantree CRE CLO 2027 FL-1", "Gallantree CRE CLO 2027 FL-2", "Gallantree CRE CLO 2028 FL-1" (one per start date above)
-  - startPeriodKey: 2026-06, 2026-11, 2027-04, 2027-09, 2028-02
-  - endPeriodKey: 3 years after start (e.g. 2029-06, 2029-11, 2030-04, 2030-09, 2031-02)
+Programs 2–8 — follow-on deals, 6 months apart:
+  - Names (in order, one per start date above): "Gallantree CRE CLO 2027 FL-1", "Gallantree CRE CLO 2027 FL-2", "Gallantree CRE CLO 2028 FL-1", "Gallantree CRE CLO 2028 FL-2", "Gallantree CRE CLO 2029 FL-1", "Gallantree CRE CLO 2029 FL-2", "Gallantree CRE CLO 2030 FL-1"
+  - startPeriodKey: 2027-02, 2027-08, 2028-02, 2028-08, 2029-02, 2029-08, 2030-02
+  - endPeriodKey: 3 years after start (e.g. 2030-02, 2030-08, 2031-02, 2031-08, 2032-02, 2032-08, 2033-02)
   - faceValuePerNote: always "1000"
   - dealSize: pick a randomized total between 800,000,000 and 1,200,000,000 for each (different value each time)
-  - Same fee structure as Program 1 (Senior 20bps, Sub 50bps, Servicing 50bps; basisAmount = dealSize for senior/sub, dealSize − 1.5m for servicing)
+  - Same fee structure as Program 1 (Senior 20bps, Sub 50bps, Servicing 50bps, Trustee 5bps; basisAmount = dealSize for senior/sub/trustee, dealSize − 1.5m for servicing). Trustee fee uses category "trustee", account 6500 — it's a waterfall cost, not revenue.
   - Same tranche structure: X, A, A-S, B, C, D, E, F, G, Equity
   - Tranche numNotes: scale proportionally with dealSize so each tranche's
     share matches Program 1.
@@ -221,33 +223,33 @@ export const CRE_CLO_SEED = {
   systemPrompt: CRE_CLO_SYSTEM,
   tool: CRE_CLO_TOOL,
   userMessage:
-    "Generate exactly 6 CRE CLO programs at the prescribed start dates (5 months apart: 2026-01, 2026-06, 2026-11, 2027-04, 2027-09, 2028-02). Vary the dealSize, numNotes, and tranche spreads as instructed. Include the upfront fees on every deal.",
+    "Generate exactly 8 CRE CLO programs at the prescribed start dates (6 months apart: 2026-08, 2027-02, 2027-08, 2028-02, 2028-08, 2029-02, 2029-08, 2030-02). Vary the dealSize, numNotes, and tranche spreads as instructed. Include the upfront fees on every deal.",
 } as const;
 
 // ── CMBS seed ───────────────────────────────────────────────────────────────
 
 const CMBS_SYSTEM = `You are a CMBS structuring assistant for Gallantree, an Australian non-bank lender. You generate realistic capital program specifications.
 
-GENERATE EXACTLY 8 CMBS PROGRAMS — fresh issuances every 4 months. The first 4 are backed by CRE collateral; the last 4 are backed by corporate credit collateral. Use these EXACT start dates and collateral types, in order:
-  1. 2026-01 — CRE-backed CMBS
-  2. 2026-05 — CRE-backed CMBS
-  3. 2026-09 — CRE-backed CMBS
-  4. 2027-01 — CRE-backed CMBS
-  5. 2027-05 — Corporate-credit-backed CMBS
-  6. 2027-09 — Corporate-credit-backed CMBS
-  7. 2028-01 — Corporate-credit-backed CMBS
-  8. 2028-05 — Corporate-credit-backed CMBS
+GENERATE EXACTLY 8 CMBS PROGRAMS — fresh issuances every 6 months across the 5-year model horizon. The first 4 are backed by CRE collateral; the last 4 are backed by corporate credit collateral. Use these EXACT start dates and collateral types, in order:
+  1. 2026-09 — CRE-backed CMBS
+  2. 2027-03 — CRE-backed CMBS
+  3. 2027-09 — CRE-backed CMBS
+  4. 2028-03 — CRE-backed CMBS
+  5. 2028-09 — Corporate-credit-backed CMBS
+  6. 2029-03 — Corporate-credit-backed CMBS
+  7. 2029-09 — Corporate-credit-backed CMBS
+  8. 2030-03 — Corporate-credit-backed CMBS
 
 Do NOT generate any warehouse facilities, CRE CLOs, or BSL deals from this prompt.
 
 CMBS Program 1 — anchor CRE-backed deal (use these EXACT values):
   - name: "Gallantree CRE CMBS 2026-1"
   - type: "CMBS"
-  - startPeriodKey: "2026-01"
-  - endPeriodKey: "2031-01"
+  - startPeriodKey: "2026-09"
+  - endPeriodKey: "2031-09"
   - dealSize: "500000000"
   - faceValuePerNote: "1000"
-  - Fees: Senior management 15bps on $500,000,000 (account 4500); Subordinate management 35bps on $500,000,000 (account 4510); Servicing 25bps on $499,500,000 (account 4520)
+  - Fees: Senior management 15bps on $500,000,000 (account 4500); Subordinate management 35bps on $500,000,000 (account 4510); Servicing 25bps on $499,500,000 (account 4520); Trustee 5bps on $500,000,000 (category "trustee", account 6500) — trustee fee is a waterfall COST, not Gallantree revenue
   - Tranches (name, numNotes, spread bps):
       X       500     / 165
       A       350000  / 125
@@ -264,9 +266,9 @@ CMBS Program 1 — anchor CRE-backed deal (use these EXACT values):
       { name: "Ratings agency presale + monitoring", category: "credit_rating", amount: "300000", accountCode: "6900" }
     ]
 
-CMBS Programs 2, 3, 4 — follow-on CRE-backed deals at 2026-05, 2026-09, 2027-01:
-  - Names: "Gallantree CRE CMBS 2026-2", "Gallantree CRE CMBS 2026-3", "Gallantree CRE CMBS 2027-1"
-  - endPeriodKey: 5 years after start
+CMBS Programs 2, 3, 4 — follow-on CRE-backed deals at 2027-03, 2027-09, 2028-03:
+  - Names (in order): "Gallantree CRE CMBS 2027-1", "Gallantree CRE CMBS 2027-2", "Gallantree CRE CMBS 2028-1"
+  - endPeriodKey: 5 years after start (e.g. 2032-03, 2032-09, 2033-03)
   - dealSize: pick a randomized total between 400,000,000 and 800,000,000 (different value each deal)
   - Spreads (CRE-backed): pick a randomized integer in each band, vary across the deals.
       X:   150-180
@@ -277,9 +279,9 @@ CMBS Programs 2, 3, 4 — follow-on CRE-backed deals at 2026-05, 2026-09, 2027-0
       D:   240-260
       Equity: 0
 
-CMBS Programs 5, 6, 7, 8 — Corporate-credit-backed deals at 2027-05, 2027-09, 2028-01, 2028-05:
-  - Names: "Gallantree Corporate CMBS 2027-1", "Gallantree Corporate CMBS 2027-2", "Gallantree Corporate CMBS 2028-1", "Gallantree Corporate CMBS 2028-2"
-  - endPeriodKey: 5 years after start
+CMBS Programs 5, 6, 7, 8 — Corporate-credit-backed deals at 2028-09, 2029-03, 2029-09, 2030-03:
+  - Names (in order): "Gallantree Corporate CMBS 2028-1", "Gallantree Corporate CMBS 2029-1", "Gallantree Corporate CMBS 2029-2", "Gallantree Corporate CMBS 2030-1"
+  - endPeriodKey: 5 years after start (e.g. 2033-09, 2034-03, 2034-09, 2035-03)
   - dealSize: pick a randomized total between 350,000,000 and 700,000,000
   - Spreads (Corporate-credit-backed are wider than CRE-backed because corporate-credit CLO/CMBS typically prices wider than commercial real estate):
       X:   190-220
@@ -293,7 +295,7 @@ CMBS Programs 5, 6, 7, 8 — Corporate-credit-backed deals at 2027-05, 2027-09, 
 
 ALL Programs 2–8 (both CRE-backed and Corporate-credit-backed):
   - faceValuePerNote: always "1000"
-  - Same fee structure as Program 1 (Senior 15bps, Sub 35bps, Servicing 25bps; servicing basis = dealSize − 500,000)
+  - Same fee structure as Program 1 (Senior 15bps, Sub 35bps, Servicing 25bps, Trustee 5bps; servicing basis = dealSize − 500,000; senior/sub/trustee basis = dealSize). Trustee fee uses category "trustee", account 6500 — it's a waterfall cost, not revenue.
   - Same 7-tranche structure (X, A, A-S, B, C, D, Equity)
   - Tranche numNotes: scale proportionally with dealSize so each tranche's share matches Program 1
     (X 0.10%, A 70.00%, A-S 10.00%, B 6.00%, C 4.00%, D 2.00%, Equity 7.90%).
@@ -312,7 +314,7 @@ export const CMBS_SEED = {
   systemPrompt: CMBS_SYSTEM,
   tool: CRE_CLO_TOOL, // same tool, different prompt
   userMessage:
-    "Generate exactly 8 CMBS programs at the prescribed start dates (4 months apart, 4 CRE-backed then 4 Corporate-credit-backed): 2026-01, 2026-05, 2026-09, 2027-01 (CRE-backed) and 2027-05, 2027-09, 2028-01, 2028-05 (Corporate-credit-backed). Do NOT generate any warehouse facilities, CRE CLOs, or BSL deals.",
+    "Generate exactly 8 CMBS programs at the prescribed start dates (6 months apart, 4 CRE-backed then 4 Corporate-credit-backed): 2026-09, 2027-03, 2027-09, 2028-03 (CRE-backed) and 2028-09, 2029-03, 2029-09, 2030-03 (Corporate-credit-backed). Do NOT generate any warehouse facilities, CRE CLOs, or BSL deals.",
 } as const;
 
 // ── BSL CLO seed ────────────────────────────────────────────────────────────
@@ -633,17 +635,40 @@ const FyLoanRowSchema = z.object({
   state: z.enum(["NSW", "VIC", "QLD", "WA", "SA", "TAS", "ACT", "NT"]),
   postcode: z.string().regex(/^\d{4}$/, "must be a 4-digit postcode"),
   location: z.string(),
-  assetClass: z.enum([
-    "Office",
-    "Industrial",
-    "Retail",
-    "Multi-Family",
-    "Mixed-Use",
-    "Hospitality",
-    "Healthcare",
-    "Self-Storage",
-    "Data Centre",
-  ]),
+  // Haiku sometimes emits combined values like "Healthcare/Self-Storage/Data Centre"
+  // when it can't pick one. Split on common joiners and keep the first valid
+  // enum member; fall back to "Mixed-Use" only if nothing matches.
+  assetClass: z.preprocess(
+    (v) => {
+      if (typeof v !== "string") return v;
+      const valid = new Set([
+        "Office",
+        "Industrial",
+        "Retail",
+        "Multi-Family",
+        "Mixed-Use",
+        "Hospitality",
+        "Healthcare",
+        "Self-Storage",
+        "Data Centre",
+      ]);
+      if (valid.has(v)) return v;
+      const parts = v.split(/[/,|]| and /).map((s) => s.trim());
+      const first = parts.find((p) => valid.has(p));
+      return first ?? v;
+    },
+    z.enum([
+      "Office",
+      "Industrial",
+      "Retail",
+      "Multi-Family",
+      "Mixed-Use",
+      "Hospitality",
+      "Healthcare",
+      "Self-Storage",
+      "Data Centre",
+    ]),
+  ),
   propertyStatus: z.enum(["Stabilised", "Transitional"]),
   originationPeriod: periodKey,
   // Haiku occasionally emits numeric fields as quoted strings ("350" instead
@@ -761,7 +786,7 @@ REALISM RULES (apply to every loan):
   - state distribution: NSW ~35%, VIC ~25%, QLD ~20%, WA ~10%, SA ~5%, TAS/ACT/NT ~5%
   - postcode: 4-digit Australian postcode that matches the state (NSW 2xxx, VIC 3xxx, QLD 4xxx, WA 6xxx, SA 5xxx, TAS 7xxx, ACT 26xx, NT 08xx)
   - location: a real suburb in that state (e.g. "Surry Hills, NSW", "Richmond, VIC", "Fortitude Valley, QLD")
-  - assetClass distribution: Office ~30%, Industrial ~25%, Retail ~15%, Multi-Family ~10%, Mixed-Use ~10%, Hospitality/Healthcare/Self-Storage/Data Centre ~10% combined
+  - assetClass: pick EXACTLY ONE value per loan from the enum — never combine values with "/", "," or "and". Distribution: Office ~30%, Industrial ~25%, Retail ~15%, Multi-Family ~10%, Mixed-Use ~10%, and the remaining ~10% split across single picks of Hospitality, Healthcare, Self-Storage, or Data Centre (one per loan)
   - originationPeriod: MUST be one of the period keys listed in the user message — spread loans roughly uniformly across those months
 
 Return all loans via the generate_fy_loans tool in a single call. Return EXACTLY the requested count. Do not return prose.`;
