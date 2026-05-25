@@ -35,6 +35,10 @@ export function AddUserModal({ orgs }: { orgs: OrgOption[] }) {
   const [organisationId, setOrganisationId] = useState("");
   const [membershipRole, setMembershipRole] = useState<"admin" | "member">("admin");
   const [status, setStatus] = useState<CreateUserPayload["status"]>("active");
+  // Default ON for active users — that's the existing server-side default and
+  // the most common onboarding flow. Becomes inert (disabled) for
+  // pending/disabled accounts since no link would be sent anyway.
+  const [sendInvite, setSendInvite] = useState(true);
 
   function show() {
     setError(null);
@@ -56,6 +60,7 @@ export function AddUserModal({ orgs }: { orgs: OrgOption[] }) {
     setOrganisationId("");
     setMembershipRole("admin");
     setStatus("active");
+    setSendInvite(true);
     setError(null);
   }
 
@@ -73,6 +78,7 @@ export function AddUserModal({ orgs }: { orgs: OrgOption[] }) {
         organisationId: organisationId || undefined,
         membershipRole,
         status,
+        sendInvite: status === "active" ? sendInvite : false,
       });
       if (!res.ok) {
         setError(res.error ?? "Failed to create user");
@@ -97,7 +103,7 @@ export function AddUserModal({ orgs }: { orgs: OrgOption[] }) {
         <dialog
           ref={ref}
           onClose={() => setOpen(false)}
-          className="w-[640px] max-w-[92vw] rounded-lg border border-zinc-200 p-0 shadow-xl backdrop:bg-zinc-900/40"
+          className="fixed inset-0 m-auto w-[640px] max-w-[92vw] rounded-lg border border-zinc-200 p-0 shadow-xl backdrop:bg-zinc-900/40"
         >
           <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4">
             <h2 className="text-base font-semibold tracking-tight text-zinc-900">Add user</h2>
@@ -231,6 +237,26 @@ export function AddUserModal({ orgs }: { orgs: OrgOption[] }) {
                   </select>
                 </Field>
               </div>
+            </section>
+
+            <section className="border-t border-zinc-200 pt-5">
+              <label className="flex items-start gap-3 text-sm text-zinc-700">
+                <input
+                  type="checkbox"
+                  checked={status === "active" && sendInvite}
+                  disabled={status !== "active"}
+                  onChange={(e) => setSendInvite(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+                />
+                <span className="flex flex-col gap-0.5">
+                  <span className="font-medium text-zinc-900">Send invite email</span>
+                  <span className="text-xs text-zinc-500">
+                    {status === "active"
+                      ? "Emails the user a magic-link + one-time code so they can sign in."
+                      : "Only available for active users."}
+                  </span>
+                </span>
+              </label>
             </section>
 
             {error ? (

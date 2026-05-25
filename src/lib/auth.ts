@@ -12,12 +12,69 @@
 // the sign-in URL to the server console — handy in dev when you haven't
 // configured email yet.
 
+import crypto from "node:crypto";
 import { MongoDBAdapter } from "@auth/mongodb-adapter";
 import sgMail from "@sendgrid/mail";
+import { cookies } from "next/headers";
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { authConfig } from "@/lib/auth.config";
+import { connectToDatabase } from "@/lib/db";
+import { recordLoginActivity } from "@/lib/loginActivity";
+import {
+  DEFAULT_LOGIN_CODE_EXPIRY_MINUTES,
+  LOGIN_CODE_CHARS,
+  LOGIN_CODE_LENGTH,
+  LOGIN_CODE_SEGMENT_LENGTH,
+  normalizeLoginCode,
+} from "@/lib/loginCodeConstants";
 import { authClientPromise } from "@/lib/mongoClient";
+import type { LoginMethod } from "@/models";
+import { LoginCode } from "@/models";
+
+function methodFromProvider(provider: string | undefined): LoginMethod {
+  if (provider === "google") return "google";
+  if (provider === "email") return "link";
+  return "unknown";
+}
+
+function generateLoginCode(): string {
+  const parts: string[] = [];
+  const segmentCount = LOGIN_CODE_LENGTH / LOGIN_CODE_SEGMENT_LENGTH;
+  for (let i = 0; i < segmentCount; i++) {
+    let seg = "";
+    for (let j = 0; j < LOGIN_CODE_SEGMENT_LENGTH; j++) {
+      seg += LOGIN_CODE_CHARS[crypto.randomInt(0, LOGIN_CODE_CHARS.length)];
+    }
+    parts.push(seg);
+  }
+  return parts.join("-");
+}
+
+function hashCode(canonicalCode: string, salt: string): string {
+  return crypto.createHash("sha256").update(`${salt}:${canonicalCode}`).digest("hex");
+}
+
+async function storeLoginCode(email: string, loginUrl: string, expires: Date): Promise<string> {
+  const code = generateLoginCode();
+  const salt = crypto.randomBytes(16).toString("hex");
+  const codeHash = hashCode(normalizeLoginCode(code), salt);
+  await connectToDatabase();
+  // Invalidate prior unconsumed codes for this email so only the latest works.
+  await LoginCode.updateMany(
+    { email: email.toLowerCase(), consumedAt: null },
+    { $set: { consumedAt: new Date() } },
+  );
+  await LoginCode.create({
+    email: email.toLowerCase(),
+    codeHash,
+    codeSalt: salt,
+    loginUrl,
+    expiresAt: expires,
+    attempts: 0,
+  });
+  return code;
+}
 
 interface EmailProviderArgs {
   identifier: string;
@@ -34,21 +91,17 @@ interface EmailProviderArgs {
 // Gallantree login email's variable name), {{magic_link}}, {{url}}, or
 // {{sign_in_url}}.
 //
-// `loginCode` is currently empty: Auth.js v5 doesn't expose a short OTP-style
-// code to type into a form — the raw verification token in the URL is the
-// only credential. If your template's OTP box shows blank, either remove it
-// from the template, or ask to wire up full one-time-code entry (separate
-// collection + /api/auth/verify-code endpoint + verify-request input).
-function templateVars(email: string, url: string, expiresMinutes: number) {
+// `loginCode` is a 12-char alphanumeric one-time code (XXXX-XXXX-XXXX) tied to
+// the same email + sign-in URL. The user can either click the magic link OR
+// type the code into /login — see /api/auth/verify-code.
+function templateVars(email: string, url: string, expiresMinutes: number, loginCode: string) {
   return {
     // Primary aliases — at least one of these will match any template.
     loginUrl: url,
     magic_link: url,
     url,
     sign_in_url: url,
-    // Placeholder so {{loginCode}} renders blank cleanly. Replace with a real
-    // OTP once code-entry sign-in is built.
-    loginCode: "",
+    loginCode,
     email,
     expires_minutes: expiresMinutes,
     expires_in: `${expiresMinutes} minutes`,
@@ -60,11 +113,24 @@ async function sendMagicLink({ identifier, url, expires, provider }: EmailProvid
   const apiKey = process.env.SENDGRID_API_KEY;
   const templateId = process.env.SENDGRID_LOGIN_EMAIL_ID;
 
+  // Generate + persist a one-time login code bound to the same URL. Code
+  // expires sooner than the magic link (10 min vs 60 min by default) so we
+  // pass our own expiry to LoginCode rather than reusing `expires`.
+  const codeExpiryMs = DEFAULT_LOGIN_CODE_EXPIRY_MINUTES * 60_000;
+  const codeExpiresAt = new Date(Date.now() + codeExpiryMs);
+  let loginCode = "";
+  try {
+    loginCode = await storeLoginCode(identifier, url, codeExpiresAt);
+  } catch (err) {
+    // If code storage fails, fall back to link-only — better degraded auth
+    // than no email at all.
+    console.warn("[auth] Could not persist login code; sending link-only email", err);
+  }
+
   if (!apiKey) {
-    // Dev fallback — print the link to the server console so the developer
-    // can click through without configuring SendGrid.
+    // Dev fallback — print the link AND code to the server console.
     console.log(
-      `\n[auth] Magic link for ${identifier}:\n  ${url}\n  (set SENDGRID_API_KEY to send real email)\n`,
+      `\n[auth] Magic link for ${identifier}:\n  ${url}\n  Login code: ${loginCode || "(unavailable)"}\n  (set SENDGRID_API_KEY to send real email)\n`,
     );
     return;
   }
@@ -84,7 +150,7 @@ async function sendMagicLink({ identifier, url, expires, provider }: EmailProvid
       to: identifier,
       from,
       templateId,
-      dynamicTemplateData: templateVars(identifier, url, expiresMinutes),
+      dynamicTemplateData: templateVars(identifier, url, expiresMinutes, loginCode),
     });
     return;
   }
@@ -139,19 +205,29 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const doc = await db
         .collection("users")
         .findOne({ email: raw }, { projection: { _id: 1, status: 1 } });
+      const method = methodFromProvider(account?.provider);
       if (!doc) {
-        // No invite on record — refuse silently. Returning false aborts
-        // the flow; for email provider this means no email is ever sent.
-        // Log so admins can spot brute-force attempts.
         console.warn(
           `[auth] Sign-in blocked: no account for ${raw} (provider=${account?.provider ?? "unknown"})`,
         );
+        await recordLoginActivity({
+          email: raw,
+          method,
+          outcome: "failure",
+          reason: "unknown-email",
+        });
         return false;
       }
       if (doc.status === "disabled") {
         console.warn(
           `[auth] Sign-in blocked: account disabled for ${raw} (provider=${account?.provider ?? "unknown"})`,
         );
+        await recordLoginActivity({
+          email: raw,
+          method,
+          outcome: "failure",
+          reason: "account-disabled",
+        });
         return false;
       }
       return true;
@@ -219,6 +295,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
       }
       return token;
+    },
+  },
+  // Successful authentications land here AFTER the signIn callback has
+  // allowed them. Record the activity row with browser/IP context pulled
+  // from `next/headers` inside recordLoginActivity.
+  events: {
+    async signIn({ user, account }) {
+      const email = user?.email?.toLowerCase();
+      if (!email) return;
+      let method = methodFromProvider(account?.provider);
+      // /api/auth/verify-code drops an `auth_method=code` cookie just before
+      // the browser follows the magic-link URL. If we see it, this email
+      // sign-in originated from a typed code, not a clicked link.
+      try {
+        const c = await cookies();
+        if (method === "link" && c.get("auth_method")?.value === "code") {
+          method = "code";
+        }
+      } catch {
+        // cookies() can throw outside a request scope — fine.
+      }
+      await recordLoginActivity({ email, method, outcome: "success" });
     },
   },
   providers: [

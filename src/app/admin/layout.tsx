@@ -71,9 +71,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             </span>
           </div>
           <ul className="flex flex-col gap-0.5">
-            <NavLink href="/admin" label="Overview" icon="□" />
-            <NavLink href="/admin/organisations" label="Organisations" icon="◫" />
-            <NavLink href="/admin/users" label="Users" icon="👥" />
+            <NavLink href="/admin" label="Overview" icon={<OverviewIcon />} />
+            <NavLink
+              href="/admin/organisations"
+              label="Organisations"
+              icon={<OrganisationsIcon />}
+            />
+            <NavLink href="/admin/users" label="Users" icon={<UsersIcon />} />
           </ul>
           <div className="mt-auto border-t border-zinc-200 pt-3">
             <Link
@@ -91,16 +95,65 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   );
 }
 
-function NavLink({ href, label, icon }: { href: string; label: string; icon: string }) {
+function NavLink({ href, label, icon }: { href: string; label: string; icon: React.ReactNode }) {
   return (
     <li>
       <Link
         href={href}
         className="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-100"
       >
-        <span className="grid h-4 w-4 place-items-center text-xs text-zinc-500">{icon}</span>
+        <span className="grid h-4 w-4 shrink-0 place-items-center text-zinc-500">{icon}</span>
         <span>{label}</span>
       </Link>
     </li>
+  );
+}
+
+function iconProps() {
+  return {
+    width: 16,
+    height: 16,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.75,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+  };
+}
+
+function OverviewIcon() {
+  return (
+    <svg {...iconProps()}>
+      <title>Overview</title>
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      <rect x="14" y="14" width="7" height="7" rx="1.5" />
+    </svg>
+  );
+}
+
+function OrganisationsIcon() {
+  return (
+    <svg {...iconProps()}>
+      <title>Organisations</title>
+      <rect x="4" y="3" width="16" height="18" rx="1.5" />
+      <path d="M9 7h.01M15 7h.01M9 11h.01M15 11h.01M9 15h.01M15 15h.01" />
+      <path d="M10 21v-3h4v3" />
+    </svg>
+  );
+}
+
+function UsersIcon() {
+  return (
+    <svg {...iconProps()}>
+      <title>Users</title>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
   );
 }

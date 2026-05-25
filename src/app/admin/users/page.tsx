@@ -2,10 +2,11 @@ import { connectToDatabase } from "@/lib/db";
 import { Organisation, User } from "@/models";
 import { AddUserModal } from "../_components/AddUserModal";
 import { EditUserModal } from "../_components/EditUserModal";
+import { UserRow } from "./_components/UserRow";
 
 export const dynamic = "force-dynamic";
 
-interface UserRow {
+interface UserRowData {
   _id: string;
   name: string;
   firstName?: string;
@@ -66,7 +67,7 @@ export default async function UsersPage() {
       .lean<Array<{ _id: { toString: () => string }; name: string }>>(),
   ]);
 
-  const users: UserRow[] = usersRaw.map((u) => ({
+  const users: UserRowData[] = usersRaw.map((u) => ({
     _id: u._id.toString(),
     name: [u.firstName, u.lastName].filter(Boolean).join(" ") || u.name || u.email,
     firstName: u.firstName,
@@ -123,10 +124,7 @@ export default async function UsersPage() {
               </tr>
             ) : (
               users.map((u) => (
-                <tr
-                  key={u._id}
-                  className="border-b border-zinc-100 last:border-b-0 hover:bg-yellow-50/40"
-                >
+                <UserRow key={u._id} userId={u._id}>
                   <Td className="font-semibold text-zinc-900">{u.name}</Td>
                   <Td className="text-zinc-700">{u.email}</Td>
                   <Td>
@@ -137,10 +135,10 @@ export default async function UsersPage() {
                   </Td>
                   <Td className="text-zinc-500">{fmtDate(u.lastLogin)}</Td>
                   <Td className="text-zinc-500">{fmtDate(u.createdAt)}</Td>
-                  <Td className="text-right">
+                  <Td className="text-right" noRowNav>
                     <EditUserModal user={u} orgs={orgs} />
                   </Td>
-                </tr>
+                </UserRow>
               ))
             )}
           </tbody>
@@ -172,8 +170,20 @@ function Th({ children, className = "" }: { children: React.ReactNode; className
   );
 }
 
-function Td({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <td className={`px-4 py-3 ${className}`}>{children}</td>;
+function Td({
+  children,
+  className = "",
+  noRowNav,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  noRowNav?: boolean;
+}) {
+  return (
+    <td className={`px-4 py-3 ${className}`} data-no-row-nav={noRowNav ? "" : undefined}>
+      {children}
+    </td>
+  );
 }
 
 function Badge({

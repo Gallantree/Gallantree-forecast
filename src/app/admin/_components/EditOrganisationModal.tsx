@@ -58,7 +58,7 @@ export function EditOrganisationModal({ org }: { org: OrgRow }) {
         <dialog
           ref={ref}
           onClose={() => setOpen(false)}
-          className="w-[480px] max-w-[92vw] rounded-lg border border-zinc-200 p-0 shadow-xl backdrop:bg-zinc-900/40"
+          className="fixed inset-0 m-auto w-[480px] max-w-[92vw] rounded-lg border border-zinc-200 p-0 shadow-xl backdrop:bg-zinc-900/40"
         >
           <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4">
             <h2 className="text-base font-semibold tracking-tight text-zinc-900">
