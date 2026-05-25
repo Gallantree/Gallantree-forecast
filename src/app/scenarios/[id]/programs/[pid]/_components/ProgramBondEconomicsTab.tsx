@@ -1,5 +1,10 @@
 import { fmtMoney2, fmtNum0 } from "@/utils/format";
-import { isFundingTranche, type ProgramAggregate, type ProgramLiabilityRow, type ProgramRow } from "../../../_components/ProgramsTab";
+import {
+  isFundingTranche,
+  type ProgramAggregate,
+  type ProgramLiabilityRow,
+  type ProgramRow,
+} from "../../../_components/ProgramsTab";
 
 const TYPE_LABEL: Record<ProgramRow["type"], string> = {
   CRE_CLO: "CRE CLO",
@@ -70,10 +75,7 @@ export async function ProgramBondEconomicsTab({
         </h3>
         <div className="grid grid-cols-2 gap-px rounded-md border border-zinc-200 bg-zinc-200 overflow-hidden sm:grid-cols-3 lg:grid-cols-6">
           <SummaryTile label="Deal size" value={dealSize > 0 ? fmtMoney2(dealSize) : "—"} />
-          <SummaryTile
-            label="Note count"
-            value={noteCount !== null ? fmtNum0(noteCount) : "—"}
-          />
+          <SummaryTile label="Note count" value={noteCount !== null ? fmtNum0(noteCount) : "—"} />
           <SummaryTile
             label="Face value / note"
             value={faceValuePerNote > 0 ? fmtMoney2(faceValuePerNote) : "—"}
@@ -94,10 +96,7 @@ export async function ProgramBondEconomicsTab({
               Asset side
             </div>
             <EconRow label="Total loan balance" value={fmtMoney2(aggregate.totalBalance)} />
-            <EconRow
-              label="Assets WAS"
-              value={assetWasBps > 0 ? `${assetWasBps} bps` : "—"}
-            />
+            <EconRow label="Assets WAS" value={assetWasBps > 0 ? `${assetWasBps} bps` : "—"} />
             <EconRow
               label="Annual interest income"
               value={fmtMoney2(annualInterestIncome)}
@@ -112,10 +111,7 @@ export async function ProgramBondEconomicsTab({
               label="Total funded principal"
               value={totalFundedPrincipal > 0 ? fmtMoney2(totalFundedPrincipal) : "—"}
             />
-            <EconRow
-              label="Liabilities WAS"
-              value={liabWasBps > 0 ? `${liabWasBps} bps` : "—"}
-            />
+            <EconRow label="Liabilities WAS" value={liabWasBps > 0 ? `${liabWasBps} bps` : "—"} />
             <EconRow
               label="Annual interest expense"
               value={totalAnnualInterest > 0 ? fmtMoney2(totalAnnualInterest) : "—"}
@@ -126,11 +122,7 @@ export async function ProgramBondEconomicsTab({
             <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
               Net interest margin
             </div>
-            <EconRow
-              label="NIM spread"
-              value={`${nimBps} bps`}
-              tone={nimBps > 0 ? "ok" : "warn"}
-            />
+            <EconRow label="NIM spread" value={`${nimBps} bps`} tone={nimBps > 0 ? "ok" : "warn"} />
             <EconRow
               label="NIM $/yr"
               value={fmtMoney2(nimAnnual)}
@@ -231,15 +223,7 @@ function SummaryTile({ label, value }: { label: string; value: string }) {
   );
 }
 
-function EconRow({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: "ok" | "warn";
-}) {
+function EconRow({ label, value, tone }: { label: string; value: string; tone?: "ok" | "warn" }) {
   const valueClass =
     tone === "warn" ? "text-rose-700" : tone === "ok" ? "text-emerald-700" : "text-zinc-900";
   return (

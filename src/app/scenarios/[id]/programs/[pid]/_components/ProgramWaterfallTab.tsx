@@ -1,11 +1,15 @@
-import { fmtMoney2, fmtNum2 } from "@/utils/format";
 import {
   annualFeeAmount,
   equityReturnPct,
   grossCollectionsAllIn,
   trancheAnnualInterest,
 } from "@/engine/waterfall";
-import { isFundingTranche, type ProgramAggregate, type ProgramFeeRow, type ProgramRow } from "../../../_components/ProgramsTab";
+import { fmtMoney2, fmtNum2 } from "@/utils/format";
+import {
+  isFundingTranche,
+  type ProgramAggregate,
+  type ProgramRow,
+} from "../../../_components/ProgramsTab";
 
 export async function ProgramWaterfallTab({
   program,
@@ -68,7 +72,13 @@ export async function ProgramWaterfallTab({
   const equityTranches = liabilities.filter((l) => !isFundingTranche(l.name, l.returnProfileBps));
 
   for (const l of debtTranches) {
-    const annual = trancheAnnualInterest(l.numNotes ?? 0, faceValuePerNote, l.returnProfileBps, l.rateType, baseRateBps);
+    const annual = trancheAnnualInterest(
+      l.numNotes ?? 0,
+      faceValuePerNote,
+      l.returnProfileBps,
+      l.rateType,
+      baseRateBps,
+    );
     if (annual > 0) {
       items.push({
         priority: priority++,
@@ -147,8 +157,7 @@ export async function ProgramWaterfallTab({
                 const principal = (l.numNotes ?? 0) * faceValuePerNote;
                 const share = totalEquityPrincipal > 0 ? principal / totalEquityPrincipal : 0;
                 const trancheResidual = residual * share;
-                const trancheYield =
-                  principal > 0 ? (trancheResidual / principal) * 100 : null;
+                const trancheYield = principal > 0 ? (trancheResidual / principal) * 100 : null;
                 return (
                   <tr key={l._id} className="border-t-2 border-zinc-300 bg-indigo-50">
                     <Td className="text-zinc-400">—</Td>
@@ -243,11 +252,7 @@ function Metric({
   tone: "ok" | "warn" | "neutral";
 }) {
   const valueClass =
-    tone === "ok"
-      ? "text-indigo-700"
-      : tone === "warn"
-        ? "text-rose-700"
-        : "text-zinc-800";
+    tone === "ok" ? "text-indigo-700" : tone === "warn" ? "text-rose-700" : "text-zinc-800";
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">

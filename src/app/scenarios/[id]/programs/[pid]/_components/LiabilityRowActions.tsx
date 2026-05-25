@@ -129,9 +129,7 @@ export function LiabilityRowActions({
                 <select
                   value={calculationMethod}
                   onChange={(e) =>
-                    setCalculationMethod(
-                      e.target.value as "monthly" | "quarterly" | "annually",
-                    )
+                    setCalculationMethod(e.target.value as "monthly" | "quarterly" | "annually")
                   }
                   className="rounded-md border border-zinc-300 px-2 py-1"
                 >

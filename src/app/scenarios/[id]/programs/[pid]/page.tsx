@@ -1,3 +1,4 @@
+import Decimal from "decimal.js";
 import { Types } from "mongoose";
 import Image from "next/image";
 import Link from "next/link";
@@ -8,15 +9,18 @@ import { getCurrentUser } from "@/lib/currentUser";
 import { connectToDatabase } from "@/lib/db";
 import { CapitalProgram, Loan, Scenario } from "@/models";
 import { fmtMoney2 } from "@/utils/format";
-import Decimal from "decimal.js";
 import type { LoanRow } from "../../_components/LoansTab";
-import { isFundingTranche, type ProgramAggregate, type ProgramRow } from "../../_components/ProgramsTab";
-import { ProgramDetailTabBar } from "./_components/ProgramDetailTabBar";
-import { ProgramOverviewTab } from "./_components/ProgramOverviewTab";
-import { ProgramLoanBookTab } from "./_components/ProgramLoanBookTab";
-import { ProgramLiabilitiesTab } from "./_components/ProgramLiabilitiesTab";
-import { ProgramWaterfallTab } from "./_components/ProgramWaterfallTab";
+import {
+  isFundingTranche,
+  type ProgramAggregate,
+  type ProgramRow,
+} from "../../_components/ProgramsTab";
 import { ProgramBondEconomicsTab } from "./_components/ProgramBondEconomicsTab";
+import { ProgramDetailTabBar } from "./_components/ProgramDetailTabBar";
+import { ProgramLiabilitiesTab } from "./_components/ProgramLiabilitiesTab";
+import { ProgramLoanBookTab } from "./_components/ProgramLoanBookTab";
+import { ProgramOverviewTab } from "./_components/ProgramOverviewTab";
+import { ProgramWaterfallTab } from "./_components/ProgramWaterfallTab";
 
 export const dynamic = "force-dynamic";
 
@@ -265,16 +269,14 @@ export default async function ProgramDetailPage({ params, searchParams }: Params
     }
   }
 
-  const tab: ProgramTabKey =
-    PROGRAM_TABS.some((t) => t.key === rawTab) ? (rawTab as ProgramTabKey) : "overview";
+  const tab: ProgramTabKey = PROGRAM_TABS.some((t) => t.key === rawTab)
+    ? (rawTab as ProgramTabKey)
+    : "overview";
 
   const baseRateBps = scenario.baseRateBps ?? 0;
 
   const programAnnual = new Decimal(
-    program.fees.reduce(
-      (acc, f) => acc + (Number(f.basisAmount.toString()) * f.feeBps) / 10000,
-      0,
-    ),
+    program.fees.reduce((acc, f) => acc + (Number(f.basisAmount.toString()) * f.feeBps) / 10000, 0),
   );
   const programUpfront = new Decimal(
     (program.upfrontFees ?? []).reduce((acc, u) => acc + Number(u.amount.toString()), 0),
@@ -310,7 +312,9 @@ export default async function ProgramDetailPage({ params, searchParams }: Params
             />
           </Link>
           <span className="text-zinc-300">|</span>
-          <h1 className="text-sm font-semibold tracking-tight text-zinc-800">Gallantree Forecast</h1>
+          <h1 className="text-sm font-semibold tracking-tight text-zinc-800">
+            Gallantree Forecast
+          </h1>
           <span className="text-zinc-300">/</span>
           <Link
             href={`/scenarios/${id}?tab=capital-programs`}
@@ -390,11 +394,7 @@ export default async function ProgramDetailPage({ params, searchParams }: Params
           />
         )}
         {tab === "waterfall" && (
-          <ProgramWaterfallTab
-            program={program}
-            aggregate={aggregate}
-            baseRateBps={baseRateBps}
-          />
+          <ProgramWaterfallTab program={program} aggregate={aggregate} baseRateBps={baseRateBps} />
         )}
         {tab === "bond-economics" && (
           <ProgramBondEconomicsTab

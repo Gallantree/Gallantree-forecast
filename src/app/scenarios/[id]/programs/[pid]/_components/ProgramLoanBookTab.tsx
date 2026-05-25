@@ -1,7 +1,7 @@
 import { cleanDecimal, fmtMoney2, fmtNum0 } from "@/utils/format";
 import { deleteLoan, updateLoan } from "../../../_actions";
-import type { LoanRow } from "../../../_components/LoansTab";
 import { type LoanEditInitial, LoanRowActions } from "../../../_components/LoanRowActions";
+import type { LoanRow } from "../../../_components/LoansTab";
 import type { ProgramAggregate, ProgramRow } from "../../../_components/ProgramsTab";
 
 function toIsoDate(d: Date | string): string {
@@ -47,7 +47,6 @@ const ARREARS_COLOR: Record<NonNullable<LoanRow["arrearsStatus"]>, string> = {
 
 export async function ProgramLoanBookTab({
   loans,
-  program,
   aggregate,
   scenarioId,
   programs,
@@ -79,9 +78,7 @@ export async function ProgramLoanBookTab({
     return (
       <div className="flex h-64 flex-col items-center justify-center gap-2 text-sm text-zinc-500">
         <div>No loans assigned to this program yet.</div>
-        <div className="text-xs">
-          Assign loans from the Loan Book tab on the scenario page.
-        </div>
+        <div className="text-xs">Assign loans from the Loan Book tab on the scenario page.</div>
       </div>
     );
   }
@@ -91,18 +88,9 @@ export async function ProgramLoanBookTab({
       <div className="grid grid-cols-2 gap-px border-b border-zinc-200 bg-zinc-200 sm:grid-cols-6">
         <SummaryTile label="Loans" value={fmtNum0(aggregate.loanCount)} />
         <SummaryTile label="Total balance" value={fmtMoney2(aggregate.totalBalance)} />
-        <SummaryTile
-          label="WA score"
-          value={waScore !== null ? waScore.toFixed(1) : "—"}
-        />
-        <SummaryTile
-          label="WA LVR"
-          value={waLvr !== null ? `${(waLvr * 100).toFixed(1)}%` : "—"}
-        />
-        <SummaryTile
-          label="WA DSCR"
-          value={waDscr !== null ? `${waDscr.toFixed(2)}x` : "—"}
-        />
+        <SummaryTile label="WA score" value={waScore !== null ? waScore.toFixed(1) : "—"} />
+        <SummaryTile label="WA LVR" value={waLvr !== null ? `${(waLvr * 100).toFixed(1)}%` : "—"} />
+        <SummaryTile label="WA DSCR" value={waDscr !== null ? `${waDscr.toFixed(2)}x` : "—"} />
         <SummaryTile
           label="WA spread"
           value={waSpreadBps !== null ? `${Math.round(waSpreadBps)} bps` : "—"}

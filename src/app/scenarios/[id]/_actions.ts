@@ -309,7 +309,13 @@ export async function importLoanTape(scenarioId: string, formData: FormData): Pr
 }
 
 const PROGRAM_TYPES = new Set(["CRE_CLO", "CMBS", "MIT_FUND", "WAREHOUSE", "OTHER"]);
-const FEE_CATEGORIES = new Set(["senior_mgmt", "subordinate_mgmt", "servicing", "trustee", "other"]);
+const FEE_CATEGORIES = new Set([
+  "senior_mgmt",
+  "subordinate_mgmt",
+  "servicing",
+  "trustee",
+  "other",
+]);
 const LIABILITY_CALC_METHODS = new Set(["monthly", "quarterly", "annually"]);
 const LIABILITY_RATE_TYPES = new Set(["fixed", "variable"]);
 const UPFRONT_FEE_CATEGORIES = new Set(["underwriter", "legal", "credit_rating", "other"]);
@@ -1572,8 +1578,7 @@ async function mirrorLoansToAllBase(
     const cloned = loanDocs
       .map((d) => {
         const galProgOid = d.capitalProgramId as Types.ObjectId | undefined;
-        const galProgId =
-          galProgOid instanceof Types.ObjectId ? galProgOid.toString() : undefined;
+        const galProgId = galProgOid instanceof Types.ObjectId ? galProgOid.toString() : undefined;
         const allProgOid = galProgId ? programIdMap.get(galProgId) : undefined;
         if (galProgId && !allProgOid) return null; // no matching ALL program — skip
         return { ...d, scenarioId: allBaseOid, capitalProgramId: allProgOid };

@@ -243,7 +243,10 @@ export default async function Home() {
               </h2>
               <span className="text-xs text-zinc-500">Programs across base scenarios.</span>
             </div>
-            <ProgramsTable programs={basePrograms} scenarioNameById={Object.fromEntries(rows.map((r) => [r._id, r.name]))} />
+            <ProgramsTable
+              programs={basePrograms}
+              scenarioNameById={Object.fromEntries(rows.map((r) => [r._id, r.name]))}
+            />
           </section>
         ) : null}
 

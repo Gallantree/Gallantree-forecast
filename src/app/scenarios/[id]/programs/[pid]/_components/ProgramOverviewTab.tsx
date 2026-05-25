@@ -1,15 +1,18 @@
 import Decimal from "decimal.js";
-import { fmtMoney2, fmtNum0 } from "@/utils/format";
-import {
-  cloneProgram,
-  deleteProgram,
-  updateProgram,
-} from "../../../_actions";
+import { fmtMoney2, fmtMoneyInput, fmtNum0 } from "@/utils/format";
+import { cloneProgram, deleteProgram, updateProgram } from "../../../_actions";
 import { AddProgramModal } from "../../../_components/AddProgramModal";
 import { CalibrateProgramButton } from "../../../_components/CalibrateProgramButton";
-import { isFundingTranche, type ProgramAggregate, type ProgramRow } from "../../../_components/ProgramsTab";
-import { fmtMoneyInput } from "@/utils/format";
-import type { ProgramFeeRow, ProgramLiabilityRow, ProgramUpfrontFeeRow } from "../../../_components/ProgramsTab";
+import type {
+  ProgramFeeRow,
+  ProgramLiabilityRow,
+  ProgramUpfrontFeeRow,
+} from "../../../_components/ProgramsTab";
+import {
+  isFundingTranche,
+  type ProgramAggregate,
+  type ProgramRow,
+} from "../../../_components/ProgramsTab";
 
 const CATEGORY_LABEL: Record<ProgramFeeRow["category"], string> = {
   senior_mgmt: "Senior mgmt",
@@ -201,14 +204,8 @@ export async function ProgramOverviewTab({
                 value={waScore !== null ? waScore.toFixed(1) : "—"}
                 sub="balance-weighted"
               />
-              <Mini
-                label="WA LVR"
-                value={waLvr !== null ? `${(waLvr * 100).toFixed(1)}%` : "—"}
-              />
-              <Mini
-                label="WA DSCR"
-                value={waDscr !== null ? `${waDscr.toFixed(2)}x` : "—"}
-              />
+              <Mini label="WA LVR" value={waLvr !== null ? `${(waLvr * 100).toFixed(1)}%` : "—"} />
+              <Mini label="WA DSCR" value={waDscr !== null ? `${waDscr.toFixed(2)}x` : "—"} />
               <Mini
                 label="WA spread"
                 value={waSpreadBps !== null ? `${Math.round(waSpreadBps)} bps` : "—"}
@@ -388,8 +385,7 @@ export async function ProgramOverviewTab({
                 Upfront issuance costs · one-off
               </span>
               <span className="text-[11px] text-zinc-500">
-                Total{" "}
-                <span className="font-semibold text-rose-700">{fmtMoney2(upfrontTotal)}</span>
+                Total <span className="font-semibold text-rose-700">{fmtMoney2(upfrontTotal)}</span>
               </span>
             </div>
             <table className="w-full border-collapse text-xs">

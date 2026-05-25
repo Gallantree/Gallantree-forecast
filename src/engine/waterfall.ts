@@ -94,7 +94,14 @@ export function computeWaterfall(opts: {
   const totalFees = fees.reduce((acc, f) => acc + annualFeeAmount(f.basisAmount, f.feeBps), 0);
   const totalNoteInterest = debtTranches.reduce(
     (acc, t) =>
-      acc + trancheAnnualInterest(t.numNotes, t.faceValuePerNote, t.returnProfileBps, t.rateType, baseRateBps),
+      acc +
+      trancheAnnualInterest(
+        t.numNotes,
+        t.faceValuePerNote,
+        t.returnProfileBps,
+        t.rateType,
+        baseRateBps,
+      ),
     0,
   );
   const totalOutflows = totalFees + totalNoteInterest;

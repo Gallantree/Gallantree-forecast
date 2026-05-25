@@ -1,13 +1,11 @@
 import { fmtMoney2, fmtNum0 } from "@/utils/format";
 import { updateLiabilityTranche } from "../../../_actions";
-import { isFundingTranche, type ProgramLiabilityRow, type ProgramRow } from "../../../_components/ProgramsTab";
+import {
+  isFundingTranche,
+  type ProgramLiabilityRow,
+  type ProgramRow,
+} from "../../../_components/ProgramsTab";
 import { LiabilityRowActions } from "./LiabilityRowActions";
-
-const CALC_LABEL: Record<ProgramLiabilityRow["calculationMethod"], string> = {
-  monthly: "Monthly",
-  quarterly: "Quarterly",
-  annually: "Annually",
-};
 
 function tranchePrincipal(l: ProgramLiabilityRow, faceValuePerNote: number): number {
   return (l.numNotes ?? 0) * faceValuePerNote;
@@ -78,11 +76,7 @@ export async function ProgramLiabilitiesTab({
         />
       </div>
       <div className="grid grid-cols-2 gap-px border-b border-zinc-200 bg-zinc-200 sm:grid-cols-2">
-        <SummaryTile
-          label="Annual interest"
-          value={fmtMoney2(totalAnnualInterest)}
-          tone="warn"
-        />
+        <SummaryTile label="Annual interest" value={fmtMoney2(totalAnnualInterest)} tone="warn" />
         <SummaryTile
           label="Monthly interest"
           value={fmtMoney2(totalAnnualInterest / 12)}
@@ -114,8 +108,7 @@ export async function ProgramLiabilitiesTab({
               const rateBps = trancheRateBps(l, baseRateBps);
               const annual = (principal * rateBps) / 10000;
               const monthly = annual / 12;
-              const pctOfStructure =
-                totalPrincipal > 0 ? (principal / totalPrincipal) * 100 : null;
+              const pctOfStructure = totalPrincipal > 0 ? (principal / totalPrincipal) * 100 : null;
               return (
                 <tr key={l._id} className="border-t border-zinc-100 hover:bg-yellow-50/40">
                   <Td className="font-medium">{l.name}</Td>
@@ -128,9 +121,7 @@ export async function ProgramLiabilitiesTab({
                   <Td className="text-right tabular-nums font-semibold text-zinc-900">
                     {principal > 0 ? fmtMoney2(principal) : "—"}
                   </Td>
-                  <Td className="text-right tabular-nums text-zinc-600">
-                    {l.returnProfileBps}
-                  </Td>
+                  <Td className="text-right tabular-nums text-zinc-600">{l.returnProfileBps}</Td>
                   <Td>
                     <span
                       className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${
@@ -166,12 +157,7 @@ export async function ProgramLiabilitiesTab({
                         rateType: l.rateType,
                         accountCode: l.accountCode,
                       }}
-                      updateAction={updateLiabilityTranche.bind(
-                        null,
-                        scenarioId,
-                        programId,
-                        l._id,
-                      )}
+                      updateAction={updateLiabilityTranche.bind(null, scenarioId, programId, l._id)}
                     />
                   </Td>
                 </tr>
