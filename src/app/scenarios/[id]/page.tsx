@@ -32,7 +32,7 @@ import { type CapitalRaiseRow, CapitalRaisesTab } from "./_components/CapitalRai
 import { type CashflowData, CashflowTab } from "./_components/CashflowTab";
 import { ConsolidatedModal } from "./_components/ConsolidatedModal";
 import { ControlPanelTab } from "./_components/ControlPanelTab";
-import { buildGallantreeStatements } from "./_components/gallantreeStatements";
+import { buildGallantreeStatements, NIM_REVENUE_PATTERN } from "./_components/gallantreeStatements";
 import { LoanBookAnalysisTab } from "./_components/LoanBookAnalysisTab";
 import {
   type BookGrowthProfileRow,
@@ -817,8 +817,13 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
             monthly,
           };
         });
-        const revenueLinesByAccount: UofMonthlyByAccount[] = statements.pnl.revenue.lines.map(
-          (l) => {
+        // Strip NIM revenue (accounts 4100–4499) — that interest flows through
+        // to program noteholders, not Gallantree. Use of Funds offsets a
+        // Gallantree capital raise, so only Gallantree-recognised revenue
+        // (management / servicing / platform fees, 4500+) should count.
+        const revenueLinesByAccount: UofMonthlyByAccount[] = statements.pnl.revenue.lines
+          .filter((l) => !NIM_REVENUE_PATTERN.test(l.accountCode))
+          .map((l) => {
             const monthly: Record<string, number> = {};
             for (const m of l.monthly) monthly[m.periodKey] = Number(m.value.toString());
             return {
@@ -826,8 +831,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
               accountName: accountByCode.get(l.accountCode) ?? l.accountCode,
               monthly,
             };
-          },
-        );
+          });
         const issuanceCostByMonth: Record<string, number> = {};
         for (const m of statements.cf.issuanceCostOutflow) {
           issuanceCostByMonth[m.periodKey] = Number(m.value.toString());

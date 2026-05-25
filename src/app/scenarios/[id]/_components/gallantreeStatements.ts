@@ -41,7 +41,12 @@ import type { ValuationData } from "./ValuationTab";
 // of operating cash, but the alternative requires changes inside the engine
 // itself. Same trade-off as `toGallantreePnl`.
 
-const NIM_REVENUE_PATTERN = /^4[1-4]\d\d$/;
+// Account codes 4100–4499 are loan-book NIM revenue (interest earned on the
+// underlying loans). Gallantree only recognises the management / servicing /
+// platform fees (4500+) as its own revenue — the NIM flows through to
+// program noteholders. Exported so the Use of Funds aggregator can apply the
+// same filter when offsetting Gallantree's cash uses against revenue.
+export const NIM_REVENUE_PATTERN = /^4[1-4]\d\d$/;
 const ZERO = new Decimal(0);
 
 function serializeMonthly(series: MonthlyValue[]): SerializedSeries {
