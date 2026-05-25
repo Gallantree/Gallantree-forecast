@@ -140,18 +140,22 @@ export function CapexTab({
   }, [schedules, fys]);
 
   // Running NBV for roll-forward.
-  const fyRollForward = useMemo(
-    () =>
-      fyTotals.reduce<{ fy: string; openingNbv: number; additions: number; depreciation: number; closingNbv: number; runningNbv: number }[]>(
-        (acc, { fy, additions, depreciation }) => {
-          const openingNbv = acc.length > 0 ? acc[acc.length - 1].runningNbv : 0;
-          const closing = openingNbv + additions - depreciation;
-          return [...acc, { fy, openingNbv, additions, depreciation, closingNbv: closing, runningNbv: closing }];
-        },
-        [],
-      ).map(({ runningNbv: _r, ...row }) => row),
-    [fyTotals],
-  );
+  const fyRollForward = useMemo(() => {
+    const rows: {
+      fy: string;
+      openingNbv: number;
+      additions: number;
+      depreciation: number;
+      closingNbv: number;
+    }[] = [];
+    let runningNbv = 0;
+    for (const { fy, additions, depreciation } of fyTotals) {
+      const openingNbv = runningNbv;
+      runningNbv = openingNbv + additions - depreciation;
+      rows.push({ fy, openingNbv, additions, depreciation, closingNbv: runningNbv });
+    }
+    return rows;
+  }, [fyTotals]);
 
   function startEditRow(d: CapexDriverRow) {
     setEditing((prev) => ({

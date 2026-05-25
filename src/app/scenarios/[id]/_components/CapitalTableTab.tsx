@@ -67,7 +67,7 @@ function fmtMoney(n: number) {
   return n.toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 function fmtPct(n: number) {
-  return n.toFixed(2) + "%";
+  return `${n.toFixed(2)}%`;
 }
 function fmtM(n: number) {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
