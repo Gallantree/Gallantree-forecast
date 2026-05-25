@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import type { SeedResult } from "../_actions";
 
@@ -9,7 +10,43 @@ interface SeedOption {
   key: string;
   label: string;
   description: string;
-  action: SeedAction;
+  // Optional — when present, used as a fallback if the streaming endpoint
+  // is unreachable. The primary path is the streaming /seed route.
+  action?: SeedAction;
+}
+
+// Runs the seed via the streaming route handler so Heroku's 30s router
+// timeout never fires on slow AI calls — bytes are flushed every 10s and the
+// final non-empty line is the SeedResult JSON.
+async function runStreamingSeed(scenarioId: string, kind: string): Promise<SeedResult> {
+  const res = await fetch(`/api/scenarios/${scenarioId}/seed`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kind }),
+  });
+  if (!res.ok || !res.body) {
+    return { ok: false, error: `HTTP ${res.status}` };
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (value) buf += decoder.decode(value, { stream: true });
+    if (done) break;
+  }
+  buf += decoder.decode();
+  const lines = buf
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const last = lines[lines.length - 1];
+  if (!last) return { ok: false, error: "empty seed response" };
+  try {
+    return JSON.parse(last) as SeedResult;
+  } catch {
+    return { ok: false, error: "malformed seed response" };
+  }
 }
 
 export function SeedMenu({
@@ -21,6 +58,7 @@ export function SeedMenu({
   enabled: boolean;
   options: SeedOption[];
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [running, setRunning] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -31,13 +69,14 @@ export function SeedMenu({
     setRunning(opt.key);
     setToast({ msg: `Asking Claude to generate ${opt.label.toLowerCase()}…`, tone: "ok" });
     startTransition(async () => {
-      const res = await opt.action(scenarioId);
+      const res = await runStreamingSeed(scenarioId, opt.key);
       setRunning(null);
       if (res.ok) {
         setToast({
           msg: `Seeded ${res.created} ${opt.label.toLowerCase()} record(s).`,
           tone: "ok",
         });
+        router.refresh();
         setTimeout(() => setToast(null), 4000);
       } else {
         setToast({
