@@ -10,6 +10,7 @@ export interface ValuationAssumptionsView {
   evRevenueMultiple: string;
   peMultiple: string;
   netDebt: string;
+  pbMultiple: string;
 }
 
 export function EditValuationAssumptions({
@@ -29,6 +30,7 @@ export function EditValuationAssumptions({
   const [evRevenueMultiple, setEvRevenueMultiple] = useState(initial.evRevenueMultiple);
   const [peMultiple, setPeMultiple] = useState(initial.peMultiple);
   const [netDebt, setNetDebt] = useState(initial.netDebt);
+  const [pbMultiple, setPbMultiple] = useState(initial.pbMultiple);
 
   function show() {
     setWaccPct(initial.waccPct);
@@ -37,6 +39,7 @@ export function EditValuationAssumptions({
     setEvRevenueMultiple(initial.evRevenueMultiple);
     setPeMultiple(initial.peMultiple);
     setNetDebt(initial.netDebt);
+    setPbMultiple(initial.pbMultiple);
     setOpen(true);
     dialogRef.current?.showModal();
   }
@@ -53,6 +56,7 @@ export function EditValuationAssumptions({
         evRevenueMultiple,
         peMultiple,
         netDebt,
+        pbMultiple,
       });
       hide();
     });
@@ -126,6 +130,14 @@ export function EditValuationAssumptions({
                 <input
                   value={netDebt}
                   onChange={(e) => setNetDebt(e.target.value)}
+                  inputMode="decimal"
+                  className="rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
+                />
+              </Field>
+              <Field label="P/B multiple" hint="default 1.4x">
+                <input
+                  value={pbMultiple}
+                  onChange={(e) => setPbMultiple(e.target.value)}
                   inputMode="decimal"
                   className="rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
                 />

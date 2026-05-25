@@ -40,6 +40,11 @@ export {
 } from "./platformLicense.model";
 export { default as Scenario, type IScenario } from "./scenario.model";
 export {
+  default as Shareholder,
+  type IShareholder,
+  type ShareClass,
+} from "./shareholder.model";
+export {
   default as User,
   type IUser,
   type MembershipRole,

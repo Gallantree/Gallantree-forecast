@@ -6,7 +6,7 @@
 // deterministic default so failed assertions point at the field under test.
 
 import { Types } from "mongoose";
-import { CapitalProgram, Loan, Scenario } from "@/models";
+import { CapitalProgram, Loan, Scenario, Shareholder } from "@/models";
 import { toDecimal128 } from "@/utils/money";
 
 type AnyDoc = Record<string, unknown>;
@@ -85,6 +85,22 @@ export async function makeLoan(
     originationDate: new Date("2026-01-15"),
     maturityDate: new Date("2029-01-15"),
     includeInRevenue: true,
+    ...overrides,
+  });
+}
+
+export async function makeShareholder(
+  scenarioId: Types.ObjectId,
+  overrides: AnyDoc = {},
+) {
+  return await Shareholder.create({
+    scenarioId,
+    name: "Test Holder",
+    shareClass: "Ordinary",
+    shares: 100_000,
+    pricePerShare: toDecimal128("0.5"),
+    beneficiallyHeld: false,
+    dateOfIssue: new Date("2026-03-24"),
     ...overrides,
   });
 }

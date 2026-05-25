@@ -54,6 +54,7 @@ describe("computeValuation — DCF", () => {
         ebit: series,
         netIncome: series,
         netCashMovement: series,
+        equity: series,
       },
       { waccPct: 10, terminalGrowthPct: 0, netDebt: 0 },
     );
@@ -76,6 +77,7 @@ describe("computeValuation — DCF", () => {
         ebit: series,
         netIncome: series,
         netCashMovement: series,
+        equity: series,
       },
       { waccPct: 5, terminalGrowthPct: 5 },
     );
@@ -93,6 +95,7 @@ describe("computeValuation — DCF", () => {
         ebit: series,
         netIncome: series,
         netCashMovement: series,
+        equity: series,
       },
       { waccPct: 10, terminalGrowthPct: 0, netDebt: 20_000_000 },
     );
@@ -110,6 +113,7 @@ describe("computeValuation — DCF", () => {
         ebit: series,
         netIncome: series,
         netCashMovement: series,
+        equity: series,
       },
       { waccPct: 10, terminalGrowthPct: 0 },
     );
@@ -132,6 +136,7 @@ describe("computeValuation — multiples", () => {
         ebit: series,
         netIncome: series,
         netCashMovement: series,
+        equity: series,
       },
       { evEbitdaMultiple: 8, netDebt: 5_000_000 },
     );
@@ -150,6 +155,7 @@ describe("computeValuation — multiples", () => {
         ebit: series,
         netIncome: series,
         netCashMovement: series,
+        equity: series,
       },
       { evRevenueMultiple: 3 },
     );
@@ -167,6 +173,7 @@ describe("computeValuation — multiples", () => {
         ebit: series,
         netIncome: series,
         netCashMovement: series,
+        equity: series,
       },
       { peMultiple: 15 },
     );

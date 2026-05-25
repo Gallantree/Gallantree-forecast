@@ -12,12 +12,14 @@ export type TabKey =
   | "platform-revenues"
   | "opex-general"
   | "opex-staffing"
+  | "capex"
   | "pnl"
   | "pnl-gallantree"
   | "balance-sheet"
   | "cashflow"
   | "valuation"
   | "use-of-funds"
+  | "capital-table"
   | "control-panel";
 
 export const TABS: { key: TabKey; label: string }[] = [
@@ -31,12 +33,14 @@ export const TABS: { key: TabKey; label: string }[] = [
   { key: "platform-revenues", label: "Platform Revenues" },
   { key: "opex-general", label: "OPEX — General" },
   { key: "opex-staffing", label: "OPEX — Staffing" },
+  { key: "capex", label: "Capex" },
   { key: "pnl", label: "Profit & Loss" },
   { key: "pnl-gallantree", label: "Profit & Loss — Gallantree" },
   { key: "balance-sheet", label: "Balance Sheet" },
   { key: "cashflow", label: "Cashflow" },
   { key: "valuation", label: "Valuation" },
   { key: "use-of-funds", label: "Use of Funds" },
+  { key: "capital-table", label: "Capital Table" },
   { key: "control-panel", label: "Control Panel" },
 ];
 
@@ -53,11 +57,13 @@ const ALL_TABS: TabKey[] = [
   "platform-revenues",
   "opex-general",
   "opex-staffing",
+  "capex",
   "pnl",
   "balance-sheet",
   "cashflow",
   "valuation",
   "use-of-funds",
+  "capital-table",
   "control-panel",
 ];
 
@@ -71,11 +77,13 @@ const GALLANTREE_TABS: TabKey[] = [
   "capital-raises",
   "opex-general",
   "opex-staffing",
+  "capex",
   "pnl-gallantree",
   "balance-sheet",
   "cashflow",
   "valuation",
   "use-of-funds",
+  "capital-table",
   "control-panel",
 ];
 

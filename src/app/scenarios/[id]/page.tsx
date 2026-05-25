@@ -21,6 +21,7 @@ import {
   Period,
   PlatformLicense,
   Scenario,
+  Shareholder,
 } from "@/models";
 import { addDriver } from "./_actions";
 import {
@@ -28,7 +29,9 @@ import {
   BalanceSheetTab,
   type SerializedSeries,
 } from "./_components/BalanceSheetTab";
+import { type CapexDriverRow, CapexTab } from "./_components/CapexTab";
 import { type CapitalRaiseRow, CapitalRaisesTab } from "./_components/CapitalRaisesTab";
+import { CapitalTableTab, type ShareholderRow } from "./_components/CapitalTableTab";
 import { type CashflowData, CashflowTab } from "./_components/CashflowTab";
 import { ConsolidatedModal } from "./_components/ConsolidatedModal";
 import { ControlPanelTab } from "./_components/ControlPanelTab";
@@ -58,6 +61,7 @@ import { buildProgramAnalysisData } from "./_components/programAnalysisData";
 import { type PaybandRow, StaffingTab, type StaffRow } from "./_components/StaffingTab";
 import { defaultTabFor, isTabKeyForMode, TabBar, type TabKey } from "./_components/TabBar";
 import {
+  type UofCapexDriver,
   type UofMonthlyByAccount,
   type UseOfFundsData,
   UseOfFundsTab,
@@ -147,12 +151,15 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
     baseRateBps?: number;
     firstYearLabel?: number;
     staffTargetByYear?: number[];
+    esopPctByYear?: number[];
+    earnBackPctByYear?: number[];
     waccPct?: { toString: () => string };
     terminalGrowthPct?: { toString: () => string };
     evEbitdaMultiple?: { toString: () => string };
     evRevenueMultiple?: { toString: () => string };
     peMultiple?: { toString: () => string };
     netDebt?: { toString: () => string };
+    pbMultiple?: { toString: () => string };
   }>();
   if (!scenario) notFound();
 
@@ -169,6 +176,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
     programDocs,
     licenseDocs,
     raiseDocs,
+    shareholderDocs,
     inputs,
   ] = await Promise.all([
     // Period docs are kept for historical reasons but the horizon is now
@@ -184,6 +192,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
     CapitalProgram.find({ scenarioId: id }).sort({ startPeriodKey: 1, name: 1 }).lean(),
     PlatformLicense.find({ scenarioId: id }).sort({ type: 1, startPeriodKey: 1, name: 1 }).lean(),
     CapitalRaise.find({ scenarioId: id }).sort({ raiseDate: 1, name: 1 }).lean(),
+    Shareholder.find({ scenarioId: id }).sort({ shares: -1 }).lean(),
     loadEngineInputs(id),
   ]);
 
@@ -329,6 +338,27 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
       costPerFteMonthly: d.costPerFteMonthly
         ? { toString: () => d.costPerFteMonthly!.toString() }
         : undefined,
+    }));
+
+  // Capex (capex_straight_line) drivers for the Capex tab.
+  type LeanCapexDoc = {
+    _id: { toString: () => string };
+    name: string;
+    type: string;
+    accountCode: string;
+    cost?: { toString: () => string };
+    inServicePeriodKey?: string;
+    usefulLifeMonths?: number;
+  };
+  const capexDriverRows: CapexDriverRow[] = (drivers as unknown as LeanCapexDoc[])
+    .filter((d) => d.type === "capex_straight_line" && d.cost && d.inServicePeriodKey)
+    .map((d) => ({
+      _id: d._id.toString(),
+      name: d.name,
+      accountCode: d.accountCode,
+      inServicePeriodKey: d.inServicePeriodKey!,
+      cost: d.cost!.toString(),
+      usefulLifeMonths: d.usefulLifeMonths ?? 36,
     }));
 
   // Compact options list for the loan-book program selector (no fee detail).
@@ -564,6 +594,28 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
       : undefined,
   }));
 
+  const shareholderRows: ShareholderRow[] = (
+    shareholderDocs as unknown as Array<{
+      _id: { toString: () => string };
+      name: string;
+      entityTrust?: string;
+      shareClass: string;
+      shares: number;
+      pricePerShare: { toString: () => string };
+      beneficiallyHeld: boolean;
+      dateOfIssue: Date;
+    }>
+  ).map((s) => ({
+    _id: s._id.toString(),
+    name: s.name,
+    entityTrust: s.entityTrust,
+    shareClass: s.shareClass,
+    shares: s.shares,
+    pricePerShare: s.pricePerShare.toString(),
+    beneficiallyHeld: s.beneficiallyHeld,
+    dateOfIssue: new Date(s.dateOfIssue).toISOString(),
+  }));
+
   // Year 1 calendar year from the Control Panel — drives the horizon across
   // every tab. Falls back to 2026 (the seed default) when not set.
   const firstCalendarYear = scenario.firstYearLabel ?? 2026;
@@ -650,6 +702,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
             ebit: statements.pnl.ebit,
             netIncome: statements.pnl.netIncome,
             netCashMovement: statements.cf.netCashMovement,
+            equity: statements.bs.equity,
           },
           {
             waccPct: scenario.waccPct?.toString(),
@@ -658,6 +711,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
             evRevenueMultiple: scenario.evRevenueMultiple?.toString(),
             peMultiple: scenario.peMultiple?.toString(),
             netDebt: scenario.netDebt?.toString(),
+            pbMultiple: scenario.pbMultiple?.toString(),
           },
         );
         return {
@@ -701,6 +755,13 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
             enterpriseValue: m.enterpriseValue.toFixed(2),
             equityValue: m.equityValue.toFixed(2),
           })),
+          pb: v.pb.map((m) => ({
+            fy: m.fy,
+            metric: m.metric.toFixed(2),
+            multiple: m.multiple.toFixed(2),
+            enterpriseValue: m.enterpriseValue.toFixed(2),
+            equityValue: m.equityValue.toFixed(2),
+          })),
           assumptions: {
             waccPct: v.assumptions.waccPct.toFixed(2),
             terminalGrowthPct: v.assumptions.terminalGrowthPct.toFixed(2),
@@ -708,6 +769,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
             evRevenueMultiple: v.assumptions.evRevenueMultiple.toFixed(2),
             peMultiple: v.assumptions.peMultiple.toFixed(2),
             netDebt: v.assumptions.netDebt.toFixed(2),
+            pbMultiple: v.assumptions.pbMultiple.toFixed(2),
           },
         };
       })()
@@ -798,6 +860,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
             evRevenueMultiple: scenario.evRevenueMultiple?.toString(),
             peMultiple: scenario.peMultiple?.toString(),
             netDebt: scenario.netDebt?.toString(),
+            pbMultiple: scenario.pbMultiple?.toString(),
           },
         })
       : null;
@@ -836,6 +899,21 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
         for (const m of statements.cf.issuanceCostOutflow) {
           issuanceCostByMonth[m.periodKey] = Number(m.value.toString());
         }
+        type LeanCapexDriver = {
+          _id: { toString: () => string };
+          name: string;
+          type: string;
+          cost?: { toString: () => string };
+          inServicePeriodKey?: string;
+        };
+        const capexDrivers: UofCapexDriver[] = (drivers as unknown as LeanCapexDriver[])
+          .filter((d) => d.type === "capex_straight_line" && d.cost && d.inServicePeriodKey)
+          .map((d) => ({
+            id: d._id.toString(),
+            name: d.name,
+            inServicePeriodKey: d.inServicePeriodKey!,
+            cost: Number(d.cost!.toString()),
+          }));
         const raises = raiseRows.map((r) => {
           const raiseDateObj = new Date(r.raiseDate);
           const y = raiseDateObj.getUTCFullYear();
@@ -867,6 +945,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
           opexLinesByAccount,
           revenueLinesByAccount,
           issuanceCostByMonth,
+          capexDrivers,
         };
       })()
     : null;
@@ -1215,6 +1294,16 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
           />
         )}
 
+        {tab === "capex" && (
+          <CapexTab
+            scenarioId={id}
+            drivers={capexDriverRows}
+            expenseAccounts={expenseAccounts.map((a) => ({ code: a.code, name: a.name }))}
+            defaultStartPeriod={firstPeriod}
+            fyGroups={groups}
+          />
+        )}
+
         {tab === "balance-sheet" &&
           (effectiveBalanceSheetData ? (
             <BalanceSheetTab scenarioId={id} data={effectiveBalanceSheetData} />
@@ -1242,6 +1331,18 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
           ) : (
             <Stub title="Use of Funds" message="Seed periods + add a capital raise first." />
           ))}
+
+        {tab === "capital-table" && (
+          <CapitalTableTab
+            scenarioId={id}
+            shareholders={shareholderRows}
+            raises={raiseRows}
+            valuation={effectiveValuationData}
+            firstCalendarYear={firstCalendarYear}
+            initialEsopPcts={scenario.esopPctByYear ?? [0, 0, 0, 0, 0]}
+            initialEarnBackPcts={scenario.earnBackPctByYear ?? [0, 0, 0, 0, 0]}
+          />
+        )}
 
         {tab === "control-panel" && (
           <ControlPanelTab

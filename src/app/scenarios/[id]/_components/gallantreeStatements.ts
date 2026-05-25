@@ -101,6 +101,7 @@ export function buildGallantreeStatements({
     evRevenueMultiple?: string;
     peMultiple?: string;
     netDebt?: string;
+    pbMultiple?: string;
   };
 }): GallantreeStatements {
   const horizon = statements.horizon;
@@ -323,6 +324,7 @@ export function buildGallantreeStatements({
       ebit: gEbit,
       netIncome: gNetIncome,
       netCashMovement: gNetCashMovement,
+      equity: gEquity,
     },
     valuationAssumptions,
   );
@@ -367,6 +369,13 @@ export function buildGallantreeStatements({
       enterpriseValue: m.enterpriseValue.toFixed(2),
       equityValue: m.equityValue.toFixed(2),
     })),
+    pb: v.pb.map((m) => ({
+      fy: m.fy,
+      metric: m.metric.toFixed(2),
+      multiple: m.multiple.toFixed(2),
+      enterpriseValue: m.enterpriseValue.toFixed(2),
+      equityValue: m.equityValue.toFixed(2),
+    })),
     assumptions: {
       waccPct: v.assumptions.waccPct.toFixed(2),
       terminalGrowthPct: v.assumptions.terminalGrowthPct.toFixed(2),
@@ -374,6 +383,7 @@ export function buildGallantreeStatements({
       evRevenueMultiple: v.assumptions.evRevenueMultiple.toFixed(2),
       peMultiple: v.assumptions.peMultiple.toFixed(2),
       netDebt: v.assumptions.netDebt.toFixed(2),
+      pbMultiple: v.assumptions.pbMultiple.toFixed(2),
     },
   };
 

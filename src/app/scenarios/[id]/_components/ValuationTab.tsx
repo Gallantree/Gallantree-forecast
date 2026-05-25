@@ -41,6 +41,7 @@ export interface ValuationData {
   evEbitda: ValuationMultipleRow[];
   evRevenue: ValuationMultipleRow[];
   pe: ValuationMultipleRow[];
+  pb: ValuationMultipleRow[];
   assumptions: ValuationAssumptionsView;
 }
 
@@ -49,11 +50,12 @@ export function ValuationTab({ scenarioId, data }: { scenarioId: string; data: V
   const lastEvEbitda = data.evEbitda[data.evEbitda.length - 1];
   const lastEvRevenue = data.evRevenue[data.evRevenue.length - 1];
   const lastPe = data.pe[data.pe.length - 1];
+  const lastPb = data.pb[data.pb.length - 1];
 
   return (
     <div className="flex h-full flex-col bg-white">
       {/* Headline tiles */}
-      <div className="grid grid-cols-4 gap-px border-b border-zinc-200 bg-zinc-200">
+      <div className="grid grid-cols-5 gap-px border-b border-zinc-200 bg-zinc-200">
         <Tile
           label={`DCF · ${lastDcf.horizonYears}y horizon`}
           value={fmtMoney2(lastDcf.equityValue)}
@@ -75,6 +77,11 @@ export function ValuationTab({ scenarioId, data }: { scenarioId: string; data: V
           value={fmtMoney2(lastPe.equityValue)}
           sub={`${data.assumptions.peMultiple}x · NI ${fmtMoney2(lastPe.metric)}`}
         />
+        <Tile
+          label={`P/B · CY${String(lastPb.fy).slice(-2)}`}
+          value={fmtMoney2(lastPb.equityValue)}
+          sub={`${data.assumptions.pbMultiple}x · BV ${fmtMoney2(lastPb.metric)}`}
+        />
       </div>
 
       {/* Assumptions banner */}
@@ -84,6 +91,7 @@ export function ValuationTab({ scenarioId, data }: { scenarioId: string; data: V
         <Stat label="EV/EBITDA" value={`${data.assumptions.evEbitdaMultiple}x`} />
         <Stat label="EV/Revenue" value={`${data.assumptions.evRevenueMultiple}x`} />
         <Stat label="P/E" value={`${data.assumptions.peMultiple}x`} />
+        <Stat label="P/B" value={`${data.assumptions.pbMultiple}x`} />
         <Stat label="Net debt" value={fmtMoney2(data.assumptions.netDebt)} />
         <div className="ml-auto">
           <EditValuationAssumptions
@@ -201,6 +209,13 @@ export function ValuationTab({ scenarioId, data }: { scenarioId: string; data: V
           color="bg-violet-50 text-violet-800"
           metricLabel="Net income"
           rows={data.pe}
+          equityOnly
+        />
+        <MultiplesSection
+          title={`P / BOOK · ${data.assumptions.pbMultiple}x`}
+          color="bg-rose-50 text-rose-800"
+          metricLabel="Book value"
+          rows={data.pb}
           equityOnly
         />
       </div>
