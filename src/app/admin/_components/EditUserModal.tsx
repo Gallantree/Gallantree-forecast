@@ -97,7 +97,7 @@ export function EditUserModal({ user, orgs }: { user: UserRow; orgs: OrgOption[]
         <dialog
           ref={ref}
           onClose={() => setOpen(false)}
-          className="w-[600px] max-w-[92vw] rounded-lg border border-zinc-200 p-0 shadow-xl backdrop:bg-zinc-900/40"
+          className="fixed inset-0 m-auto w-[600px] max-w-[92vw] rounded-lg border border-zinc-200 p-0 shadow-xl backdrop:bg-zinc-900/40"
         >
           <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4">
             <div>

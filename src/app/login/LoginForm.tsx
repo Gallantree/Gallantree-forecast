@@ -4,9 +4,32 @@ import { useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { useState } from "react";
 import { toast } from "sonner";
+import {
+  LOGIN_CODE_CHARS,
+  LOGIN_CODE_FORMATTED_LENGTH,
+  LOGIN_CODE_LENGTH,
+  LOGIN_CODE_SEGMENT_LENGTH,
+  normalizeLoginCode,
+} from "@/lib/loginCodeConstants";
 
 function validEmail(s: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+}
+
+// Strip invalid chars, uppercase, then insert dashes every SEGMENT_LENGTH.
+function formatCodeInput(raw: string): string {
+  const allowed = new Set(LOGIN_CODE_CHARS.split(""));
+  const cleaned = raw
+    .toUpperCase()
+    .split("")
+    .filter((c) => allowed.has(c))
+    .slice(0, LOGIN_CODE_LENGTH)
+    .join("");
+  const parts: string[] = [];
+  for (let i = 0; i < cleaned.length; i += LOGIN_CODE_SEGMENT_LENGTH) {
+    parts.push(cleaned.slice(i, i + LOGIN_CODE_SEGMENT_LENGTH));
+  }
+  return parts.join("-");
 }
 
 export function LoginForm({ googleEnabled }: { googleEnabled: boolean }) {
@@ -14,6 +37,12 @@ export function LoginForm({ googleEnabled }: { googleEnabled: boolean }) {
   const [emailError, setEmailError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  // Once the email has been sent, we swap to the code-entry view. The email
+  // stays in component state so resend / back works.
+  const [codeSent, setCodeSent] = useState(false);
+  const [code, setCode] = useState("");
+  const [codeError, setCodeError] = useState<string | null>(null);
+  const [verifying, setVerifying] = useState(false);
   const searchParams = useSearchParams();
   // If the user landed on /login by trying to hit a protected route, the
   // middleware appends ?callbackUrl=<that route>. Honour it on successful
@@ -30,6 +59,36 @@ export function LoginForm({ googleEnabled }: { googleEnabled: boolean }) {
     }
   }
 
+  async function sendEmail(normalised: string): Promise<boolean> {
+    const lookup = await fetch("/api/auth/email-exists", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: normalised }),
+    });
+    if (lookup.ok) {
+      const { exists } = (await lookup.json()) as { exists: boolean };
+      if (!exists) {
+        toast.info("No account found", {
+          description:
+            "We couldn't find an account for that email. Contact your administrator to be invited.",
+        });
+        return false;
+      }
+    }
+    const result = await signIn("email", {
+      email: normalised,
+      redirect: false,
+      callbackUrl,
+    });
+    if (result?.error) {
+      toast.error("Sign-in failed", {
+        description: "We could not send a sign-in link. Please try again.",
+      });
+      return false;
+    }
+    return true;
+  }
+
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setEmailError(null);
@@ -40,41 +99,136 @@ export function LoginForm({ googleEnabled }: { googleEnabled: boolean }) {
     }
     setSubmitting(true);
     try {
-      const lookup = await fetch("/api/auth/email-exists", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: normalised }),
-      });
-      if (lookup.ok) {
-        const { exists } = (await lookup.json()) as { exists: boolean };
-        if (!exists) {
-          toast.info("No account found", {
-            description:
-              "We couldn't find an account for that email. Contact your administrator to be invited.",
-          });
-          return;
-        }
+      const ok = await sendEmail(normalised);
+      if (ok) {
+        setEmail(normalised);
+        setCodeSent(true);
+        setCode("");
+        setCodeError(null);
       }
-
-      const result = await signIn("email", {
-        email: normalised,
-        redirect: false,
-        callbackUrl,
-      });
-      if (result?.error) {
-        toast.error("Sign-in failed", {
-          description: "We could not send a sign-in link. Please try again.",
-        });
-        return;
-      }
-      window.location.href = `/login/verify-request?email=${encodeURIComponent(normalised)}`;
     } catch {
-      toast.error("Sign-in failed", {
-        description: "Unexpected error. Please try again.",
-      });
+      toast.error("Sign-in failed", { description: "Unexpected error. Please try again." });
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function onVerifyCode(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setCodeError(null);
+    if (normalizeLoginCode(code).length !== LOGIN_CODE_LENGTH) {
+      setCodeError(`Enter the full ${LOGIN_CODE_LENGTH}-character code.`);
+      return;
+    }
+    setVerifying(true);
+    try {
+      const res = await fetch("/api/auth/verify-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, code }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; loginUrl?: string };
+      if (!res.ok || !data.ok || !data.loginUrl) {
+        setCodeError("Invalid or expired code. Check the email and try again.");
+        return;
+      }
+      // Hand the browser the Auth.js callback URL — following it mints the
+      // session cookie and lands the user on `callbackUrl`.
+      window.location.href = data.loginUrl;
+    } catch {
+      setCodeError("Couldn't verify the code. Please try again.");
+    } finally {
+      setVerifying(false);
+    }
+  }
+
+  async function onResend() {
+    setSubmitting(true);
+    try {
+      const ok = await sendEmail(email);
+      if (ok) {
+        toast.success("Sent a new code", { description: `Check ${email}.` });
+        setCode("");
+        setCodeError(null);
+      }
+    } catch {
+      toast.error("Couldn't resend", { description: "Please try again." });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (codeSent) {
+    return (
+      <div className="flex flex-col gap-7">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold tracking-tight text-zinc-900">Enter your code</h1>
+          <p className="mt-2 text-sm text-zinc-500">
+            We sent a sign-in link and a one-time code to{" "}
+            <span className="font-semibold text-zinc-900">{email}</span>. Enter the code below, or
+            click the link in your email.
+          </p>
+        </div>
+
+        <form onSubmit={onVerifyCode} noValidate className="flex flex-col gap-4">
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold text-zinc-900">
+              Sign-in code <span className="text-rose-500">*</span>
+            </span>
+            <input
+              type="text"
+              inputMode="text"
+              autoComplete="one-time-code"
+              autoCapitalize="characters"
+              spellCheck={false}
+              required
+              maxLength={LOGIN_CODE_FORMATTED_LENGTH}
+              value={code}
+              onChange={(e) => {
+                setCode(formatCodeInput(e.target.value));
+                if (codeError) setCodeError(null);
+              }}
+              placeholder="XXXX-XXXX-XXXX"
+              className={`rounded-md border bg-white px-3 py-2 text-center font-mono text-lg tracking-widest uppercase placeholder:text-zinc-400 focus:outline-none focus:ring-1 ${
+                codeError
+                  ? "border-rose-400 focus:border-rose-500 focus:ring-rose-500"
+                  : "border-zinc-300 focus:border-indigo-500 focus:ring-indigo-500"
+              }`}
+            />
+            {codeError ? <span className="text-xs text-rose-600">{codeError}</span> : null}
+          </label>
+          <button
+            type="submit"
+            disabled={verifying}
+            className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
+          >
+            {verifying ? "Verifying…" : "Verify & Sign In"}
+          </button>
+        </form>
+
+        <div className="flex flex-col items-center gap-2 text-sm">
+          <button
+            type="button"
+            onClick={onResend}
+            disabled={submitting}
+            className="text-zinc-600 hover:text-zinc-900 disabled:opacity-60"
+          >
+            {submitting ? "Resending…" : "Didn't get it? Resend"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setCodeSent(false);
+              setCode("");
+              setCodeError(null);
+            }}
+            className="text-zinc-500 hover:text-zinc-700"
+          >
+            ← Use a different email
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -82,7 +236,7 @@ export function LoginForm({ googleEnabled }: { googleEnabled: boolean }) {
       <div className="text-center">
         <h1 className="text-3xl font-bold tracking-tight text-zinc-900">Sign In</h1>
         <p className="mt-2 text-sm text-zinc-500">
-          Enter your email — we&apos;ll send you a one-time sign-in link.
+          Enter your email — we&apos;ll send you a one-time sign-in link and code.
         </p>
       </div>
 
@@ -136,7 +290,7 @@ export function LoginForm({ googleEnabled }: { googleEnabled: boolean }) {
           disabled={submitting || googleLoading}
           className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
         >
-          {submitting ? "Sending link…" : "Sign In"}
+          {submitting ? "Sending code…" : "Sign In"}
         </button>
       </form>
 

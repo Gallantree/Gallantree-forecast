@@ -25,6 +25,13 @@ export { type DriverType, default as Driver, type IDriver } from "./driver.model
 export { default as Headcount, type IHeadcount } from "./headcount.model";
 export { default as Loan, type ILoan } from "./loan.model";
 export {
+  default as LoginActivity,
+  type ILoginActivity,
+  type LoginMethod,
+  type LoginOutcome,
+} from "./loginActivity.model";
+export { default as LoginCode, type ILoginCode } from "./loginCode.model";
+export {
   default as Organisation,
   type IOrganisation,
   type OrganisationStatus,
