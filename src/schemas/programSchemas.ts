@@ -3,7 +3,7 @@ import { decimalStringSchema, periodKeySchema } from "@/validators";
 
 export const programFeeSchema = z.object({
   name: z.string().min(1).max(120),
-  category: z.enum(["senior_mgmt", "subordinate_mgmt", "servicing", "other"]),
+  category: z.enum(["senior_mgmt", "subordinate_mgmt", "servicing", "trustee", "other"]),
   basisAmount: decimalStringSchema,
   feeBps: z.number().min(0),
   accountCode: z.string().min(1).max(20),

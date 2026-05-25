@@ -54,6 +54,7 @@ const FEE_CATEGORY_LABEL: Record<string, string> = {
   senior_mgmt: "Senior mgmt",
   subordinate_mgmt: "Sub mgmt",
   servicing: "Servicing",
+  trustee: "Trustee fees",
   other: "Other",
 };
 

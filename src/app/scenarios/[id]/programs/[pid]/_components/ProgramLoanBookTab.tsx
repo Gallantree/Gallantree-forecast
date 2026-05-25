@@ -1,6 +1,33 @@
-import { fmtMoney2, fmtNum0 } from "@/utils/format";
+import { cleanDecimal, fmtMoney2, fmtNum0 } from "@/utils/format";
+import { deleteLoan, updateLoan } from "../../../_actions";
 import type { LoanRow } from "../../../_components/LoansTab";
+import { type LoanEditInitial, LoanRowActions } from "../../../_components/LoanRowActions";
 import type { ProgramAggregate, ProgramRow } from "../../../_components/ProgramsTab";
+
+function toIsoDate(d: Date | string): string {
+  const date = typeof d === "string" ? new Date(d) : d;
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+}
+
+function toLoanEditInitial(l: LoanRow): LoanEditInitial {
+  return {
+    _id: l._id,
+    loanId: l.loanId,
+    borrower: l.borrower,
+    lenderOfRecord: l.lenderOfRecord,
+    capitalProgramId: l.capitalProgramId,
+    balance: l.balance.toString(),
+    originationDate: toIsoDate(l.originationDate),
+    maturityDate: toIsoDate(l.maturityDate),
+    termMonths: l.termMonths,
+    creditSpreadBps: l.creditSpreadBps,
+    internalScore: l.internalScore,
+    internalGrade: l.internalGrade,
+    lvr: l.lvr ? cleanDecimal(l.lvr.toString()) : undefined,
+    dscr: l.dscr ? cleanDecimal(l.dscr.toString()) : undefined,
+  };
+}
 
 const ARREARS_LABEL: Record<NonNullable<LoanRow["arrearsStatus"]>, string> = {
   current: "Current",
@@ -22,10 +49,14 @@ export async function ProgramLoanBookTab({
   loans,
   program,
   aggregate,
+  scenarioId,
+  programs,
 }: {
   loans: LoanRow[];
   program: ProgramRow;
   aggregate: ProgramAggregate;
+  scenarioId: string;
+  programs: { _id: string; name: string; type: string }[];
 }) {
   const waScore =
     aggregate.weightBalanceForScore > 0
@@ -95,6 +126,7 @@ export async function ProgramLoanBookTab({
               <Th className="text-right">All-in rate</Th>
               <Th>Status</Th>
               <Th className="text-right">Term (mo)</Th>
+              <Th />
             </tr>
           </thead>
           <tbody>
@@ -137,6 +169,14 @@ export async function ProgramLoanBookTab({
                     </span>
                   </Td>
                   <Td className="text-right tabular-nums text-zinc-600">{l.termMonths}</Td>
+                  <Td className="text-center">
+                    <LoanRowActions
+                      initial={toLoanEditInitial(l)}
+                      programs={programs}
+                      updateAction={updateLoan.bind(null, scenarioId, l._id)}
+                      deleteAction={deleteLoan.bind(null, scenarioId, l._id)}
+                    />
+                  </Td>
                 </tr>
               );
             })}

@@ -47,7 +47,7 @@ import { toDecimal128 } from "@/utils/money";
 
 export type ProgramFeePayload = {
   name: string;
-  category: "senior_mgmt" | "subordinate_mgmt" | "servicing" | "other";
+  category: "senior_mgmt" | "subordinate_mgmt" | "servicing" | "trustee" | "other";
   basisAmount: string;
   feeBps: number;
   accountCode: string;
@@ -309,7 +309,7 @@ export async function importLoanTape(scenarioId: string, formData: FormData): Pr
 }
 
 const PROGRAM_TYPES = new Set(["CRE_CLO", "CMBS", "MIT_FUND", "WAREHOUSE", "OTHER"]);
-const FEE_CATEGORIES = new Set(["senior_mgmt", "subordinate_mgmt", "servicing", "other"]);
+const FEE_CATEGORIES = new Set(["senior_mgmt", "subordinate_mgmt", "servicing", "trustee", "other"]);
 const LIABILITY_CALC_METHODS = new Set(["monthly", "quarterly", "annually"]);
 const LIABILITY_RATE_TYPES = new Set(["fixed", "variable"]);
 const UPFRONT_FEE_CATEGORIES = new Set(["underwriter", "legal", "credit_rating", "other"]);
@@ -518,6 +518,55 @@ export async function deleteProgram(scenarioId: string, programId: string): Prom
   if (!(await checkAccess(scenarioId))) return;
   await connectToDatabase();
   await CapitalProgram.deleteOne({ _id: programId, scenarioId });
+  revalidatePath(`/scenarios/${scenarioId}`);
+}
+
+export type LiabilityTranchePayload = {
+  name: string;
+  numNotes?: number;
+  returnProfileBps: number;
+  calculationMethod: "monthly" | "quarterly" | "annually";
+  rateType: "fixed" | "variable";
+  accountCode?: string;
+};
+
+export async function updateLiabilityTranche(
+  scenarioId: string,
+  programId: string,
+  trancheId: string,
+  payload: LiabilityTranchePayload,
+): Promise<void> {
+  if (
+    !Types.ObjectId.isValid(scenarioId) ||
+    !Types.ObjectId.isValid(programId) ||
+    !Types.ObjectId.isValid(trancheId)
+  )
+    return;
+  if (!(await checkAccess(scenarioId))) return;
+  if (!payload.name?.trim()) return;
+  if (!LIABILITY_CALC_METHODS.has(payload.calculationMethod)) return;
+  if (!LIABILITY_RATE_TYPES.has(payload.rateType)) return;
+  if (!Number.isFinite(payload.returnProfileBps) || payload.returnProfileBps < 0) return;
+
+  await connectToDatabase();
+  await CapitalProgram.updateOne(
+    { _id: programId, scenarioId, "liabilities._id": trancheId },
+    {
+      $set: {
+        "liabilities.$.name": payload.name.trim(),
+        "liabilities.$.returnProfileBps": payload.returnProfileBps,
+        "liabilities.$.calculationMethod": payload.calculationMethod,
+        "liabilities.$.rateType": payload.rateType,
+        ...(Number.isFinite(payload.numNotes) && (payload.numNotes as number) >= 0
+          ? { "liabilities.$.numNotes": payload.numNotes }
+          : {}),
+        ...(payload.accountCode?.trim()
+          ? { "liabilities.$.accountCode": payload.accountCode.trim() }
+          : {}),
+      },
+      ...(payload.accountCode?.trim() ? {} : { $unset: { "liabilities.$.accountCode": "" } }),
+    },
+  );
   revalidatePath(`/scenarios/${scenarioId}`);
 }
 
@@ -1429,6 +1478,117 @@ function persistSeededPrograms(scenarioId: string, programs: SeedProgram[]): Pro
   return CapitalProgram.insertMany(docs);
 }
 
+/**
+ * If the given scenario is the Gallantree base, clone the same seeded programs
+ * into the ALL base so both profiles stay in sync without a second AI call.
+ * Best-effort — silently no-ops if the scenario isn't the Gallantree base, no
+ * ALL base exists, or any step fails.
+ */
+async function mirrorProgramsToAllBase(
+  gallantreeScenarioId: string,
+  programs: SeedProgram[],
+): Promise<void> {
+  try {
+    const thisSc = await Scenario.findById(gallantreeScenarioId)
+      .select("isBase viewMode")
+      .lean<{ isBase?: boolean; viewMode?: string }>();
+    if (!thisSc?.isBase || thisSc.viewMode !== "gallantree") return;
+
+    const allBase = await Scenario.findOne({ isBase: true, viewMode: "all" })
+      .select("_id")
+      .lean<{ _id: { toString: () => string } }>();
+    if (!allBase) return;
+
+    const allBaseId = allBase._id.toString();
+    if (allBaseId === gallantreeScenarioId) return;
+
+    await persistSeededPrograms(allBaseId, programs);
+    revalidatePath(`/scenarios/${allBaseId}`);
+  } catch {
+    // Mirror is best-effort.
+  }
+}
+
+/**
+ * If the given scenario is the Gallantree base, clone the seeded loan docs
+ * into the ALL base, remapping capitalProgramId by program name. Best-effort.
+ */
+async function mirrorLoansToAllBase(
+  gallantreeScenarioId: string,
+  loanDocs: Array<Record<string, unknown>>,
+): Promise<void> {
+  try {
+    if (loanDocs.length === 0) return;
+
+    const thisSc = await Scenario.findById(gallantreeScenarioId)
+      .select("isBase viewMode")
+      .lean<{ isBase?: boolean; viewMode?: string }>();
+    if (!thisSc?.isBase || thisSc.viewMode !== "gallantree") return;
+
+    const allBase = await Scenario.findOne({ isBase: true, viewMode: "all" })
+      .select("_id")
+      .lean<{ _id: { toString: () => string } }>();
+    if (!allBase) return;
+
+    const allBaseId = allBase._id.toString();
+    if (allBaseId === gallantreeScenarioId) return;
+
+    const allBaseOid = new Types.ObjectId(allBaseId);
+
+    // Collect unique Gallantree capitalProgramIds referenced in these docs.
+    const galProgramOids = new Map<string, Types.ObjectId>();
+    for (const d of loanDocs) {
+      const oid = d.capitalProgramId as Types.ObjectId | undefined;
+      if (oid instanceof Types.ObjectId) galProgramOids.set(oid.toString(), oid);
+    }
+
+    // Build gallantreeProgramId → allBaseProgramId mapping via name match.
+    const programIdMap = new Map<string, Types.ObjectId>();
+    if (galProgramOids.size > 0) {
+      const galPrograms = await CapitalProgram.find({
+        _id: { $in: Array.from(galProgramOids.values()) },
+        scenarioId: gallantreeScenarioId,
+      })
+        .select("_id name")
+        .lean<Array<{ _id: { toString: () => string }; name: string }>>();
+
+      const allPrograms = await CapitalProgram.find({
+        scenarioId: allBaseOid,
+        name: { $in: galPrograms.map((p) => p.name) },
+      })
+        .select("_id name")
+        .lean<Array<{ _id: { toString: () => string }; name: string }>>();
+
+      const allByName = new Map(
+        allPrograms.map((p) => [p.name, new Types.ObjectId(p._id.toString())]),
+      );
+      for (const gp of galPrograms) {
+        const allOid = allByName.get(gp.name);
+        if (allOid) programIdMap.set(gp._id.toString(), allOid);
+      }
+    }
+
+    // Clone loan docs: swap scenarioId and remap capitalProgramId.
+    const cloned = loanDocs
+      .map((d) => {
+        const galProgOid = d.capitalProgramId as Types.ObjectId | undefined;
+        const galProgId =
+          galProgOid instanceof Types.ObjectId ? galProgOid.toString() : undefined;
+        const allProgOid = galProgId ? programIdMap.get(galProgId) : undefined;
+        if (galProgId && !allProgOid) return null; // no matching ALL program — skip
+        return { ...d, scenarioId: allBaseOid, capitalProgramId: allProgOid };
+      })
+      .filter((d): d is NonNullable<typeof d> => d !== null);
+
+    if (cloned.length > 0) {
+      await Loan.insertMany(cloned, { ordered: false }).catch(() => {});
+      revalidatePath(`/scenarios/${allBaseId}`);
+    }
+  } catch {
+    // Mirror is best-effort.
+  }
+}
+
 export async function seedCreCloPrograms(scenarioId: string): Promise<SeedResult> {
   if (!Types.ObjectId.isValid(scenarioId)) return { ok: false, error: "invalid scenario" };
   if (!(await checkAccess(scenarioId))) return { ok: false, error: "not authorized" };
@@ -1442,6 +1602,7 @@ export async function seedCreCloPrograms(scenarioId: string): Promise<SeedResult
     });
     await connectToDatabase();
     await persistSeededPrograms(scenarioId, programs);
+    await mirrorProgramsToAllBase(scenarioId, programs);
     revalidatePath(`/scenarios/${scenarioId}`);
     return { ok: true, created: programs.length };
   } catch (e) {
@@ -1462,6 +1623,7 @@ export async function seedCmbsPrograms(scenarioId: string): Promise<SeedResult> 
     });
     await connectToDatabase();
     await persistSeededPrograms(scenarioId, programs);
+    await mirrorProgramsToAllBase(scenarioId, programs);
     revalidatePath(`/scenarios/${scenarioId}`);
     return { ok: true, created: programs.length };
   } catch (e) {
@@ -1482,6 +1644,7 @@ export async function seedBslPrograms(scenarioId: string): Promise<SeedResult> {
     });
     await connectToDatabase();
     await persistSeededPrograms(scenarioId, programs);
+    await mirrorProgramsToAllBase(scenarioId, programs);
     revalidatePath(`/scenarios/${scenarioId}`);
     return { ok: true, created: programs.length };
   } catch (e) {
@@ -1734,6 +1897,7 @@ export async function seedWarehousePrograms(scenarioId: string): Promise<SeedRes
     });
     await connectToDatabase();
     await persistSeededPrograms(scenarioId, programs);
+    await mirrorProgramsToAllBase(scenarioId, programs);
     revalidatePath(`/scenarios/${scenarioId}`);
     return { ok: true, created: programs.length };
   } catch (e) {
@@ -2093,6 +2257,7 @@ export async function seedLoansByFy(
         }
       }
     }
+    await mirrorLoansToAllBase(scenarioId, allDocs);
     revalidatePath(`/scenarios/${scenarioId}`);
     return { ok: true, created: createdCount };
   } catch (e) {

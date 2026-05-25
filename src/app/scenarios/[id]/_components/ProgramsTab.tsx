@@ -24,7 +24,7 @@ import { SeedMenu } from "./SeedMenu";
 export interface ProgramFeeRow {
   _id: string;
   name: string;
-  category: "senior_mgmt" | "subordinate_mgmt" | "servicing" | "other";
+  category: "senior_mgmt" | "subordinate_mgmt" | "servicing" | "trustee" | "other";
   basisAmount: { toString: () => string };
   feeBps: number;
   accountCode: string;
@@ -99,6 +99,7 @@ const CATEGORY_LABEL: Record<ProgramFeeRow["category"], string> = {
   senior_mgmt: "Senior mgmt",
   subordinate_mgmt: "Sub mgmt",
   servicing: "Servicing",
+  trustee: "Trustee fees",
   other: "Other",
 };
 
@@ -106,6 +107,7 @@ const CATEGORY_COLOR: Record<ProgramFeeRow["category"], string> = {
   senior_mgmt: "bg-emerald-100 text-emerald-800",
   subordinate_mgmt: "bg-sky-100 text-sky-800",
   servicing: "bg-amber-100 text-amber-800",
+  trustee: "bg-violet-100 text-violet-800",
   other: "bg-zinc-100 text-zinc-700",
 };
 

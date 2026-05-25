@@ -404,15 +404,17 @@ export function computePnL(
         monthly: projectLoanRevenue(l, horizon, baseRateBps, loanBookGrowthPctByYear),
       }),
     ),
-    ...programFees.map(
-      (f): ProjectedItem => ({
-        id: f.id,
-        label: `${f.programName} · ${f.feeName}`,
-        source: "program_fee",
-        accountCode: f.accountCode,
-        monthly: projectProgramFee(f, horizon),
-      }),
-    ),
+    ...programFees
+      .filter((f) => f.category !== "trustee")
+      .map(
+        (f): ProjectedItem => ({
+          id: f.id,
+          label: `${f.programName} · ${f.feeName}`,
+          source: "program_fee",
+          accountCode: f.accountCode,
+          monthly: projectProgramFee(f, horizon),
+        }),
+      ),
     ...platformLicenses.map(
       (l): ProjectedItem => ({
         id: l.id,
@@ -461,6 +463,15 @@ export function computePnL(
     accountCode: u.accountCode || DEFAULT_UPFRONT_FEE_ACCOUNT,
     monthly: projectUpfrontFeeAmortisation(u, horizon),
   }));
+  const trusteeProjected: ProjectedItem[] = programFees
+    .filter((f) => f.category === "trustee")
+    .map((f) => ({
+      id: f.id,
+      label: `${f.programName} · ${f.feeName}`,
+      source: "program_fee" as const,
+      accountCode: f.accountCode,
+      monthly: projectProgramFee(f, horizon),
+    }));
   const opexLines = groupByAccount(
     [
       ...fixedProjected,
@@ -469,6 +480,7 @@ export function computePnL(
       ...depreciationProjected,
       ...headcountProjected,
       ...upfrontAmortProjected,
+      ...trusteeProjected,
     ],
     horizon,
   );

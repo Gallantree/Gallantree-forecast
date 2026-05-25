@@ -134,6 +134,15 @@ export default async function ProgramDetailPage({ params, searchParams }: Params
     .sort({ loanId: 1 })
     .lean<LeanLoan[]>();
 
+  const allProgramDocs = await CapitalProgram.find({ scenarioId: new Types.ObjectId(id) })
+    .select("_id name type")
+    .lean<{ _id: { toString: () => string }; name: string; type: string }[]>();
+  const allPrograms = allProgramDocs.map((p) => ({
+    _id: p._id.toString(),
+    name: p.name,
+    type: p.type,
+  }));
+
   const program: ProgramRow = {
     _id: programDoc._id.toString(),
     name: programDoc.name,
@@ -364,10 +373,21 @@ export default async function ProgramDetailPage({ params, searchParams }: Params
           />
         )}
         {tab === "loan-book" && (
-          <ProgramLoanBookTab loans={loans} program={program} aggregate={aggregate} />
+          <ProgramLoanBookTab
+            loans={loans}
+            program={program}
+            aggregate={aggregate}
+            scenarioId={id}
+            programs={allPrograms}
+          />
         )}
         {tab === "liabilities" && (
-          <ProgramLiabilitiesTab program={program} baseRateBps={baseRateBps} />
+          <ProgramLiabilitiesTab
+            program={program}
+            baseRateBps={baseRateBps}
+            scenarioId={id}
+            programId={pid}
+          />
         )}
         {tab === "waterfall" && (
           <ProgramWaterfallTab

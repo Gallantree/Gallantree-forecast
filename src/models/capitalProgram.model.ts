@@ -6,7 +6,7 @@ export type CapitalProgramType = "CRE_CLO" | "CMBS" | "MIT_FUND" | "WAREHOUSE" |
 export interface IProgramFee {
   _id?: Types.ObjectId;
   name: string;
-  category: "senior_mgmt" | "subordinate_mgmt" | "servicing" | "other";
+  category: "senior_mgmt" | "subordinate_mgmt" | "servicing" | "trustee" | "other";
   basisAmount: Types.Decimal128;
   feeBps: number;
   accountCode: string;
@@ -100,7 +100,7 @@ const programFeeSchema = new Schema<IProgramFee>(
     name: { type: String, required: true, trim: true },
     category: {
       type: String,
-      enum: ["senior_mgmt", "subordinate_mgmt", "servicing", "other"],
+      enum: ["senior_mgmt", "subordinate_mgmt", "servicing", "trustee", "other"],
       required: true,
     },
     basisAmount: { type: Schema.Types.Decimal128, required: true },

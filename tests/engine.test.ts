@@ -449,6 +449,37 @@ describe("computePnL", () => {
     expect(line!.total.toFixed(0)).toBe("6250000");
   });
 
+  it("trustee fees route to opex (not revenue)", () => {
+    const pnl = computePnL(
+      [],
+      [],
+      HORIZON,
+      [],
+      [
+        {
+          id: "T1",
+          programId: "P1",
+          programName: "CRE CLO 2026-1",
+          programType: "CRE_CLO",
+          feeName: "Trustee fees",
+          category: "trustee",
+          basisAmount: "100000000",
+          feeBps: 10,
+          accountCode: "6500",
+          startPeriodKey: "2026-07",
+        },
+      ],
+    );
+    // Must NOT appear in revenue
+    const revLine = pnl.revenue.lines.find((l) => l.accountCode === "6500");
+    expect(revLine).toBeUndefined();
+    // Must appear in opex
+    const opexLine = pnl.opex.lines.find((l) => l.accountCode === "6500");
+    expect(opexLine).toBeTruthy();
+    // $100M × 10bps = $100,000/yr → $8,333.33/mo
+    expect(opexLine!.monthly[0].value.toFixed(2)).toBe("8333.33");
+  });
+
   it("compliance licence: monthlyFeePerSeat × seats × annual discount", () => {
     const pnl = computePnL(
       [],

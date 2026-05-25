@@ -1,19 +1,11 @@
-import { fmtMoney2 } from "@/utils/format";
-import type { ProgramAggregate, ProgramFeeRow, ProgramRow } from "../../../_components/ProgramsTab";
-
-function annualFeeAmount(f: ProgramFeeRow): number {
-  return (Number(f.basisAmount.toString()) * f.feeBps) / 10000;
-}
-
-function trancheAnnualInterest(
-  l: { numNotes?: number; returnProfileBps: number; rateType: "fixed" | "variable" },
-  faceValuePerNote: number,
-  baseRateBps: number,
-): number {
-  const principal = (l.numNotes ?? 0) * faceValuePerNote;
-  const rateBps = l.rateType === "variable" ? baseRateBps + l.returnProfileBps : l.returnProfileBps;
-  return (principal * rateBps) / 10000;
-}
+import { fmtMoney2, fmtNum2 } from "@/utils/format";
+import {
+  annualFeeAmount,
+  equityReturnPct,
+  grossCollectionsAllIn,
+  trancheAnnualInterest,
+} from "@/engine/waterfall";
+import { isFundingTranche, type ProgramAggregate, type ProgramFeeRow, type ProgramRow } from "../../../_components/ProgramsTab";
 
 export async function ProgramWaterfallTab({
   program,
@@ -39,7 +31,11 @@ export async function ProgramWaterfallTab({
       ? aggregate.weightSumSpreadBps / aggregate.weightBalanceForSpread
       : 0;
 
-  const grossCollections = (aggregate.totalBalance * waSpreadBps) / 10000;
+  // Gross collections use the all-in rate (base + credit spread) to match how
+  // variable-rate note interest is calculated. Using only the credit spread
+  // understates income and makes equity always appear deeply negative.
+  const waAllInBps = waSpreadBps + baseRateBps;
+  const grossCollections = grossCollectionsAllIn(aggregate.totalBalance, waSpreadBps, baseRateBps);
 
   type WaterfallItem = {
     priority: number;
@@ -54,35 +50,25 @@ export async function ProgramWaterfallTab({
   const seniorMgmt = program.fees.filter((f) => f.category === "senior_mgmt");
   const subordinateMgmt = program.fees.filter((f) => f.category === "subordinate_mgmt");
   const servicing = program.fees.filter((f) => f.category === "servicing");
+  const trustee = program.fees.filter((f) => f.category === "trustee");
+  const other = program.fees.filter((f) => f.category === "other");
 
-  for (const f of seniorMgmt) {
+  for (const f of [...seniorMgmt, ...subordinateMgmt, ...servicing, ...trustee, ...other]) {
     items.push({
       priority: priority++,
       item: f.name,
-      annual: annualFeeAmount(f),
-      color: "text-amber-700",
-    });
-  }
-  for (const f of subordinateMgmt) {
-    items.push({
-      priority: priority++,
-      item: f.name,
-      annual: annualFeeAmount(f),
-      color: "text-amber-700",
-    });
-  }
-  for (const f of servicing) {
-    items.push({
-      priority: priority++,
-      item: f.name,
-      annual: annualFeeAmount(f),
+      annual: annualFeeAmount(Number(f.basisAmount?.toString() ?? "0"), f.feeBps ?? 0),
       color: "text-amber-700",
     });
   }
 
   const liabilities = program.liabilities ?? [];
-  for (const l of liabilities) {
-    const annual = trancheAnnualInterest(l, faceValuePerNote, baseRateBps);
+  // Split into debt tranches (funding) and equity tranches (residual claimants).
+  const debtTranches = liabilities.filter((l) => isFundingTranche(l.name, l.returnProfileBps));
+  const equityTranches = liabilities.filter((l) => !isFundingTranche(l.name, l.returnProfileBps));
+
+  for (const l of debtTranches) {
+    const annual = trancheAnnualInterest(l.numNotes ?? 0, faceValuePerNote, l.returnProfileBps, l.rateType, baseRateBps);
     if (annual > 0) {
       items.push({
         priority: priority++,
@@ -95,6 +81,13 @@ export async function ProgramWaterfallTab({
 
   const totalOutflows = items.reduce((acc, i) => acc + i.annual, 0);
   const residual = grossCollections - totalOutflows;
+
+  // Equity return profile: residual is distributed pro-rata across equity tranches.
+  const totalEquityPrincipal = equityTranches.reduce(
+    (acc, l) => acc + (l.numNotes ?? 0) * faceValuePerNote,
+    0,
+  );
+  const equityYieldPct = equityReturnPct(residual, totalEquityPrincipal);
 
   let running = grossCollections;
 
@@ -116,7 +109,10 @@ export async function ProgramWaterfallTab({
               <Td className="font-semibold text-emerald-800">
                 Gross interest income (loan book)
                 <span className="ml-2 font-normal text-zinc-500">
-                  {fmtMoney2(aggregate.totalBalance)} × {Math.round(waSpreadBps)} bps
+                  {fmtMoney2(aggregate.totalBalance)} × {Math.round(waAllInBps)} bps
+                  <span className="ml-1 text-zinc-400">
+                    ({Math.round(waSpreadBps)} credit + {baseRateBps} base)
+                  </span>
                 </span>
               </Td>
               <Td className="text-right font-semibold tabular-nums text-emerald-700">
@@ -144,21 +140,120 @@ export async function ProgramWaterfallTab({
                 </tr>
               );
             })}
-            <tr className="border-t-2 border-zinc-300 bg-indigo-50">
-              <Td className="text-zinc-400">—</Td>
-              <Td className="font-semibold text-indigo-800">Residual / equity return</Td>
-              <Td
-                className={`text-right font-semibold tabular-nums ${
-                  residual >= 0 ? "text-indigo-700" : "text-rose-700"
-                }`}
-              >
-                {fmtMoney2(residual)}
-              </Td>
-              <Td className="text-right tabular-nums text-zinc-400">—</Td>
-            </tr>
+
+            {/* Equity tranche rows — each absorbs residual pro-rata by principal */}
+            {equityTranches.length > 0 ? (
+              equityTranches.map((l) => {
+                const principal = (l.numNotes ?? 0) * faceValuePerNote;
+                const share = totalEquityPrincipal > 0 ? principal / totalEquityPrincipal : 0;
+                const trancheResidual = residual * share;
+                const trancheYield =
+                  principal > 0 ? (trancheResidual / principal) * 100 : null;
+                return (
+                  <tr key={l._id} className="border-t-2 border-zinc-300 bg-indigo-50">
+                    <Td className="text-zinc-400">—</Td>
+                    <Td className="font-semibold text-indigo-800">
+                      {l.name} tranche
+                      {principal > 0 && (
+                        <span className="ml-2 font-normal text-zinc-500">
+                          {(l.numNotes ?? 0).toLocaleString()} notes × {fmtMoney2(faceValuePerNote)}
+                          {" · "}
+                          principal {fmtMoney2(principal)}
+                        </span>
+                      )}
+                    </Td>
+                    <Td
+                      className={`text-right font-semibold tabular-nums ${
+                        trancheResidual >= 0 ? "text-indigo-700" : "text-rose-700"
+                      }`}
+                    >
+                      {fmtMoney2(trancheResidual)}
+                    </Td>
+                    <Td
+                      className={`text-right tabular-nums font-semibold ${
+                        trancheYield !== null && trancheYield >= 0
+                          ? "text-indigo-700"
+                          : "text-rose-700"
+                      }`}
+                    >
+                      {trancheYield !== null ? `${fmtNum2(trancheYield)}% p.a.` : "—"}
+                    </Td>
+                  </tr>
+                );
+              })
+            ) : (
+              <tr className="border-t-2 border-zinc-300 bg-indigo-50">
+                <Td className="text-zinc-400">—</Td>
+                <Td className="font-semibold text-indigo-800">Residual / equity return</Td>
+                <Td
+                  className={`text-right font-semibold tabular-nums ${
+                    residual >= 0 ? "text-indigo-700" : "text-rose-700"
+                  }`}
+                >
+                  {fmtMoney2(residual)}
+                </Td>
+                <Td className="text-right tabular-nums text-zinc-400">—</Td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
+
+      {/* Equity return profile summary card */}
+      {equityTranches.length > 0 && (
+        <div className="border-t border-zinc-200 bg-indigo-50/60 px-4 py-3">
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-indigo-600">
+            Equity return profile
+          </p>
+          <div className="flex flex-wrap gap-6 text-xs">
+            <Metric
+              label="Total equity principal"
+              value={fmtMoney2(totalEquityPrincipal)}
+              tone={totalEquityPrincipal > 0 ? "neutral" : "warn"}
+            />
+            <Metric
+              label="Annual residual cashflow"
+              value={fmtMoney2(residual)}
+              tone={residual >= 0 ? "ok" : "warn"}
+            />
+            <Metric
+              label="Cash-on-cash yield"
+              value={equityYieldPct !== null ? `${fmtNum2(equityYieldPct)}% p.a.` : "—"}
+              tone={equityYieldPct !== null && equityYieldPct >= 0 ? "ok" : "warn"}
+            />
+            <Metric
+              label="Monthly equity cashflow"
+              value={fmtMoney2(residual / 12)}
+              tone={residual >= 0 ? "ok" : "warn"}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Metric({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: "ok" | "warn" | "neutral";
+}) {
+  const valueClass =
+    tone === "ok"
+      ? "text-indigo-700"
+      : tone === "warn"
+        ? "text-rose-700"
+        : "text-zinc-800";
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+        {label}
+      </span>
+      <span className={`text-sm font-semibold tabular-nums ${valueClass}`}>{value}</span>
     </div>
   );
 }

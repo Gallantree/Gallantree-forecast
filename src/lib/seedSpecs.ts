@@ -15,7 +15,7 @@ const moneyString = z.string().regex(/^-?\d+(\.\d+)?$/, "must be a numeric strin
 
 const FeeSchema = z.object({
   name: z.string(),
-  category: z.enum(["senior_mgmt", "subordinate_mgmt", "servicing", "other"]),
+  category: z.enum(["senior_mgmt", "subordinate_mgmt", "servicing", "trustee", "other"]),
   basisAmount: moneyString,
   // Coerce — Haiku sometimes quotes numeric fields even when the tool
   // schema declares them as numbers. See FyLoanRowSchema for the note.

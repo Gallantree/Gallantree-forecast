@@ -25,6 +25,7 @@ export const DEFAULT_COA: SeedAccount[] = [
   { code: "6200", name: "Rent & occupancy", type: "expense" },
   { code: "6300", name: "Software & subscriptions", type: "expense" },
   { code: "6400", name: "Professional fees", type: "expense" },
+  { code: "6500", name: "Trustee fees", type: "expense" },
   { code: "6800", name: "Interest expense — senior notes", type: "expense" },
   { code: "6810", name: "Interest expense — subordinate notes", type: "expense" },
   { code: "6820", name: "Interest expense — other tranches", type: "expense" },

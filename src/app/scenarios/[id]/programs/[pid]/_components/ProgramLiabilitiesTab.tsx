@@ -1,5 +1,7 @@
 import { fmtMoney2, fmtNum0 } from "@/utils/format";
+import { updateLiabilityTranche } from "../../../_actions";
 import { isFundingTranche, type ProgramLiabilityRow, type ProgramRow } from "../../../_components/ProgramsTab";
+import { LiabilityRowActions } from "./LiabilityRowActions";
 
 const CALC_LABEL: Record<ProgramLiabilityRow["calculationMethod"], string> = {
   monthly: "Monthly",
@@ -18,9 +20,13 @@ function trancheRateBps(l: ProgramLiabilityRow, baseRateBps: number): number {
 export async function ProgramLiabilitiesTab({
   program,
   baseRateBps,
+  scenarioId,
+  programId,
 }: {
   program: ProgramRow;
   baseRateBps: number;
+  scenarioId: string;
+  programId: string;
 }) {
   const liabilities = program.liabilities ?? [];
   const faceValuePerNote = Number(program.faceValuePerNote?.toString() ?? "0");
@@ -99,6 +105,7 @@ export async function ProgramLiabilitiesTab({
               <Th className="text-right">Monthly interest</Th>
               <Th className="text-right">% of structure</Th>
               <Th>Account</Th>
+              <Th />
             </tr>
           </thead>
           <tbody>
@@ -148,6 +155,25 @@ export async function ProgramLiabilitiesTab({
                     {pctOfStructure !== null ? `${pctOfStructure.toFixed(1)}%` : "—"}
                   </Td>
                   <Td className="font-mono text-[11px] text-zinc-500">{l.accountCode ?? "—"}</Td>
+                  <Td className="text-center">
+                    <LiabilityRowActions
+                      initial={{
+                        _id: l._id,
+                        name: l.name,
+                        numNotes: l.numNotes,
+                        returnProfileBps: l.returnProfileBps,
+                        calculationMethod: l.calculationMethod,
+                        rateType: l.rateType,
+                        accountCode: l.accountCode,
+                      }}
+                      updateAction={updateLiabilityTranche.bind(
+                        null,
+                        scenarioId,
+                        programId,
+                        l._id,
+                      )}
+                    />
+                  </Td>
                 </tr>
               );
             })}
