@@ -3,7 +3,7 @@ import { type Money, money, ZERO } from "@/utils/money";
 import type { MonthlyValue } from "./pnl";
 import { programBalanceFactor } from "./programFactor";
 
-export type FeeCategory = "senior_mgmt" | "subordinate_mgmt" | "servicing" | "other";
+export type FeeCategory = "senior_mgmt" | "subordinate_mgmt" | "servicing" | "trustee" | "other";
 
 export interface ProgramFeeInput {
   id: string;
@@ -35,6 +35,7 @@ export const DEFAULT_FEE_ACCOUNT: Record<FeeCategory, string> = {
   senior_mgmt: "4500",
   subordinate_mgmt: "4510",
   servicing: "4520",
+  trustee: "6500",
   other: "4530",
 };
 

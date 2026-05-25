@@ -53,6 +53,7 @@ const FEE_CATEGORIES: {
   { value: "senior_mgmt", label: "Senior mgmt", defaultAccount: "4500" },
   { value: "subordinate_mgmt", label: "Sub mgmt", defaultAccount: "4510" },
   { value: "servicing", label: "Servicing", defaultAccount: "4520" },
+  { value: "trustee", label: "Trustee fees", defaultAccount: "6500" },
   { value: "other", label: "Other", defaultAccount: "4530" },
 ];
 
@@ -61,6 +62,7 @@ const ACCOUNT_LABEL: Record<string, string> = {
   "4510": "4510 Subordinate management fees",
   "4520": "4520 Servicing fees",
   "4530": "4530 Other capital program fees",
+  "6500": "6500 Trustee fees",
 };
 
 interface FeeRow extends ProgramFeePayload {
