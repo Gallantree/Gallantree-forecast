@@ -58,6 +58,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
       evRevenueMultiple?: D128Like;
       peMultiple?: D128Like;
       netDebt?: D128Like;
+      pbMultiple?: D128Like;
     }>(),
     loadEngineInputs(id),
   ]);
@@ -98,6 +99,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
       ebit: s.pnl.ebit,
       netIncome: s.pnl.netIncome,
       netCashMovement: s.cf.netCashMovement,
+      equity: s.bs.equity,
     },
     {
       waccPct: scenario.waccPct?.toString(),
@@ -106,6 +108,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
       evRevenueMultiple: scenario.evRevenueMultiple?.toString(),
       peMultiple: scenario.peMultiple?.toString(),
       netDebt: scenario.netDebt?.toString(),
+      pbMultiple: scenario.pbMultiple?.toString(),
     },
   );
 
@@ -151,6 +154,13 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
       enterpriseValue: m.enterpriseValue.toFixed(2),
       equityValue: m.equityValue.toFixed(2),
     })),
+    pb: v.pb.map((m) => ({
+      fy: m.fy,
+      metric: m.metric.toFixed(2),
+      multiple: m.multiple.toFixed(2),
+      enterpriseValue: m.enterpriseValue.toFixed(2),
+      equityValue: m.equityValue.toFixed(2),
+    })),
     assumptions: {
       waccPct: v.assumptions.waccPct.toFixed(2),
       terminalGrowthPct: v.assumptions.terminalGrowthPct.toFixed(2),
@@ -158,6 +168,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
       evRevenueMultiple: v.assumptions.evRevenueMultiple.toFixed(2),
       peMultiple: v.assumptions.peMultiple.toFixed(2),
       netDebt: v.assumptions.netDebt.toFixed(2),
+      pbMultiple: v.assumptions.pbMultiple.toFixed(2),
     },
   });
 }

@@ -29,6 +29,13 @@ export interface UofMonthlyByAccount {
   monthly: Record<string, number>; // periodKey → value
 }
 
+export interface UofCapexDriver {
+  id: string;
+  name: string;
+  inServicePeriodKey: string; // YYYY-MM — cash outflow month
+  cost: number;
+}
+
 export interface UseOfFundsData {
   raises: UofFundsRaise[];
   horizon: string[]; // YYYY-MM in order
@@ -41,6 +48,9 @@ export interface UseOfFundsData {
   // Cash use of program upfront fees per month (underwriter/legal/ratings).
   // Drawn from CF.issuanceCostOutflow rather than the amortised P&L line.
   issuanceCostByMonth: Record<string, number>;
+  // capex_straight_line drivers — cash outflow is the full cost in the
+  // in-service month, one row per asset.
+  capexDrivers: UofCapexDriver[];
 }
 
 interface ManualLine {
@@ -142,14 +152,23 @@ export function UseOfFundsTab({ scenarioId, data }: { scenarioId: string; data: 
     return s;
   }, [data.issuanceCostByMonth, windowKeys]);
 
+  const capexLines = useMemo(
+    () =>
+      data.capexDrivers
+        .filter((d) => windowKeys.includes(d.inServicePeriodKey))
+        .map((d) => ({ ...d, total: d.cost })),
+    [data.capexDrivers, windowKeys],
+  );
+
   const staffTotal = staffLines.reduce((s, l) => s + l.total, 0);
   const opexTotal = opexLines.reduce((s, l) => s + l.total, 0);
+  const capexTotal = capexLines.reduce((s, l) => s + l.total, 0);
   const revenueTotal = revenueLines.reduce((s, l) => s + l.total, 0);
   const manualTotal = manualLines.reduce(
     (s, l) => s + (Number.isFinite(l.amount) ? l.amount : 0),
     0,
   );
-  const grossUses = staffTotal + opexTotal + issuanceTotal + manualTotal;
+  const grossUses = staffTotal + opexTotal + capexTotal + issuanceTotal + manualTotal;
   const revenueOffset = includeRevenue ? revenueTotal : 0;
   const subtotal = grossUses - revenueOffset;
   const contingencyAmount = subtotal * (Math.max(0, contingencyPct) / 100);
@@ -189,8 +208,9 @@ export function UseOfFundsTab({ scenarioId, data }: { scenarioId: string; data: 
         </div>
         <p className="mt-1 text-[11px] text-zinc-500">
           Pick a capital raise and a runway window — the tab rolls up staff cost, OPEX drivers,
-          capital-program upfront fees, and (optionally) revenue, then compares to the funded
-          amount. Click <strong>Save plan</strong> to persist the dials + manual lines on the raise.
+          capex purchases, capital-program upfront fees, and (optionally) revenue, then compares to
+          the funded amount. Click <strong>Save plan</strong> to persist the dials + manual lines on
+          the raise.
         </p>
       </div>
 
@@ -328,6 +348,28 @@ export function UseOfFundsTab({ scenarioId, data }: { scenarioId: string; data: 
             <Empty msg="No OPEX drivers in window." />
           ) : (
             <LineTable lines={opexLines} />
+          )}
+        </Section>
+
+        <Section title="Capex" total={capexTotal} count={capexLines.length}>
+          {capexLines.length === 0 ? (
+            <Empty msg="No capex purchases in window. Add a capex_straight_line driver on the OPEX — General tab." />
+          ) : (
+            <table className="w-full border-collapse">
+              <tbody>
+                {capexLines.map((l) => (
+                  <tr key={l.id} className="border-b border-zinc-100">
+                    <td className="px-2 py-1.5 font-mono text-[11px] text-zinc-500">
+                      {l.inServicePeriodKey}
+                    </td>
+                    <td className="px-2 py-1.5 text-zinc-700">{l.name}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">
+                      {fmtMoney2(l.total.toFixed(2))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </Section>
 
@@ -471,6 +513,7 @@ export function UseOfFundsTab({ scenarioId, data }: { scenarioId: string; data: 
             <tbody>
               <SummaryRow label="Staff" value={staffTotal} />
               <SummaryRow label="OPEX drivers" value={opexTotal} />
+              <SummaryRow label="Capex" value={capexTotal} />
               <SummaryRow label="Capital program upfront fees" value={issuanceTotal} />
               <SummaryRow label="Manual" value={manualTotal} />
               <SummaryRow label="Gross uses" value={grossUses} bold />

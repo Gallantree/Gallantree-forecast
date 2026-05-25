@@ -53,6 +53,7 @@ export interface IScenario {
   evRevenueMultiple?: Types.Decimal128;
   peMultiple?: Types.Decimal128;
   netDebt?: Types.Decimal128;
+  pbMultiple?: Types.Decimal128;
   // Control panel — global rate context + year-label config
   baseRateType?: "BBSW" | "BBSY" | "SOFR";
   baseRateBps?: number;
@@ -63,6 +64,10 @@ export interface IScenario {
   // the staffing cost projection. Length matches the 5-year horizon; missing
   // entries are treated as "no target" (zero delta).
   staffTargetByYear?: number[];
+  // Cap table — ESOP and management earn-back option pools, stored as % of
+  // issued shares per forecast year (5 entries, index 0 = Year 1).
+  esopPctByYear?: number[];
+  earnBackPctByYear?: number[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -110,10 +115,13 @@ const scenarioSchema = new Schema<IScenario>(
     evRevenueMultiple: { type: Schema.Types.Decimal128 },
     peMultiple: { type: Schema.Types.Decimal128 },
     netDebt: { type: Schema.Types.Decimal128 },
+    pbMultiple: { type: Schema.Types.Decimal128 },
     baseRateType: { type: String, enum: ["BBSW", "BBSY", "SOFR"] },
     baseRateBps: { type: Number, min: 0 },
     firstYearLabel: { type: Number, min: 2000, max: 2100 },
     staffTargetByYear: { type: [Number], default: undefined },
+    esopPctByYear: { type: [Number], default: undefined },
+    earnBackPctByYear: { type: [Number], default: undefined },
   },
   { timestamps: true },
 );

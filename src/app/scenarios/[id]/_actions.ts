@@ -20,6 +20,7 @@ import {
   WAREHOUSE_SEED,
 } from "@/lib/seedSpecs";
 import {
+  Account,
   CapitalProgram,
   CapitalRaise,
   Driver,
@@ -28,8 +29,10 @@ import {
   Payband,
   PlatformLicense,
   Scenario,
+  Shareholder,
 } from "@/models";
 import type { ArrearsStatus } from "@/models/loan.model";
+import { DEFAULT_COA } from "@/seed/coa";
 import {
   ENHANCED_FUND_MGMT_FEE_BPS,
   ENHANCED_FUND_UNIT_RETURN_BPS,
@@ -699,6 +702,7 @@ export type ValuationAssumptionsPayload = {
   evRevenueMultiple?: string;
   peMultiple?: string;
   netDebt?: string;
+  pbMultiple?: string;
 };
 
 export async function updateValuationAssumptions(
@@ -717,6 +721,7 @@ export async function updateValuationAssumptions(
     "evRevenueMultiple",
     "peMultiple",
     "netDebt",
+    "pbMultiple",
   ];
   for (const f of fields) {
     const v = payload[f];
@@ -1063,6 +1068,111 @@ export async function deleteOpexDriver(scenarioId: string, driverId: string): Pr
   if (!(await checkAccess(scenarioId))) return;
   await connectToDatabase();
   await Driver.deleteOne({ _id: driverId, scenarioId });
+  revalidatePath(`/scenarios/${scenarioId}`);
+}
+
+// ── CAPEX drivers ──
+
+export type CapexDriverPayload = {
+  name: string;
+  accountCode: string;
+  inServicePeriodKey: string;
+  cost: string;
+  usefulLifeMonths: number;
+};
+
+export async function createCapexDriver(
+  scenarioId: string,
+  payload: CapexDriverPayload,
+): Promise<void> {
+  if (!Types.ObjectId.isValid(scenarioId)) return;
+  if (!(await checkAccess(scenarioId))) return;
+  if (!payload.name?.trim() || !payload.accountCode) return;
+  if (!PERIOD_RE.test(payload.inServicePeriodKey)) return;
+  const cost = Number(payload.cost);
+  if (!Number.isFinite(cost) || cost <= 0) return;
+  const uli = Math.floor(payload.usefulLifeMonths);
+  if (uli < 1) return;
+  await connectToDatabase();
+  await Driver.create({
+    scenarioId: new Types.ObjectId(scenarioId),
+    name: payload.name.trim(),
+    type: "capex_straight_line",
+    accountCode: payload.accountCode,
+    startPeriodKey: payload.inServicePeriodKey,
+    inServicePeriodKey: payload.inServicePeriodKey,
+    cost: toDecimal128(payload.cost),
+    usefulLifeMonths: uli,
+  });
+  revalidatePath(`/scenarios/${scenarioId}`);
+}
+
+export async function updateCapexDriver(
+  scenarioId: string,
+  driverId: string,
+  payload: CapexDriverPayload,
+): Promise<void> {
+  if (!Types.ObjectId.isValid(scenarioId) || !Types.ObjectId.isValid(driverId)) return;
+  if (!(await checkAccess(scenarioId))) return;
+  if (!payload.name?.trim() || !payload.accountCode) return;
+  if (!PERIOD_RE.test(payload.inServicePeriodKey)) return;
+  const cost = Number(payload.cost);
+  if (!Number.isFinite(cost) || cost <= 0) return;
+  const uli = Math.floor(payload.usefulLifeMonths);
+  if (uli < 1) return;
+  await connectToDatabase();
+  await Driver.updateOne(
+    { _id: driverId, scenarioId },
+    {
+      $set: {
+        name: payload.name.trim(),
+        accountCode: payload.accountCode,
+        startPeriodKey: payload.inServicePeriodKey,
+        inServicePeriodKey: payload.inServicePeriodKey,
+        cost: toDecimal128(payload.cost),
+        usefulLifeMonths: uli,
+      },
+    },
+  );
+  revalidatePath(`/scenarios/${scenarioId}`);
+}
+
+export async function deleteCapexDriver(scenarioId: string, driverId: string): Promise<void> {
+  if (!Types.ObjectId.isValid(scenarioId) || !Types.ObjectId.isValid(driverId)) return;
+  if (!(await checkAccess(scenarioId))) return;
+  await connectToDatabase();
+  await Driver.deleteOne({ _id: driverId, scenarioId, type: "capex_straight_line" });
+  revalidatePath(`/scenarios/${scenarioId}`);
+}
+
+export async function batchCreateCapexDrivers(
+  scenarioId: string,
+  payloads: CapexDriverPayload[],
+): Promise<void> {
+  if (!Types.ObjectId.isValid(scenarioId)) return;
+  if (!(await checkAccess(scenarioId))) return;
+  await connectToDatabase();
+  const docs = payloads
+    .filter(
+      (p) =>
+        p.name?.trim() &&
+        p.accountCode &&
+        PERIOD_RE.test(p.inServicePeriodKey) &&
+        Number.isFinite(Number(p.cost)) &&
+        Number(p.cost) > 0 &&
+        Math.floor(p.usefulLifeMonths) >= 1,
+    )
+    .map((p) => ({
+      scenarioId: new Types.ObjectId(scenarioId),
+      name: p.name.trim(),
+      type: "capex_straight_line",
+      accountCode: p.accountCode,
+      startPeriodKey: p.inServicePeriodKey,
+      inServicePeriodKey: p.inServicePeriodKey,
+      cost: toDecimal128(p.cost),
+      usefulLifeMonths: Math.floor(p.usefulLifeMonths),
+    }));
+  if (docs.length > 0) await Driver.insertMany(docs);
   revalidatePath(`/scenarios/${scenarioId}`);
 }
 
@@ -2793,6 +2903,151 @@ export async function updateWorkingCapitalDays(
   await Scenario.updateOne(
     { _id: scenarioId },
     { $set: { dsoDays: toDecimal128(dso), dpoDays: toDecimal128(dpo) } },
+  );
+  revalidatePath(`/scenarios/${scenarioId}`);
+}
+
+// ── Chart of accounts sync ──────────────────────────────────────────────────
+// Upserts the canonical DEFAULT_COA into the shared Account collection so
+// operators don't need to re-run the seed script after a COA change.
+
+export async function syncCoa(scenarioId: string): Promise<{ upserted: number; modified: number }> {
+  if (!Types.ObjectId.isValid(scenarioId)) return { upserted: 0, modified: 0 };
+  if (!(await checkAccess(scenarioId))) return { upserted: 0, modified: 0 };
+  await connectToDatabase();
+  const ops = DEFAULT_COA.map((a) => ({
+    updateOne: {
+      filter: { code: a.code },
+      update: { $set: { name: a.name, type: a.type } },
+      upsert: true,
+    },
+  }));
+  const result = await Account.bulkWrite(ops);
+  revalidatePath(`/scenarios/${scenarioId}`);
+  return { upserted: result.upsertedCount, modified: result.modifiedCount };
+}
+
+// ── Capital table (shareholders) ────────────────────────────────────────────
+
+export type ShareholderPayload = {
+  name: string;
+  entityTrust?: string;
+  shareClass: string;
+  shares: string;
+  pricePerShare: string;
+  beneficiallyHeld: boolean;
+  dateOfIssue: string; // ISO date string YYYY-MM-DD
+};
+
+export async function createShareholder(
+  scenarioId: string,
+  payload: ShareholderPayload,
+): Promise<void> {
+  if (!Types.ObjectId.isValid(scenarioId)) return;
+  if (!(await checkAccess(scenarioId))) return;
+  if (!payload.name?.trim() || !payload.shareClass?.trim()) return;
+  if (!DATE_RE.test(payload.dateOfIssue)) return;
+  const shares = Math.floor(Number(payload.shares));
+  if (!Number.isFinite(shares) || shares < 1) return;
+  const price = Number(payload.pricePerShare);
+  if (!Number.isFinite(price) || price < 0) return;
+  await connectToDatabase();
+  await Shareholder.create({
+    scenarioId: new Types.ObjectId(scenarioId),
+    name: payload.name.trim(),
+    entityTrust: payload.entityTrust?.trim() || undefined,
+    shareClass: payload.shareClass.trim(),
+    shares,
+    pricePerShare: toDecimal128(payload.pricePerShare),
+    beneficiallyHeld: payload.beneficiallyHeld,
+    dateOfIssue: new Date(payload.dateOfIssue),
+  });
+  revalidatePath(`/scenarios/${scenarioId}`);
+}
+
+export async function updateShareholder(
+  scenarioId: string,
+  shareholderId: string,
+  payload: ShareholderPayload,
+): Promise<void> {
+  if (!Types.ObjectId.isValid(scenarioId) || !Types.ObjectId.isValid(shareholderId)) return;
+  if (!(await checkAccess(scenarioId))) return;
+  if (!payload.name?.trim() || !payload.shareClass?.trim()) return;
+  if (!DATE_RE.test(payload.dateOfIssue)) return;
+  const shares = Math.floor(Number(payload.shares));
+  if (!Number.isFinite(shares) || shares < 1) return;
+  const price = Number(payload.pricePerShare);
+  if (!Number.isFinite(price) || price < 0) return;
+  await connectToDatabase();
+  await Shareholder.updateOne(
+    { _id: shareholderId, scenarioId },
+    {
+      $set: {
+        name: payload.name.trim(),
+        entityTrust: payload.entityTrust?.trim() || undefined,
+        shareClass: payload.shareClass.trim(),
+        shares,
+        pricePerShare: toDecimal128(payload.pricePerShare),
+        beneficiallyHeld: payload.beneficiallyHeld,
+        dateOfIssue: new Date(payload.dateOfIssue),
+      },
+    },
+  );
+  revalidatePath(`/scenarios/${scenarioId}`);
+}
+
+export async function deleteShareholder(scenarioId: string, shareholderId: string): Promise<void> {
+  if (!Types.ObjectId.isValid(scenarioId) || !Types.ObjectId.isValid(shareholderId)) return;
+  if (!(await checkAccess(scenarioId))) return;
+  await connectToDatabase();
+  await Shareholder.deleteOne({ _id: shareholderId, scenarioId });
+  revalidatePath(`/scenarios/${scenarioId}`);
+}
+
+export async function seedShareholders(scenarioId: string): Promise<{ inserted: number }> {
+  if (!Types.ObjectId.isValid(scenarioId)) return { inserted: 0 };
+  if (!(await checkAccess(scenarioId))) return { inserted: 0 };
+  const { SHAREHOLDER_SEED } = await import("@/seed/shareholders");
+  await connectToDatabase();
+  const docs = SHAREHOLDER_SEED.map((s) => ({
+    scenarioId: new Types.ObjectId(scenarioId),
+    name: s.name,
+    entityTrust: s.entityTrust,
+    shareClass: s.shareClass,
+    shares: s.shares,
+    pricePerShare: toDecimal128(s.pricePerShare),
+    beneficiallyHeld: s.beneficiallyHeld,
+    dateOfIssue: new Date(s.dateOfIssue),
+  }));
+  await Shareholder.insertMany(docs);
+  revalidatePath(`/scenarios/${scenarioId}`);
+  return { inserted: docs.length };
+}
+
+// ── Cap table option pools ────────────────────────────────────────────────────
+
+export async function updateCapTableOptionPools(
+  scenarioId: string,
+  esopPctByYear: number[],
+  earnBackPctByYear: number[],
+): Promise<void> {
+  if (!Types.ObjectId.isValid(scenarioId)) return;
+  if (!(await checkAccess(scenarioId))) return;
+
+  await connectToDatabase();
+
+  function cleanPcts(arr: number[]): number[] {
+    return arr.map((n) => (Number.isFinite(n) && n >= 0 ? Math.min(100, n) : 0));
+  }
+
+  await Scenario.updateOne(
+    { _id: new Types.ObjectId(scenarioId) },
+    {
+      $set: {
+        esopPctByYear: cleanPcts(esopPctByYear),
+        earnBackPctByYear: cleanPcts(earnBackPctByYear),
+      },
+    },
   );
   revalidatePath(`/scenarios/${scenarioId}`);
 }

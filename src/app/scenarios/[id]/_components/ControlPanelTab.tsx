@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import type { ControlPanelPayload } from "../_actions";
-import { updateControlPanel, updateScenarioMeta, wipeScenarioData } from "../_actions";
+import { syncCoa, updateControlPanel, updateScenarioMeta, wipeScenarioData } from "../_actions";
 
 export interface ControlPanelInitial {
   name: string;
@@ -48,6 +48,8 @@ export function ControlPanelTab({
   const [pending, startTransition] = useTransition();
   const [metaPending, startMetaTransition] = useTransition();
   const [wipePending, startWipeTransition] = useTransition();
+  const [syncCoaPending, startSyncCoa] = useTransition();
+  const [syncCoaResult, setSyncCoaResult] = useState<string | null>(null);
   const [name, setName] = useState(initial.name);
   const [status, setStatus] = useState<"draft" | "active" | "archived">(initial.status);
   const [baseRateType, setBaseRateType] = useState<"BBSW" | "BBSY" | "SOFR">(
@@ -276,6 +278,44 @@ export function ControlPanelTab({
             {pending ? "Saving…" : "Save control panel"}
           </button>
         </div>
+
+        {/* Chart of accounts */}
+        <section className="rounded-md border border-zinc-200 bg-zinc-50">
+          <header className="border-b border-zinc-200 px-4 py-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-700">
+              Chart of accounts
+            </h3>
+            <p className="mt-0.5 text-[11px] text-zinc-500">
+              Sync the canonical chart of accounts into the database. Run this after a code update
+              adds new account codes (e.g. new depreciation categories).
+            </p>
+          </header>
+          <div className="flex items-center justify-between gap-3 p-4">
+            {syncCoaResult ? (
+              <span className="text-[11px] text-emerald-700">{syncCoaResult}</span>
+            ) : (
+              <span className="text-[11px] text-zinc-500">
+                Upserts all default accounts — safe to run any time.
+              </span>
+            )}
+            <button
+              type="button"
+              disabled={syncCoaPending}
+              onClick={() =>
+                startSyncCoa(async () => {
+                  const r = await syncCoa(scenarioId);
+                  setSyncCoaResult(
+                    `Done — ${r.upserted} new accounts added, ${r.modified} updated.`,
+                  );
+                  setTimeout(() => setSyncCoaResult(null), 5000);
+                })
+              }
+              className="rounded-md border border-zinc-300 bg-white px-4 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-50"
+            >
+              {syncCoaPending ? "Syncing…" : "Sync COA"}
+            </button>
+          </div>
+        </section>
 
         {/* Danger zone */}
         <section className="rounded-md border border-rose-200 bg-rose-50">

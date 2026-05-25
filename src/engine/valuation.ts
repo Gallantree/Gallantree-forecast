@@ -14,6 +14,7 @@ export interface ValuationAssumptions {
   evRevenueMultiple?: Decimal.Value;
   peMultiple?: Decimal.Value;
   netDebt?: Decimal.Value;
+  pbMultiple?: Decimal.Value;
 }
 
 export interface FyAggregate {
@@ -24,6 +25,7 @@ export interface FyAggregate {
   netIncome: Money;
   // Unlevered free cash flow = net cash movement (operating + investing) for the FY
   fcf: Money;
+  closingEquity: Money;
 }
 
 export interface DcfHorizonValuation {
@@ -52,6 +54,7 @@ export interface ValuationResult {
   evEbitda: MultipleValuation[];
   evRevenue: MultipleValuation[];
   pe: MultipleValuation[];
+  pb: MultipleValuation[];
   assumptions: {
     waccPct: Money;
     terminalGrowthPct: Money;
@@ -59,6 +62,7 @@ export interface ValuationResult {
     evRevenueMultiple: Money;
     peMultiple: Money;
     netDebt: Money;
+    pbMultiple: Money;
   };
 }
 
@@ -69,12 +73,23 @@ function fySum(series: MonthlyValue[], months: Set<string>): Money {
   );
 }
 
+// fyLast — get the last available value for a month set from a series
+function fyLast(series: MonthlyValue[], months: string[]): Money {
+  const map = new Map(series.map((m) => [m.periodKey, m.value]));
+  for (let i = months.length - 1; i >= 0; i--) {
+    const v = map.get(months[i]);
+    if (v !== undefined) return money(v);
+  }
+  return ZERO as Money;
+}
+
 export interface StatementInputs {
   revenueTotals: MonthlyValue[];
   ebitda: MonthlyValue[];
   ebit: MonthlyValue[];
   netIncome: MonthlyValue[];
   netCashMovement: MonthlyValue[];
+  equity: MonthlyValue[];
 }
 
 export function buildFyAggregates(groups: FYGroup[], s: StatementInputs): FyAggregate[] {
@@ -87,6 +102,7 @@ export function buildFyAggregates(groups: FYGroup[], s: StatementInputs): FyAggr
       ebit: fySum(s.ebit, months),
       netIncome: fySum(s.netIncome, months),
       fcf: fySum(s.netCashMovement, months),
+      closingEquity: fyLast(s.equity, g.months),
     };
   });
 }
@@ -152,6 +168,7 @@ export function computeValuation(
   const evRevenueMult = money(assumptions.evRevenueMultiple ?? 4);
   const peMult = money(assumptions.peMultiple ?? 15);
   const netDebt = money(assumptions.netDebt ?? 0);
+  const pbMult = money(assumptions.pbMultiple ?? 1.4);
 
   const dcf: DcfHorizonValuation[] = aggregates.map((_, i) =>
     computeDcfForHorizon(aggregates, i + 1, wacc, terminalGrowth, netDebt),
@@ -189,6 +206,17 @@ export function computeValuation(
     };
   });
 
+  const pb: MultipleValuation[] = aggregates.map((a) => {
+    const equity = a.closingEquity.times(pbMult);
+    return {
+      fy: a.fy,
+      metric: a.closingEquity,
+      multiple: pbMult,
+      enterpriseValue: equity.plus(netDebt),
+      equityValue: equity,
+    };
+  });
+
   return {
     fys: aggregates.map((a) => a.fy),
     aggregates,
@@ -196,6 +224,7 @@ export function computeValuation(
     evEbitda,
     evRevenue,
     pe,
+    pb,
     assumptions: {
       waccPct: wacc.times(100),
       terminalGrowthPct: terminalGrowth.times(100),
@@ -203,6 +232,7 @@ export function computeValuation(
       evRevenueMultiple: evRevenueMult,
       peMultiple: peMult,
       netDebt,
+      pbMultiple: pbMult,
     },
   };
 }
