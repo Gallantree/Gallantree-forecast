@@ -393,14 +393,13 @@ function OverviewView({
                   "Class",
                   "Shares",
                   "% Holding",
-                  "Issue $",
                   "Curr. Value",
                   "Date Issued",
                   "",
                 ].map((h) => (
                   <th
                     key={h}
-                    className={`px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500 ${["Shares", "% Holding", "Issue $", "Curr. Value", "Date Issued"].includes(h) ? "text-right" : h === "Held" ? "text-center" : "text-left"}`}
+                    className={`px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500 ${["Shares", "% Holding", "Curr. Value", "Date Issued"].includes(h) ? "text-right" : h === "Held" ? "text-center" : "text-left"}`}
                   >
                     {h}
                   </th>
@@ -437,9 +436,6 @@ function OverviewView({
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums text-zinc-600">
                       {fmtPct(pct)}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-zinc-600">
-                      ${Number(r.pricePerShare).toFixed(3)}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums font-medium text-zinc-900">
                       ${fmtMoney(currValue)}
@@ -650,9 +646,6 @@ function CombinedView({
                   % Holding
                 </th>
                 <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
-                  Issue $
-                </th>
-                <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
                   Paid-in
                 </th>
                 <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
@@ -692,9 +685,6 @@ function CombinedView({
                     </td>
                     <td className="px-3 py-1.5 text-right tabular-nums text-zinc-600">
                       {fmtPct(pct)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right tabular-nums text-zinc-600">
-                      ${Number(r.pricePerShare).toFixed(3)}
                     </td>
                     <td className="px-3 py-1.5 text-right tabular-nums text-zinc-800">
                       ${fmtMoney(r.shares * Number(r.pricePerShare))}
