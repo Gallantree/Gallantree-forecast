@@ -462,7 +462,7 @@ export function SeedConfigModal({ typeKey, onClose, onSeed, running }: SeedConfi
         }}
       >
         {/* Modal box */}
-        <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col mx-4">
+        <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[85vh] flex flex-col mx-4">
           {/* Header */}
           <div className="px-5 pt-5 pb-3 border-b border-zinc-100">
             <div className="flex items-start justify-between gap-4">
