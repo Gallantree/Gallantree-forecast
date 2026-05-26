@@ -1,8 +1,13 @@
 "use client";
 
 import { Fragment, useState } from "react";
-import { fmtMoney2 } from "@/utils/format";
-import type { OverviewData, OverviewLiabilityLine, OverviewLine } from "./overviewData";
+import { fmtMoney0, fmtMoney2, fmtNum2 } from "@/utils/format";
+import type {
+  OperationalKPIs,
+  OverviewData,
+  OverviewLiabilityLine,
+  OverviewLine,
+} from "./overviewData";
 
 // Re-export so existing imports from this file keep working. The runtime
 // builder (`buildOverviewData`) is intentionally NOT re-exported — pages
@@ -17,8 +22,31 @@ function pct(numer: number, denom: number): string {
 
 type SectionKey = "revenue" | "opex" | "interest";
 
-export function OverviewTab({ data }: { data: OverviewData }) {
+function fmtCompactMoney(value: number): string {
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(2)}B`;
+  if (abs >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000) return `$${(value / 1_000).toFixed(0)}K`;
+  return fmtMoney0(value);
+}
+
+export function OverviewTab({ data, ops }: { data: OverviewData; ops?: OperationalKPIs }) {
   const { fys, fiveYear } = data;
+  // Peak / average operational stats over the horizon.
+  const peakAum = ops ? Math.max(0, ...ops.aumByYear) : 0;
+  const peakLoans = ops ? Math.max(0, ...ops.peakLoanCountByYear) : 0;
+  const totalNewLoans = ops ? ops.newLoanCountByYear.reduce((a, b) => a + b, 0) : 0;
+  const avgFte =
+    ops && ops.fteByYear.length > 0
+      ? ops.fteByYear.reduce((a, b) => a + b, 0) / ops.fteByYear.length
+      : 0;
+  const revPerEmp5y = avgFte > 0 ? fiveYear.revenue / (avgFte * (ops?.fys.length || 1)) : 0;
+  const revPerEmpByYear = ops
+    ? ops.fteByYear.map((fte, i) => (fte > 0 ? data.totals.revenue[i] / fte : 0))
+    : [];
+  const aumPerEmpByYear = ops
+    ? ops.fteByYear.map((fte, i) => (fte > 0 ? ops.aumByYear[i] / fte : 0))
+    : [];
   const [collapsed, setCollapsed] = useState<Record<SectionKey, boolean>>({
     revenue: false,
     opex: false,
@@ -44,6 +72,16 @@ export function OverviewTab({ data }: { data: OverviewData }) {
         <Tile label="EBITDA margin" value={pct(fiveYear.ebitda, fiveYear.revenue)} />
         <Tile label="Net margin" value={pct(fiveYear.netIncome, fiveYear.revenue)} />
       </div>
+
+      {ops ? (
+        <div className="grid grid-cols-5 gap-px border-b border-zinc-200 bg-zinc-200">
+          <Tile label="Peak AUM" value={fmtCompactMoney(peakAum)} />
+          <Tile label="Peak loans on book" value={fmtNum2(peakLoans).replace(/\.00$/, "")} />
+          <Tile label="New loans (5y)" value={fmtNum2(totalNewLoans).replace(/\.00$/, "")} />
+          <Tile label="Avg FTE" value={fmtNum2(avgFte)} />
+          <Tile label="Revenue / FTE (5y avg)" value={fmtCompactMoney(revPerEmp5y)} />
+        </div>
+      ) : null}
 
       <div className="border-b border-zinc-200 bg-zinc-50 px-4 py-2 text-[11px] text-zinc-500">
         Consolidated by calendar year (Jan → Dec). Each column is the CY total; the right column is
@@ -172,6 +210,58 @@ export function OverviewTab({ data }: { data: OverviewData }) {
               total={fiveYear.netIncome}
               variant="grand"
             />
+
+            {/* Operational metrics — business shape, not the GAAP cascade. */}
+            {ops ? (
+              <>
+                <SectionHeader
+                  label="Operations"
+                  color="bg-indigo-50 text-indigo-800"
+                  cols={fys.length + 1}
+                />
+                <OpsRow
+                  label="Loans on book (avg)"
+                  perFy={ops.loanCountByYear}
+                  total={ops.peakLoanCountByYear.reduce((a, b) => Math.max(a, b), 0)}
+                  totalLabel="peak"
+                  formatter={(v) => fmtNum2(v).replace(/\.00$/, "")}
+                />
+                <OpsRow
+                  label="New loans originated"
+                  perFy={ops.newLoanCountByYear}
+                  total={totalNewLoans}
+                  formatter={(v) => fmtNum2(v).replace(/\.00$/, "")}
+                />
+                <OpsRow
+                  label="AUM (avg outstanding)"
+                  perFy={ops.aumByYear}
+                  total={peakAum}
+                  totalLabel="peak"
+                  formatter={fmtCompactMoney}
+                />
+                <OpsRow
+                  label="FTE (avg)"
+                  perFy={ops.fteByYear}
+                  total={avgFte}
+                  totalLabel="avg"
+                  formatter={(v) => fmtNum2(v)}
+                />
+                <OpsRow
+                  label="Revenue / FTE"
+                  perFy={revPerEmpByYear}
+                  total={revPerEmp5y}
+                  totalLabel="avg"
+                  formatter={fmtCompactMoney}
+                />
+                <OpsRow
+                  label="AUM / FTE"
+                  perFy={aumPerEmpByYear}
+                  total={avgFte > 0 ? peakAum / avgFte : 0}
+                  totalLabel="peak"
+                  formatter={fmtCompactMoney}
+                />
+              </>
+            ) : null}
 
             {/* Margins */}
             <SectionHeader label="Margins" color="bg-zinc-50 text-zinc-700" cols={fys.length + 1} />
@@ -322,6 +412,50 @@ function TotalRow({
       ))}
       <td className="border-l border-t-2 border-zinc-400 bg-zinc-200 px-3 py-1.5 text-right tabular-nums">
         {fmtMoney2(total)}
+      </td>
+    </tr>
+  );
+}
+
+function OpsRow({
+  label,
+  perFy,
+  total,
+  totalLabel,
+  formatter,
+}: {
+  label: string;
+  perFy: number[];
+  total: number;
+  totalLabel?: string;
+  formatter: (v: number) => string;
+}) {
+  return (
+    <tr className="hover:bg-indigo-50/40">
+      <td className="sticky left-0 z-20 w-80 border-b border-r border-zinc-100 bg-white px-4 py-1.5 text-zinc-800">
+        {label}
+      </td>
+      {perFy.map((v, i) => (
+        <td
+          key={i}
+          className="border-b border-zinc-100 px-3 py-1.5 text-right tabular-nums text-zinc-700"
+        >
+          {v === 0 ? <span className="text-zinc-300">—</span> : formatter(v)}
+        </td>
+      ))}
+      <td className="border-b border-l border-zinc-200 bg-zinc-50 px-3 py-1.5 text-right font-semibold tabular-nums text-zinc-900">
+        {total === 0 ? (
+          <span className="text-zinc-300">—</span>
+        ) : (
+          <>
+            {formatter(total)}
+            {totalLabel ? (
+              <span className="ml-1 text-[10px] font-normal uppercase tracking-wider text-zinc-400">
+                {totalLabel}
+              </span>
+            ) : null}
+          </>
+        )}
       </td>
     </tr>
   );

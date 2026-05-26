@@ -47,7 +47,11 @@ import {
 import { buildLoanAnalysisData } from "./_components/loanAnalysisData";
 import { type OpexDriverRow, OpexGeneralTab } from "./_components/OpexGeneralTab";
 import { type OverviewData, OverviewTab } from "./_components/OverviewTab";
-import { buildOverviewData, toGallantreeOverview } from "./_components/overviewData";
+import {
+  buildOperationalKPIs,
+  buildOverviewData,
+  toGallantreeOverview,
+} from "./_components/overviewData";
 import { type PlatformLicenseRow, PlatformRevenuesTab } from "./_components/PlatformRevenuesTab";
 import { PnlAnalysisModal } from "./_components/PnlAnalysisModal";
 import { buildFYGroups, PnlTable, toGallantreePnl } from "./_components/PnlTable";
@@ -692,6 +696,22 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
       )
     : null;
 
+  const operationalData = statements
+    ? buildOperationalKPIs(
+        buildFYGroups(scenarioPeriods).map((g) => ({ fy: g.fy, months: g.months })),
+        engineLoans.map((l) => ({
+          originationPeriodKey: l.originationPeriodKey,
+          maturityPeriodKey: l.maturityPeriodKey,
+          balance: l.balance.toString(),
+        })),
+        inputs.headcount.map((h) => ({
+          startPeriodKey: h.startPeriodKey,
+          endPeriodKey: h.endPeriodKey,
+          ftePct: h.ftePct?.toString(),
+        })),
+      )
+    : null;
+
   const valuationData: ValuationData | null = statements
     ? (() => {
         const v = computeValuation(
@@ -1026,14 +1046,17 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
       <div className="flex-1 overflow-hidden">
         {tab === "overview" &&
           (overviewData ? (
-            <OverviewTab data={overviewData} />
+            <OverviewTab data={overviewData} ops={operationalData ?? undefined} />
           ) : (
             <Stub title="Overview" message="Seed periods first — run `npm run seed`." />
           ))}
 
         {tab === "overview-gallantree" &&
           (overviewData ? (
-            <OverviewTab data={toGallantreeOverview(overviewData)} />
+            <OverviewTab
+              data={toGallantreeOverview(overviewData)}
+              ops={operationalData ?? undefined}
+            />
           ) : (
             <Stub
               title="Overview — Gallantree"
