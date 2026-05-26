@@ -1119,7 +1119,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
         {tab === "overview-gallantree" &&
           (overviewData ? (
             <OverviewTab
-              data={toGallantreeOverview(overviewData)}
+              data={toGallantreeOverview(overviewData, scenario.taxRatePct?.toString())}
               ops={operationalData ?? undefined}
             />
           ) : (
@@ -1259,12 +1259,12 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
             {overviewData ? (
               <div className="flex items-center gap-2 border-b border-zinc-200 bg-zinc-50 px-4 py-2">
                 <PnlAnalysisModal
-                  data={toGallantreeOverview(overviewData)}
+                  data={toGallantreeOverview(overviewData, scenario.taxRatePct?.toString())}
                   title="P&L analysis — Gallantree"
                   subtitle="Gallantree's own operating economics — NIM revenue & program interest excluded"
                 />
                 <ConsolidatedModal
-                  data={toGallantreeOverview(overviewData)}
+                  data={toGallantreeOverview(overviewData, scenario.taxRatePct?.toString())}
                   title="Consolidated five-year view — Gallantree"
                   subtitle="Gallantree's own operating economics — NIM revenue & program interest excluded"
                 />
@@ -1296,7 +1296,11 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
                         netIncome: monthlyMap(statements.pnl.netIncome),
                       }
                     : undefined;
-                  const filtered = toGallantreePnl(pnl, standardCascade);
+                  const filtered = toGallantreePnl(
+                    pnl,
+                    standardCascade,
+                    scenario.taxRatePct?.toString(),
+                  );
                   return (
                     <PnlTable
                       pnl={filtered.pnl}

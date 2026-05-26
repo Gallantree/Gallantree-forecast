@@ -321,7 +321,7 @@ function isNimRevenueLine(line: OverviewLine): boolean {
   return NIM_REVENUE_PATTERN.test(line.accountCode);
 }
 
-export function toGallantreeOverview(data: OverviewData): OverviewData {
+export function toGallantreeOverview(data: OverviewData, taxRatePct?: string): OverviewData {
   const revenueLines = data.revenueLines.filter((l) => !isNimRevenueLine(l));
 
   // Re-sum revenue per FY without the NIM lines so totals & margins reflect
@@ -339,15 +339,33 @@ export function toGallantreeOverview(data: OverviewData): OverviewData {
   const ebit = data.totals.ebit.map((v, i) => v + revenueDelta[i]);
   // Without liability interest, EBIT == pre-tax income.
   const pretaxIncome = ebit.slice();
-  // Tax & net income recompute against the new pre-tax. Re-derive the
-  // effective tax rate per FY from the original cascade so the implied
-  // assumption stays consistent.
-  const tax = data.totals.tax.map((origTax, i) => {
-    const origPre = data.totals.pretaxIncome[i] ?? 0;
-    if (origPre === 0) return 0;
-    const rate = origTax / origPre;
-    return pretaxIncome[i] * rate;
-  });
+  // Tax & net income recompute against the new pre-tax. We can't reuse the
+  // implied per-FY effective rate from the original cascade — when program-
+  // tranche interest pushes the original FY pretax negative but some months
+  // inside it still had positive pretax (so origTax stayed > 0), the implied
+  // rate goes negative and applying it to Gallantree's (positive) pretax
+  // produces a phantom refund that inflates net income. Match the engine
+  // rule instead: tax = max(0, pretax) × taxRatePct, applied directly to
+  // Gallantree pretax. Falls back to the implied rate from POSITIVE FYs
+  // when no rate was supplied.
+  const explicitRate =
+    taxRatePct !== undefined && Number.isFinite(Number(taxRatePct))
+      ? Number(taxRatePct) / 100
+      : null;
+  const impliedRate = (() => {
+    if (explicitRate !== null) return explicitRate;
+    let num = 0;
+    let den = 0;
+    for (let i = 0; i < data.totals.pretaxIncome.length; i += 1) {
+      const pre = data.totals.pretaxIncome[i] ?? 0;
+      if (pre > 0) {
+        den += pre;
+        num += data.totals.tax[i] ?? 0;
+      }
+    }
+    return den > 0 ? num / den : 0;
+  })();
+  const tax = pretaxIncome.map((pre) => (pre > 0 ? pre * impliedRate : 0));
   const netIncome = pretaxIncome.map((v, i) => v - tax[i]);
 
   const sum = (a: number[]) => a.reduce((x, y) => x + y, 0);

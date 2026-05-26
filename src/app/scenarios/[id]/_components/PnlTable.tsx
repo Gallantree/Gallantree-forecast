@@ -84,6 +84,7 @@ function sumMap(horizon: string[], m: Map<string, Decimal>): Decimal {
 export function toGallantreePnl(
   pnl: PnL,
   cascade: PnlCascadeSeries | undefined,
+  taxRatePct?: string,
 ): { pnl: PnL; cascade: PnlCascadeSeries | undefined } {
   const keptLines = pnl.revenue.lines.filter((l) => !NIM_REVENUE_PATTERN.test(l.accountCode));
   const droppedLines = pnl.revenue.lines.filter((l) => NIM_REVENUE_PATTERN.test(l.accountCode));
@@ -170,19 +171,38 @@ export function toGallantreePnl(
     const newTax = new Map<string, Decimal>();
     const newNetIncome = new Map<string, Decimal>();
     const zeros = new Map<string, Decimal>();
+    // Tax rule mirrors the engine — max(0, gallantreePretax) × taxRatePct —
+    // applied directly to the Gallantree pretax. Reusing the original
+    // cascade's implied per-month rate broke whenever a month had positive
+    // origTax but negative gallantreePretax (or vice versa via program-
+    // tranche interest), producing nonsense refunds. Fall back to the
+    // original cascade's effective rate from months where origPretax > 0 if
+    // no explicit rate was passed in.
+    const explicitRate =
+      taxRatePct !== undefined && Number.isFinite(Number(taxRatePct))
+        ? new Decimal(taxRatePct).div(100)
+        : null;
+    const fallbackRate = (() => {
+      if (explicitRate !== null) return explicitRate;
+      let num = new Decimal(0);
+      let den = new Decimal(0);
+      for (const k of pnl.horizon) {
+        const pre = orig.pretaxIncome.get(k) ?? ZERO;
+        if (pre.gt(0)) {
+          den = den.plus(pre);
+          num = num.plus(orig.taxExpense.get(k) ?? ZERO);
+        }
+      }
+      return den.gt(0) ? num.div(den) : new Decimal(0);
+    })();
+    const taxRate = fallbackRate;
     for (const k of pnl.horizon) {
       const drop = droppedByMonth.get(k) ?? ZERO;
       const ebitda = (orig.ebitda.get(k) ?? ZERO).minus(drop);
       const ebit = (orig.ebit.get(k) ?? ZERO).minus(drop);
       // No interest deduction in the Gallantree cascade.
       const pretax = ebit;
-      // Preserve the original implied effective tax rate per month so this
-      // stays consistent with the standard view. Fall back to 0 when the
-      // original pretax was zero.
-      const origPretax = orig.pretaxIncome.get(k) ?? ZERO;
-      const origTax = orig.taxExpense.get(k) ?? ZERO;
-      const rate = origPretax.isZero() ? new Decimal(0) : origTax.div(origPretax);
-      const tax = pretax.times(rate);
+      const tax = pretax.gt(0) ? pretax.times(taxRate) : ZERO;
       const net = pretax.minus(tax);
       newEbitda.set(k, ebitda);
       newEbit.set(k, ebit);
