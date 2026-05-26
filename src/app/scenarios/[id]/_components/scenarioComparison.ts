@@ -241,22 +241,26 @@ export function buildScenarioComparison(
   base: ScenarioSnapshot,
   current: ScenarioSnapshot,
 ): ScenarioComparisonData {
-  // Both scenarios must share the same horizon for the comparison to be
-  // meaningful. If they diverge (e.g. different firstYearLabel), align on the
-  // shorter and warn via the absence of trailing columns.
-  const n = Math.min(base.fys.length, current.fys.length);
-  const slice = (a: number[]) => a.slice(0, n);
-  const fys = base.fys.slice(0, n);
+  // Align by shared fiscal year, not by array index. If the two scenarios
+  // start at different firstYearLabel values, index 0 on each side maps to
+  // different CYs — comparing them position-by-position would produce
+  // misleading deltas. Take the intersection of fys and project both
+  // snapshots through a (fy → original index) lookup.
+  const baseIdx = new Map(base.fys.map((fy, i) => [fy, i]));
+  const currentIdx = new Map(current.fys.map((fy, i) => [fy, i]));
+  const fys = current.fys.filter((fy) => baseIdx.has(fy));
+  const pickBase = (a: number[]) => fys.map((fy) => a[baseIdx.get(fy) as number] ?? 0);
+  const pickCurrent = (a: number[]) => fys.map((fy) => a[currentIdx.get(fy) as number] ?? 0);
 
   const groups: ComparisonGroup[] = [
     {
       title: "Profit & loss",
       rows: [
-        flowRow("Revenue", "money", slice(base.revenue), slice(current.revenue)),
-        flowRow("EBITDA", "money", slice(base.ebitda), slice(current.ebitda)),
-        flowRow("EBIT", "money", slice(base.ebit), slice(current.ebit)),
-        flowRow("Net income", "money", slice(base.netIncome), slice(current.netIncome)),
-        flowRow("Free cash flow", "money", slice(base.fcf), slice(current.fcf)),
+        flowRow("Revenue", "money", pickBase(base.revenue), pickCurrent(current.revenue)),
+        flowRow("EBITDA", "money", pickBase(base.ebitda), pickCurrent(current.ebitda)),
+        flowRow("EBIT", "money", pickBase(base.ebit), pickCurrent(current.ebit)),
+        flowRow("Net income", "money", pickBase(base.netIncome), pickCurrent(current.netIncome)),
+        flowRow("Free cash flow", "money", pickBase(base.fcf), pickCurrent(current.fcf)),
       ],
     },
     {
@@ -265,19 +269,25 @@ export function buildScenarioComparison(
         stockRow(
           "AUM (avg outstanding)",
           "moneyCompact",
-          slice(base.aum),
-          slice(current.aum),
+          pickBase(base.aum),
+          pickCurrent(current.aum),
           "peak",
         ),
-        stockRow("Loans on book (avg)", "decimal", slice(base.loans), slice(current.loans), "peak"),
+        stockRow(
+          "Loans on book (avg)",
+          "decimal",
+          pickBase(base.loans),
+          pickCurrent(current.loans),
+          "peak",
+        ),
         stockRow(
           "Capital programs (active)",
           "integer",
-          slice(base.capitalPrograms),
-          slice(current.capitalPrograms),
+          pickBase(base.capitalPrograms),
+          pickCurrent(current.capitalPrograms),
           "peak",
         ),
-        stockRow("FTE (avg)", "decimal", slice(base.fte), slice(current.fte), "avg"),
+        stockRow("FTE (avg)", "decimal", pickBase(base.fte), pickCurrent(current.fte), "avg"),
       ],
     },
     {

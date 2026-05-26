@@ -143,6 +143,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
     viewMode?: "all" | "gallantree";
     isBase?: boolean;
     parentId?: { toString: () => string };
+    organisationId?: { toString: () => string };
     defaultCpiPct?: { toString: () => string };
     defaultSuperPct?: { toString: () => string };
     loanBookGrowthPctByYear?: Array<{ toString: () => string }>;
@@ -910,13 +911,30 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
   // *this* scenario is the base — there's nothing to compare against.
   let baseScenarioId: string | null = null;
   if (!scenario.isBase) {
+    // Scope to the current scenario's tenant + active records so the modal
+    // can't surface another organisation's base or a soft-deleted one. When
+    // the scenario itself has no organisationId (legacy/unscoped seed data),
+    // match base candidates with the same unscoped shape.
+    const tenantFilter: Record<string, unknown> = scenario.organisationId
+      ? { organisationId: new Types.ObjectId(scenario.organisationId.toString()) }
+      : { organisationId: { $in: [null, undefined] } };
     if (scenario.parentId) {
-      baseScenarioId = scenario.parentId.toString();
-    } else {
+      const parent = await Scenario.findOne({
+        _id: scenario.parentId,
+        deletedAt: null,
+        ...tenantFilter,
+      })
+        .select({ _id: 1 })
+        .lean<{ _id: { toString: () => string } } | null>();
+      if (parent) baseScenarioId = parent._id.toString();
+    }
+    if (!baseScenarioId) {
       const base = await Scenario.findOne({
         viewMode: viewMode,
         isBase: true,
+        deletedAt: null,
         _id: { $ne: id },
+        ...tenantFilter,
       })
         .select({ _id: 1 })
         .lean<{ _id: { toString: () => string } } | null>();
