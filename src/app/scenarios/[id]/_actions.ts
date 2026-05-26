@@ -3024,6 +3024,197 @@ export async function seedShareholders(scenarioId: string): Promise<{ inserted: 
   return { inserted: docs.length };
 }
 
+// ── Market Test (AI deal benchmarking) ───────────────────────────────────────
+
+export interface MarketTestResult {
+  verdict: "on_market" | "attractive" | "rich" | "below_market";
+  verdictLabel: string;
+  confidence: "high" | "medium" | "low";
+  summary: string;
+  valuationCommentary: string;
+  structureCommentary: string;
+  keyStrengths: string[];
+  keyRisks: string[];
+  comparableDeals: Array<{
+    company: string;
+    stage: string;
+    preMoneyAUD: string;
+    revenueMultiple: string;
+    note: string;
+  }>;
+  recommendation: string;
+}
+
+export async function runMarketTest(
+  scenarioId: string,
+  deal: {
+    investmentAmt: number;
+    pricePerShare: number;
+    preMoney: number;
+    postMoney: number;
+    pctEquity: number;
+    totalPreRaiseShares: number;
+    raiseName: string;
+  },
+  valuation: {
+    dcfEquityValue?: number;
+    evEbitdaEquityY1?: number;
+    evRevenueEquityY1?: number;
+    peEquityY1?: number;
+    pbEquityY1?: number;
+    dcfEquityValueY5?: number;
+    evEbitdaEquityY5?: number;
+    evRevenueEquityY5?: number;
+    peEquityY5?: number;
+    pbEquityY5?: number;
+    revenueY1?: number;
+    ebitdaY1?: number;
+    netIncomeY1?: number;
+    revenueY5?: number;
+    ebitdaY5?: number;
+    netIncomeY5?: number;
+  },
+): Promise<MarketTestResult | { ok: false; error: string }> {
+  if (!Types.ObjectId.isValid(scenarioId)) return { ok: false, error: "invalid scenario" };
+  if (!(await checkAccess(scenarioId))) return { ok: false, error: "not authorized" };
+  if (!isAnthropicConfigured()) return { ok: false, error: "ANTHROPIC_API_KEY is not set" };
+
+  const fmt = (n?: number) => (n !== undefined ? `A$${(n / 1_000_000).toFixed(2)}M` : "n/a");
+  const fmtX = (n?: number) => (n !== undefined ? `${n.toFixed(2)}x` : "n/a");
+
+  const revenueMultipleY1 =
+    valuation.revenueY1 && valuation.revenueY1 > 0
+      ? deal.preMoney / valuation.revenueY1
+      : undefined;
+
+  const userMessage = `
+Deal Parameters:
+- Raise name: ${deal.raiseName}
+- Investment amount: ${fmt(deal.investmentAmt)}
+- Price per share: A$${deal.pricePerShare.toFixed(4)}
+- Pre-money valuation: ${fmt(deal.preMoney)}
+- Post-money valuation: ${fmt(deal.postMoney)}
+- % equity offered: ${deal.pctEquity.toFixed(2)}%
+- Pre-raise shares on issue: ${deal.totalPreRaiseShares.toLocaleString()}
+
+Internal Valuation Models (Year 1 / Year 5):
+- DCF equity value: ${fmt(valuation.dcfEquityValue)} / ${fmt(valuation.dcfEquityValueY5)}
+- EV/EBITDA equity value: ${fmt(valuation.evEbitdaEquityY1)} / ${fmt(valuation.evEbitdaEquityY5)}
+- EV/Revenue equity value: ${fmt(valuation.evRevenueEquityY1)} / ${fmt(valuation.evRevenueEquityY5)}
+- P/E equity value: ${fmt(valuation.peEquityY1)} / ${fmt(valuation.peEquityY5)}
+- P/B equity value: ${fmt(valuation.pbEquityY1)} / ${fmt(valuation.pbEquityY5)}
+
+Financial Metrics (Year 1 / Year 5):
+- Revenue: ${fmt(valuation.revenueY1)} / ${fmt(valuation.revenueY5)}
+- EBITDA: ${fmt(valuation.ebitdaY1)} / ${fmt(valuation.ebitdaY5)}
+- Net income: ${fmt(valuation.netIncomeY1)} / ${fmt(valuation.netIncomeY5)}
+- Pre-money / Year-1 revenue multiple: ${revenueMultipleY1 !== undefined ? fmtX(revenueMultipleY1) : "n/a"}
+
+Please assess whether this deal is on-market, attractive, rich or below market for an Australian CRE fintech/asset manager. Benchmark against comparable Australian fintech and asset management Series A rounds from 2023–2025.
+`.trim();
+
+  const tool = {
+    name: "market_test_verdict",
+    description: "Return a structured market test verdict for the proposed capital raise deal.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        verdict: {
+          type: "string",
+          enum: ["on_market", "attractive", "rich", "below_market"],
+          description: "Overall verdict on the deal pricing",
+        },
+        verdictLabel: {
+          type: "string",
+          description: "Human-readable verdict label",
+        },
+        confidence: {
+          type: "string",
+          enum: ["high", "medium", "low"],
+          description: "Confidence level in the verdict",
+        },
+        summary: {
+          type: "string",
+          description: "2-3 sentence executive summary of the assessment",
+        },
+        valuationCommentary: {
+          type: "string",
+          description: "Paragraph commentary on valuation vs comparable deals",
+        },
+        structureCommentary: {
+          type: "string",
+          description: "Paragraph commentary on deal structure and terms",
+        },
+        keyStrengths: {
+          type: "array",
+          items: { type: "string" },
+          description: "2-4 key strengths of the deal",
+        },
+        keyRisks: {
+          type: "array",
+          items: { type: "string" },
+          description: "2-4 key risks of the deal",
+        },
+        comparableDeals: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              company: { type: "string" },
+              stage: { type: "string" },
+              preMoneyAUD: { type: "string" },
+              revenueMultiple: { type: "string" },
+              note: { type: "string" },
+            },
+            required: ["company", "stage", "preMoneyAUD", "revenueMultiple", "note"],
+          },
+          description: "2-3 comparable deals for benchmarking",
+        },
+        recommendation: {
+          type: "string",
+          description: "1 sentence recommendation",
+        },
+      },
+      required: [
+        "verdict",
+        "verdictLabel",
+        "confidence",
+        "summary",
+        "valuationCommentary",
+        "structureCommentary",
+        "keyStrengths",
+        "keyRisks",
+        "comparableDeals",
+        "recommendation",
+      ],
+    },
+    parse: (input: unknown): MarketTestResult => input as MarketTestResult,
+  };
+
+  const systemPrompt = `You are a senior investment analyst specialising in Australian private markets and fintech. Gallantree is an Australian commercial real estate (CRE) lending platform and fund manager. It originates and manages CRE CLO, CMBS, warehouse, and MIT fund structures. The company earns fees from CRE loan origination, management fees across fund structures, and servicing income. The current capital raise (e.g. Series A) is intended to fund platform buildout, tech infrastructure, and working capital to support loan book origination growth.
+
+Your task is to assess whether a proposed equity capital raise is on-market, attractive, rich (premium to fair value), or below market. You should:
+1. Compare the implied pre-money valuation against Year 1 and Year 5 internal valuation models
+2. Benchmark the deal against comparable Australian fintech and asset management Series A rounds from 2023–2025 (Athena Home Loans, OwnHome, Sucasa, Finverse, Infinity Capital, Thinktank, La Trobe Financial early rounds, and others you are aware of)
+3. Consider revenue multiples, EBITDA multiples, and equity value relative to the stage of the business
+4. Note that Australian CRE lenders / fund managers typically attract lower multiples than pure software fintechs due to balance sheet risk, but premium multiples vs. traditional banks due to tech leverage and growth
+
+Be precise, analytical, and give a clear verdict.`;
+
+  try {
+    const result = await generateStructured({
+      systemPrompt,
+      tool,
+      userMessage,
+      maxTokens: 2000,
+    });
+    return result;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    return { ok: false, error: msg };
+  }
+}
+
 // ── Cap table option pools ────────────────────────────────────────────────────
 
 export async function updateCapTableOptionPools(
