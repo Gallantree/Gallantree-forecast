@@ -1176,19 +1176,41 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
 
         {tab === "capital-raises" && <CapitalRaisesTab scenarioId={id} raises={raiseRows} />}
 
-        {tab === "opex-staffing" && (
-          <StaffingTab
-            scenarioId={id}
-            staff={staffRows}
-            paybands={paybandRows}
-            expenseAccounts={expenseAccounts.map((a) => ({ code: a.code, name: a.name }))}
-            defaultStartPeriod={firstPeriod}
-            defaultCpiPct={defaultCpiPct}
-            defaultSuperPct={defaultSuperPct}
-            fys={fyGroups.map((g) => g.fy)}
-            staffTargetByYear={scenario.staffTargetByYear ?? undefined}
-          />
-        )}
+        {tab === "opex-staffing" &&
+          (() => {
+            // Per-CY end-of-year active headcount (real + growth), deduped
+            // the same way the staffing tab + plan-growth modal do. Drives
+            // the modal's default Target column so it always opens reflecting
+            // what the staff table actually shows.
+            const groupKey = (r: StaffRow): string =>
+              r.isGrowth || !r.personName
+                ? `__row_${r._id}`
+                : `${r.personName}|${r.role}|${r.accountCode}`;
+            const eoyActualHeadcountByYear = fyGroups.map((g) => {
+              const eoy = g.months[g.months.length - 1];
+              const seen = new Set<string>();
+              for (const s of staffRows) {
+                if (s.startPeriodKey > eoy) continue;
+                if (s.endPeriodKey && s.endPeriodKey < eoy) continue;
+                seen.add(groupKey(s));
+              }
+              return seen.size;
+            });
+            return (
+              <StaffingTab
+                scenarioId={id}
+                staff={staffRows}
+                paybands={paybandRows}
+                expenseAccounts={expenseAccounts.map((a) => ({ code: a.code, name: a.name }))}
+                defaultStartPeriod={firstPeriod}
+                defaultCpiPct={defaultCpiPct}
+                defaultSuperPct={defaultSuperPct}
+                fys={fyGroups.map((g) => g.fy)}
+                staffTargetByYear={scenario.staffTargetByYear ?? undefined}
+                eoyActualHeadcountByYear={eoyActualHeadcountByYear}
+              />
+            );
+          })()}
 
         {tab === "pnl" && (
           <div className="flex h-full flex-col bg-white">

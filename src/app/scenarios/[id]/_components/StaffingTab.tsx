@@ -78,6 +78,7 @@ export function StaffingTab({
   defaultSuperPct,
   fys,
   staffTargetByYear,
+  eoyActualHeadcountByYear,
 }: {
   scenarioId: string;
   staff: StaffRow[];
@@ -91,13 +92,12 @@ export function StaffingTab({
   fys: number[];
   // Previously-saved per-FY targets — round-trip into the modal.
   staffTargetByYear?: number[];
+  // Actual end-of-CY headcount (real + growth), computed server-side from
+  // current staff data. Drives the Plan-growth modal's defaults so it opens
+  // reflecting reality rather than whatever was last typed.
+  eoyActualHeadcountByYear?: number[];
 }) {
   const addAction = addStaff.bind(null, scenarioId);
-
-  const totalFte = staff
-    .reduce((acc, r) => acc.plus(new Decimal(r.ftePct?.toString() ?? "1")), new Decimal(0))
-    .toDecimalPlaces(2);
-  const totalAnnualCost = staff.reduce((acc, r) => acc.plus(effectiveAnnual(r)), new Decimal(0));
 
   const plainPaybands: PlainPayband[] = paybands.map((p) => ({
     band: p.band,
@@ -111,6 +111,28 @@ export function StaffingTab({
   // counts as its own block.
   const groupKey = (r: StaffRow): string =>
     r.isGrowth || !r.personName ? `__row_${r._id}` : `${r.personName}|${r.role}|${r.accountCode}`;
+
+  // Headline FTE + cost stats need to dedupe by group so a person with
+  // multiple phase rows (e.g. salary bump split into two windows) is counted
+  // once. Use the LATEST phase per group — that's the row that reflects what
+  // they're paid going forward.
+  const latestPhaseByGroup = new Map<string, StaffRow>();
+  for (const r of staff) {
+    const k = groupKey(r);
+    const prev = latestPhaseByGroup.get(k);
+    if (!prev || r.startPeriodKey.localeCompare(prev.startPeriodKey) > 0) {
+      latestPhaseByGroup.set(k, r);
+    }
+  }
+  const dedupedStaff = Array.from(latestPhaseByGroup.values());
+
+  const totalFte = dedupedStaff
+    .reduce((acc, r) => acc.plus(new Decimal(r.ftePct?.toString() ?? "1")), new Decimal(0))
+    .toDecimalPlaces(2);
+  const totalAnnualCost = dedupedStaff.reduce(
+    (acc, r) => acc.plus(effectiveAnnual(r)),
+    new Decimal(0),
+  );
 
   // Sort so phase rows for the same person are adjacent and chronological.
   // Original ordering (createdAt) is preserved within ungrouped rows by
@@ -194,6 +216,7 @@ export function StaffingTab({
             fys={fys}
             currentHeadcount={realHeadCount}
             savedTargets={staffTargetByYear}
+            eoyActualByYear={eoyActualHeadcountByYear}
           />
           <AddStaffForm
             expenseAccounts={expenseAccounts}
@@ -295,32 +318,23 @@ export function StaffingTab({
                     <Td className="font-mono text-zinc-600">{r.startPeriodKey}</Td>
                     <Td className="font-mono text-zinc-600">{r.endPeriodKey ?? "—"}</Td>
                     <Td>
-                      {r.isGrowth ? (
-                        <span
-                          className="text-[10px] text-zinc-400"
-                          title="Edit by re-opening Plan growth"
-                        >
-                          managed
-                        </span>
-                      ) : (
-                        <div className="flex items-center gap-1">
-                          <EditStaffButton
-                            row={toEditData(r)}
-                            expenseAccounts={expenseAccounts}
-                            paybands={plainPaybands}
-                            updateAction={updateStaff.bind(null, scenarioId, r._id)}
-                          />
-                          <form action={deleteStaff.bind(null, scenarioId, r._id)}>
-                            <button
-                              type="submit"
-                              className="rounded px-2 py-0.5 text-zinc-400 hover:bg-rose-50 hover:text-rose-600"
-                              aria-label="Delete"
-                            >
-                              Delete
-                            </button>
-                          </form>
-                        </div>
-                      )}
+                      <div className="flex items-center gap-1">
+                        <EditStaffButton
+                          row={toEditData(r)}
+                          expenseAccounts={expenseAccounts}
+                          paybands={plainPaybands}
+                          updateAction={updateStaff.bind(null, scenarioId, r._id)}
+                        />
+                        <form action={deleteStaff.bind(null, scenarioId, r._id)}>
+                          <button
+                            type="submit"
+                            className="rounded px-2 py-0.5 text-zinc-400 hover:bg-rose-50 hover:text-rose-600"
+                            aria-label="Delete"
+                          >
+                            Delete
+                          </button>
+                        </form>
+                      </div>
                     </Td>
                   </tr>
                 );
@@ -329,7 +343,8 @@ export function StaffingTab({
             <tfoot className="sticky bottom-0 border-t-2 border-zinc-400 bg-zinc-100 font-semibold">
               <tr>
                 <Td colSpan={3}>
-                  Totals ({staff.length} role{staff.length === 1 ? "" : "s"})
+                  Totals ({headCount} staff
+                  {phaseRowCount > headCount ? ` · ${phaseRowCount} phase rows` : ""})
                 </Td>
                 <Td className="text-right tabular-nums">{fmtNum0(totalFte.toString())}</Td>
                 <Td colSpan={4}></Td>

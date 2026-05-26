@@ -19,6 +19,11 @@ interface PlanStaffGrowthModalProps {
   // Previously-saved targets, one per CY. May be undefined or shorter than
   // fys; missing entries default to the previous running total.
   savedTargets?: number[];
+  // Actual end-of-CY headcount in the live staff table (real + growth,
+  // including any edited growth rows). Used as the default Target so the
+  // modal opens reflecting what the user sees on the staff table — they
+  // can then change a row to set a new target and we'll top up placeholders.
+  eoyActualByYear?: number[];
   triggerClassName?: string;
 }
 
@@ -27,26 +32,30 @@ export function PlanStaffGrowthModal({
   fys,
   currentHeadcount,
   savedTargets,
+  eoyActualByYear,
   triggerClassName,
 }: PlanStaffGrowthModalProps) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
 
-  // Initial values per row. Default each year's target to "prior running
-  // total" (no growth) when no saved value exists — that way the form opens
-  // showing a flat plan that the user can edit.
+  // Initial values per row. Prefer the actual live EOY headcount per CY so
+  // the modal opens reflecting what's on the staff table right now (real +
+  // growth + edited rows). Fall back to the last-saved target, then to the
+  // running prior. This way the modal "looks like" reality on open and any
+  // change becomes a deliberate new target.
   const initial = useMemo(() => {
     return fys.map((_, i) => {
+      const live = eoyActualByYear?.[i];
+      if (live !== undefined) return String(live);
       const saved = savedTargets?.[i];
       if (saved !== undefined) return String(saved);
-      // Walk backward to the most recent saved value, falling back to today.
       for (let j = i - 1; j >= 0; j -= 1) {
         const prior = savedTargets?.[j];
         if (prior !== undefined) return String(prior);
       }
       return String(currentHeadcount);
     });
-  }, [fys, currentHeadcount, savedTargets]);
+  }, [fys, currentHeadcount, savedTargets, eoyActualByYear]);
 
   const [targets, setTargets] = useState<string[]>(initial);
 
