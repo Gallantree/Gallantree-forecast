@@ -21,16 +21,28 @@ import { ProgramLiabilitiesTab } from "./_components/ProgramLiabilitiesTab";
 import { ProgramLoanBookTab } from "./_components/ProgramLoanBookTab";
 import { ProgramOverviewTab } from "./_components/ProgramOverviewTab";
 import { ProgramWaterfallTab } from "./_components/ProgramWaterfallTab";
+import { ReturnProfileTab } from "./_components/ReturnProfileTab";
+import {
+  buildReturnProfileData,
+  type UnderlyingProgramSnapshot,
+} from "./_components/returnProfileData";
 
 export const dynamic = "force-dynamic";
 
-type ProgramTabKey = "overview" | "loan-book" | "liabilities" | "waterfall" | "bond-economics";
+type ProgramTabKey =
+  | "overview"
+  | "loan-book"
+  | "liabilities"
+  | "waterfall"
+  | "bond-economics"
+  | "return-profile";
 const PROGRAM_TABS: { key: ProgramTabKey; label: string }[] = [
   { key: "overview", label: "Overview" },
   { key: "loan-book", label: "Loan Book" },
   { key: "liabilities", label: "Liabilities" },
   { key: "waterfall", label: "Waterfall" },
   { key: "bond-economics", label: "Bond Economics" },
+  { key: "return-profile", label: "Return Profile" },
 ];
 
 type Params = {
@@ -55,6 +67,7 @@ export default async function ProgramDetailPage({ params, searchParams }: Params
     status: string;
     viewMode?: "all" | "gallantree";
     baseRateBps?: number;
+    firstYearLabel?: number;
   }>();
   if (!scenario) notFound();
 
@@ -146,6 +159,90 @@ export default async function ProgramDetailPage({ params, searchParams }: Params
     name: p.name,
     type: p.type,
   }));
+
+  // For MIT_FUND programs, fetch the underlying programs whose equity tranches
+  // this fund holds (and their loan books) so we can build the return profile.
+  const isMitFund = programDoc.type === "MIT_FUND";
+  const heldProgramIds = isMitFund
+    ? Array.from(
+        new Set((programDoc.captiveEquityHoldings ?? []).map((h) => h.programId.toString())),
+      )
+    : [];
+  let underlyingSnapshots: UnderlyingProgramSnapshot[] = [];
+  if (heldProgramIds.length > 0) {
+    const objIds = heldProgramIds.map((s) => new Types.ObjectId(s));
+    const underlyingDocs = await CapitalProgram.find({
+      _id: { $in: objIds },
+      scenarioId: new Types.ObjectId(id),
+    }).lean<LeanProgram[]>();
+    const underlyingLoans = await Loan.find({
+      scenarioId: new Types.ObjectId(id),
+      capitalProgramId: { $in: objIds },
+    })
+      .select("capitalProgramId balance creditSpreadBps")
+      .lean<
+        Array<{
+          capitalProgramId: { toString: () => string };
+          balance: { toString: () => string };
+          creditSpreadBps?: number;
+        }>
+      >();
+    const aggByProgram = new Map<string, { totalBalance: number; wSpread: number; wBal: number }>();
+    for (const l of underlyingLoans) {
+      const pid2 = l.capitalProgramId.toString();
+      const bal = Number(l.balance.toString());
+      const agg = aggByProgram.get(pid2) ?? { totalBalance: 0, wSpread: 0, wBal: 0 };
+      agg.totalBalance += bal;
+      if (l.creditSpreadBps !== undefined) {
+        agg.wSpread += bal * l.creditSpreadBps;
+        agg.wBal += bal;
+      }
+      aggByProgram.set(pid2, agg);
+    }
+    underlyingSnapshots = underlyingDocs.map((u) => {
+      const agg = aggByProgram.get(u._id.toString()) ?? { totalBalance: 0, wSpread: 0, wBal: 0 };
+      const assetWasBps = agg.wBal > 0 ? agg.wSpread / agg.wBal : 0;
+      const programRow: ProgramRow = {
+        _id: u._id.toString(),
+        name: u.name,
+        type: u.type,
+        dealSize: u.dealSize ? { toString: () => u.dealSize!.toString() } : undefined,
+        faceValuePerNote: u.faceValuePerNote
+          ? { toString: () => u.faceValuePerNote!.toString() }
+          : undefined,
+        startPeriodKey: u.startPeriodKey,
+        endPeriodKey: u.endPeriodKey,
+        notes: u.notes,
+        fees: u.fees.map((f) => ({
+          _id: f._id.toString(),
+          name: f.name,
+          category: f.category,
+          basisAmount: { toString: () => f.basisAmount.toString() },
+          feeBps: f.feeBps,
+          accountCode: f.accountCode,
+        })),
+        liabilities: (u.liabilities ?? []).map((l) => ({
+          _id: l._id.toString(),
+          name: l.name,
+          numNotes: l.numNotes,
+          returnProfileBps: l.returnProfileBps,
+          calculationMethod: l.calculationMethod,
+          rateType: l.rateType,
+          accountCode: l.accountCode,
+        })),
+        upfrontFees: (u.upfrontFees ?? []).map((f) => ({
+          _id: f._id.toString(),
+          name: f.name,
+          category: f.category,
+          amount: { toString: () => f.amount.toString() },
+          accountCode: f.accountCode,
+        })),
+        rampUpMonths: u.rampUpMonths,
+        amortisationMonths: u.amortisationMonths,
+      };
+      return { program: programRow, totalBalance: agg.totalBalance, assetWasBps };
+    });
+  }
 
   const program: ProgramRow = {
     _id: programDoc._id.toString(),
@@ -269,11 +366,24 @@ export default async function ProgramDetailPage({ params, searchParams }: Params
     }
   }
 
-  const tab: ProgramTabKey = PROGRAM_TABS.some((t) => t.key === rawTab)
+  const requestedTab = PROGRAM_TABS.some((t) => t.key === rawTab)
     ? (rawTab as ProgramTabKey)
     : "overview";
+  // return-profile is only available on MIT_FUND programs; redirect others
+  // back to overview so the URL never ends up on a hidden tab.
+  const tab: ProgramTabKey =
+    requestedTab === "return-profile" && programDoc.type !== "MIT_FUND" ? "overview" : requestedTab;
 
   const baseRateBps = scenario.baseRateBps ?? 0;
+
+  const returnProfile = isMitFund
+    ? buildReturnProfileData({
+        fund: program,
+        underlying: underlyingSnapshots,
+        baseRateBps,
+        firstYearLabel: scenario.firstYearLabel ?? 2026,
+      })
+    : null;
 
   const programAnnual = new Decimal(
     program.fees.reduce((acc, f) => acc + (Number(f.basisAmount.toString()) * f.feeBps) / 10000, 0),
@@ -365,7 +475,12 @@ export default async function ProgramDetailPage({ params, searchParams }: Params
         </div>
       </div>
 
-      <ProgramDetailTabBar scenarioId={id} programId={pid} active={tab} />
+      <ProgramDetailTabBar
+        scenarioId={id}
+        programId={pid}
+        active={tab}
+        showReturnProfile={isMitFund}
+      />
 
       <main className="overflow-auto">
         {tab === "overview" && (
@@ -403,6 +518,7 @@ export default async function ProgramDetailPage({ params, searchParams }: Params
             baseRateBps={baseRateBps}
           />
         )}
+        {tab === "return-profile" && returnProfile && <ReturnProfileTab data={returnProfile} />}
       </main>
     </div>
   );
