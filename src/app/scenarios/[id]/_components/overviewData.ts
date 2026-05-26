@@ -1,4 +1,4 @@
-// Server-safe types + builder for the Overview tab.
+// Server-safe types + builders for the Overview tab.
 // The OverviewTab renderer is a client component ("use client"); keeping the
 // types and the pure data builder in this separate module lets page.tsx call
 // buildOverviewData() server-side without dragging the client bundle in.
@@ -189,6 +189,108 @@ export function buildOverviewData(
       tax: sum(tax),
       netIncome: sum(netIncome),
     },
+  };
+}
+
+// ── Operational KPIs ───────────────────────────────────────────────────────
+//
+// Headline metrics that describe the business as an operation — not the GAAP
+// profit cascade. Computed per calendar year from the same FY groups used by
+// the P&L, then surfaced as a second tile strip + a small details section on
+// the Overview tab.
+//
+// Definitions:
+//   * loanCountByYear     — average # of loans active each month in the CY
+//   * peakLoanCountByYear — max # active in any month of the CY (book size)
+//   * newLoanCountByYear  — loans whose origination month falls inside the CY
+//   * aumByYear           — average outstanding loan balance across CY months
+//   * fteByYear           — average FTE across CY months (sum of ftePct)
+//
+// Loan balances are treated as static — same convention the rest of the app
+// uses for the loan book (the per-loan `balance` field). Once a real amortising
+// outstanding-balance series exists, swap that in here.
+
+export interface OperationalKPIs {
+  fys: number[];
+  loanCountByYear: number[];
+  peakLoanCountByYear: number[];
+  newLoanCountByYear: number[];
+  aumByYear: number[];
+  fteByYear: number[];
+}
+
+interface OpsLoanInput {
+  originationPeriodKey: string;
+  maturityPeriodKey: string;
+  balance: string;
+}
+
+interface OpsHeadcountInput {
+  startPeriodKey: string;
+  endPeriodKey?: string;
+  ftePct?: string;
+}
+
+export function buildOperationalKPIs(
+  groups: { fy: number; months: string[] }[],
+  loans: OpsLoanInput[],
+  headcount: OpsHeadcountInput[],
+): OperationalKPIs {
+  const loanCountByYear: number[] = [];
+  const peakLoanCountByYear: number[] = [];
+  const newLoanCountByYear: number[] = [];
+  const aumByYear: number[] = [];
+  const fteByYear: number[] = [];
+
+  for (const g of groups) {
+    const months = g.months;
+    const monthCount = months.length || 1;
+    let loanMonthSum = 0;
+    let balanceMonthSum = 0;
+    let peakCount = 0;
+    let fteMonthSum = 0;
+
+    for (const m of months) {
+      let activeLoans = 0;
+      let activeBalance = 0;
+      for (const l of loans) {
+        if (l.originationPeriodKey <= m && m <= l.maturityPeriodKey) {
+          activeLoans += 1;
+          activeBalance += Number(l.balance);
+        }
+      }
+      loanMonthSum += activeLoans;
+      balanceMonthSum += activeBalance;
+      if (activeLoans > peakCount) peakCount = activeLoans;
+
+      let fte = 0;
+      for (const h of headcount) {
+        const end = h.endPeriodKey ?? "9999-12";
+        if (h.startPeriodKey <= m && m <= end) {
+          fte += Number(h.ftePct ?? "1");
+        }
+      }
+      fteMonthSum += fte;
+    }
+
+    let newCount = 0;
+    const monthSet = new Set(months);
+    for (const l of loans) if (monthSet.has(l.originationPeriodKey)) newCount += 1;
+
+    loanCountByYear.push(loanMonthSum / monthCount);
+    peakLoanCountByYear.push(peakCount);
+    newLoanCountByYear.push(newCount);
+    aumByYear.push(balanceMonthSum / monthCount);
+    fteByYear.push(fteMonthSum / monthCount);
+  }
+
+  return {
+    fys: groups.map((g) => g.fy),
+    loanCountByYear,
+    peakLoanCountByYear,
+    newLoanCountByYear,
+    aumByYear,
+    fteByYear,
   };
 }
 
