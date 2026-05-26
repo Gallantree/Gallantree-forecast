@@ -3188,7 +3188,25 @@ Please assess whether this deal is on-market, attractive, rich or below market f
         "recommendation",
       ],
     },
-    parse: (input: unknown): MarketTestResult => input as MarketTestResult,
+    parse: (input: unknown): MarketTestResult => {
+      const r = input as Record<string, unknown>;
+      const toArr = (v: unknown): string[] =>
+        Array.isArray(v) ? v.map(String) : typeof v === "string" ? [v] : [];
+      return {
+        verdict: r.verdict as MarketTestResult["verdict"],
+        verdictLabel: String(r.verdictLabel ?? ""),
+        confidence: r.confidence as MarketTestResult["confidence"],
+        summary: String(r.summary ?? ""),
+        valuationCommentary: String(r.valuationCommentary ?? ""),
+        structureCommentary: String(r.structureCommentary ?? ""),
+        keyStrengths: toArr(r.keyStrengths),
+        keyRisks: toArr(r.keyRisks),
+        comparableDeals: Array.isArray(r.comparableDeals)
+          ? (r.comparableDeals as MarketTestResult["comparableDeals"])
+          : [],
+        recommendation: String(r.recommendation ?? ""),
+      };
+    },
   };
 
   const systemPrompt = `You are a senior investment analyst specialising in Australian private markets and fintech. Gallantree is an Australian commercial real estate (CRE) lending platform and fund manager. It originates and manages CRE CLO, CMBS, warehouse, and MIT fund structures. The company earns fees from CRE loan origination, management fees across fund structures, and servicing income. The current capital raise (e.g. Series A) is intended to fund platform buildout, tech infrastructure, and working capital to support loan book origination growth.

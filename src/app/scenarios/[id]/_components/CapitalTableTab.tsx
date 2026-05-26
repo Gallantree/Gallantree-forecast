@@ -197,7 +197,11 @@ export function CapitalTableTab({
         <div className="grid grid-cols-4 divide-x divide-zinc-200 border-b border-zinc-200 bg-white">
           <Metric label="Total shareholders" value={String(shareholders.length)} />
           <Metric label="Total shares issued" value={fmt(totalShares)} />
-          <Metric label="Total paid-in capital" value={`$${fmtMoney(totalPaidIn)}`} />
+          <Metric
+            label="Total capital raised"
+            value={fmtM(totalCapitalRaised)}
+            sub={`$${fmtMoney(totalPaidIn)} share register + ${fmtM(totalFunded)} funded raises`}
+          />
           <SharePriceMetric
             currentPrice={currentPrice}
             onChange={setCurrentPrice}
@@ -237,7 +241,11 @@ export function CapitalTableTab({
         <div className="grid grid-cols-4 divide-x divide-zinc-200 border-b border-zinc-200 bg-white">
           <Metric label="Shareholders" value={String(shareholders.length)} />
           <Metric label="Founding shares" value={fmt(totalShares)} />
-          <Metric label="Total paid-in capital" value={`$${fmtMoney(totalPaidIn)}`} />
+          <Metric
+            label="Total capital raised"
+            value={fmtM(totalCapitalRaised)}
+            sub={`$${fmtMoney(totalPaidIn)} register + ${fmtM(totalFunded)} funded`}
+          />
           <SharePriceMetric
             currentPrice={currentPrice}
             onChange={setCurrentPrice}
@@ -249,7 +257,11 @@ export function CapitalTableTab({
         <div className="grid grid-cols-4 divide-x divide-zinc-200 border-b border-zinc-200 bg-white">
           <Metric label="Capital raises" value={String(raises.length)} />
           <Metric label="Total shares on issue" value={fmt(totalShares)} />
-          <Metric label="Total paid-in capital" value={`$${fmtMoney(totalPaidIn)}`} />
+          <Metric
+            label="Total capital raised"
+            value={fmtM(totalCapitalRaised)}
+            sub={`$${fmtMoney(totalPaidIn)} register + ${fmtM(totalFunded)} funded`}
+          />
           <SharePriceMetric
             currentPrice={currentPrice}
             onChange={setCurrentPrice}
@@ -2179,7 +2191,7 @@ function MarketTestView({
               </div>
 
               {/* Comparable deals */}
-              {result.comparableDeals.length > 0 && (
+              {(result.comparableDeals ?? []).length > 0 && (
                 <div>
                   <p className={SECTION_HDR}>Comparable Deals</p>
                   <table className="w-full border-collapse text-[11px]">
@@ -2200,7 +2212,7 @@ function MarketTestView({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-100">
-                      {result.comparableDeals.map((c, i) => (
+                      {(result.comparableDeals ?? []).map((c, i) => (
                         <tr key={i} className="hover:bg-zinc-50/60">
                           <td className="py-1.5 font-medium text-zinc-800">{c.company}</td>
                           <td className="py-1.5 text-zinc-500">{c.stage}</td>
