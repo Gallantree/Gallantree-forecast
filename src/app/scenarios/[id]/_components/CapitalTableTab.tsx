@@ -254,14 +254,9 @@ export function CapitalTableTab({
         </div>
       )}
       {internalTab === "market-test" && (
-        <div className="grid grid-cols-4 divide-x divide-zinc-200 border-b border-zinc-200 bg-white">
+        <div className="grid grid-cols-3 divide-x divide-zinc-200 border-b border-zinc-200 bg-white">
           <Metric label="Capital raises" value={String(raises.length)} />
           <Metric label="Total shares on issue" value={fmt(totalShares)} />
-          <Metric
-            label="Total capital raised"
-            value={fmtM(totalCapitalRaised)}
-            sub={`$${fmtMoney(totalPaidIn)} register + ${fmtM(totalFunded)} funded`}
-          />
           <SharePriceMetric
             currentPrice={currentPrice}
             onChange={setCurrentPrice}
