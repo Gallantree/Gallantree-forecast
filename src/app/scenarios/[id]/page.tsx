@@ -62,7 +62,13 @@ import {
   ProgramsTab,
 } from "./_components/ProgramsTab";
 import { buildProgramAnalysisData } from "./_components/programAnalysisData";
+import { ScenarioAnalysisModal } from "./_components/ScenarioAnalysisModal";
 import { type PaybandRow, StaffingTab, type StaffRow } from "./_components/StaffingTab";
+import {
+  buildScenarioComparison,
+  computeScenarioSnapshot,
+  type ScenarioSnapshot,
+} from "./_components/scenarioComparison";
 import { defaultTabFor, isTabKeyForMode, TabBar, type TabKey } from "./_components/TabBar";
 import {
   type UofCapexDriver,
@@ -135,6 +141,9 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
     name: string;
     status: string;
     viewMode?: "all" | "gallantree";
+    isBase?: boolean;
+    parentId?: { toString: () => string };
+    organisationId?: { toString: () => string };
     defaultCpiPct?: { toString: () => string };
     defaultSuperPct?: { toString: () => string };
     loanBookGrowthPctByYear?: Array<{ toString: () => string }>;
@@ -897,6 +906,48 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
           aumByYear: operationalData?.aumByYear,
         })
       : null;
+  // Scenario Analysis modal: compare against the base scenario for the same
+  // viewMode (or this scenario's explicit parent, if it has one). Skip when
+  // *this* scenario is the base — there's nothing to compare against.
+  let baseScenarioId: string | null = null;
+  if (!scenario.isBase) {
+    // Scope to the current scenario's tenant + active records so the modal
+    // can't surface another organisation's base or a soft-deleted one. When
+    // the scenario itself has no organisationId (legacy/unscoped seed data),
+    // match base candidates with the same unscoped shape.
+    const tenantFilter: Record<string, unknown> = scenario.organisationId
+      ? { organisationId: new Types.ObjectId(scenario.organisationId.toString()) }
+      : { organisationId: { $in: [null, undefined] } };
+    if (scenario.parentId) {
+      const parent = await Scenario.findOne({
+        _id: scenario.parentId,
+        deletedAt: null,
+        ...tenantFilter,
+      })
+        .select({ _id: 1 })
+        .lean<{ _id: { toString: () => string } } | null>();
+      if (parent) baseScenarioId = parent._id.toString();
+    }
+    if (!baseScenarioId) {
+      const base = await Scenario.findOne({
+        viewMode: viewMode,
+        isBase: true,
+        deletedAt: null,
+        _id: { $ne: id },
+        ...tenantFilter,
+      })
+        .select({ _id: 1 })
+        .lean<{ _id: { toString: () => string } } | null>();
+      if (base) baseScenarioId = base._id.toString();
+    }
+  }
+  const [currentSnapshot, baseSnapshot]: [ScenarioSnapshot | null, ScenarioSnapshot | null] =
+    baseScenarioId
+      ? await Promise.all([computeScenarioSnapshot(id), computeScenarioSnapshot(baseScenarioId)])
+      : [null, null];
+  const scenarioComparison =
+    currentSnapshot && baseSnapshot ? buildScenarioComparison(baseSnapshot, currentSnapshot) : null;
+
   const effectiveBalanceSheetData = gallantreeStatements?.balanceSheet ?? balanceSheetData;
   const effectiveCashflowData = gallantreeStatements?.cashflow ?? cashflowData;
   const effectiveValuationData = gallantreeStatements?.valuation ?? valuationData;
@@ -1042,7 +1093,8 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
             {viewMode === "gallantree" ? "Gallantree view" : "All"}
           </span>
         </div>
-        <div className="flex items-center gap-6 text-xs">
+        <div className="flex items-center gap-3 text-xs">
+          {scenario.isBase ? null : <ScenarioAnalysisModal data={scenarioComparison} />}
           <div className="ml-2 border-l border-zinc-200 pl-4">
             <UserMenu user={me} />
           </div>

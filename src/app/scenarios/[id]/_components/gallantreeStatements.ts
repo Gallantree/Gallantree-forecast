@@ -79,6 +79,120 @@ interface GallantreeStatements {
   valuation: ValuationData;
 }
 
+export interface GallantreeMonthlyView {
+  revenueTotals: MonthlyValue[];
+  ebitda: MonthlyValue[];
+  ebit: MonthlyValue[];
+  netIncome: MonthlyValue[];
+  netCashMovement: MonthlyValue[];
+  equity: MonthlyValue[];
+}
+
+// Re-derive the Gallantree-only per-month series from engine output. Mirrors
+// the in-line logic used by `buildGallantreeStatements` so both the modal and
+// the existing BS/CF/Valuation tabs see the same numbers. The standalone
+// helper exists so the Scenario Analysis snapshot can build a Gallantree
+// snapshot without dragging in BS/CF serialization.
+export function buildGallantreeMonthlyView(
+  statements: Statements,
+  scenarioAssumptions: {
+    openingCash?: string;
+    openingEquity?: string;
+  },
+): GallantreeMonthlyView {
+  const horizon = statements.horizon;
+  const pnl = statements.pnl;
+  const cf = statements.cf;
+
+  const droppedNim = new Map<string, Decimal>();
+  for (const pk of horizon) droppedNim.set(pk, ZERO);
+  for (const line of pnl.revenue.lines) {
+    if (!NIM_REVENUE_PATTERN.test(line.accountCode)) continue;
+    for (const m of line.monthly) {
+      droppedNim.set(m.periodKey, (droppedNim.get(m.periodKey) ?? ZERO).plus(m.value));
+    }
+  }
+
+  const ebitdaMap = toMap(pnl.ebitda);
+  const ebitMap = toMap(pnl.ebit);
+  const pretaxMap = toMap(pnl.pretaxIncome);
+  const taxMap = toMap(pnl.taxExpense);
+
+  const gEbitda: MonthlyValue[] = [];
+  const gEbit: MonthlyValue[] = [];
+  const gNetIncome: MonthlyValue[] = [];
+
+  for (const pk of horizon) {
+    const drop = droppedNim.get(pk) ?? ZERO;
+    const ebitda = (ebitdaMap.get(pk) ?? ZERO).minus(drop);
+    const ebit = (ebitMap.get(pk) ?? ZERO).minus(drop);
+    const pretax = ebit;
+    const origPretax = pretaxMap.get(pk) ?? ZERO;
+    const origTax = taxMap.get(pk) ?? ZERO;
+    const rate = origPretax.isZero() ? ZERO : origTax.div(origPretax);
+    const tax = pretax.times(rate);
+    const net = pretax.minus(tax);
+    gEbitda.push({ periodKey: pk, value: ebitda });
+    gEbit.push({ periodKey: pk, value: ebit });
+    gNetIncome.push({ periodKey: pk, value: net });
+  }
+
+  const gRevenueTotalsMap = new Map<string, Decimal>();
+  for (const pk of horizon) gRevenueTotalsMap.set(pk, ZERO);
+  for (const line of pnl.revenue.lines) {
+    if (NIM_REVENUE_PATTERN.test(line.accountCode)) continue;
+    for (const m of line.monthly) {
+      gRevenueTotalsMap.set(
+        m.periodKey,
+        (gRevenueTotalsMap.get(m.periodKey) ?? ZERO).plus(m.value),
+      );
+    }
+  }
+  const gRevenueTotals = fromMonthlyMap(horizon, gRevenueTotalsMap);
+
+  const changeInArMap = toMap(cf.changeInAr);
+  const changeInApMap = toMap(cf.changeInAp);
+  const changeInDeferredMap = toMap(cf.changeInDeferredRevenue);
+  const capexMap = toMap(cf.capexOutflow);
+  const issuanceAmortCfMap = toMap(cf.issuanceAmortisation);
+  const issuanceCostOutflowMap = toMap(cf.issuanceCostOutflow);
+  const equityProceedsMap = toMap(cf.equityProceeds);
+  const convertibleProceedsMap = toMap(cf.convertibleProceeds);
+  const depreciationMap = toMap(cf.depreciation);
+
+  const gNetCashMovement: MonthlyValue[] = horizon.map((pk, i) => ({
+    periodKey: pk,
+    value: gNetIncome[i].value
+      .plus(depreciationMap.get(pk) ?? ZERO)
+      .plus(issuanceAmortCfMap.get(pk) ?? ZERO)
+      .minus(changeInArMap.get(pk) ?? ZERO)
+      .plus(changeInApMap.get(pk) ?? ZERO)
+      .plus(changeInDeferredMap.get(pk) ?? ZERO)
+      .minus(capexMap.get(pk) ?? ZERO)
+      .minus(issuanceCostOutflowMap.get(pk) ?? ZERO)
+      .plus(equityProceedsMap.get(pk) ?? ZERO)
+      .plus(convertibleProceedsMap.get(pk) ?? ZERO),
+  }));
+
+  const openingCash = new Decimal(scenarioAssumptions.openingCash ?? "0");
+  const cumGNI = runningSum(gNetIncome);
+  const cumEquityProceeds = runningSum(cf.equityProceeds);
+  const openingEquity = new Decimal(scenarioAssumptions.openingEquity ?? "0").plus(openingCash);
+  const gEquity: MonthlyValue[] = horizon.map((pk, i) => ({
+    periodKey: pk,
+    value: openingEquity.plus(cumGNI[i].value).plus(cumEquityProceeds[i].value),
+  }));
+
+  return {
+    revenueTotals: gRevenueTotals,
+    ebitda: gEbitda,
+    ebit: gEbit,
+    netIncome: gNetIncome,
+    netCashMovement: gNetCashMovement,
+    equity: gEquity,
+  };
+}
+
 export function buildGallantreeStatements({
   statements,
   groups,
