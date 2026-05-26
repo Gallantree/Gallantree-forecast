@@ -15,7 +15,8 @@ import type { MonthlyValue } from "@/engine/pnl";
 import { computeStatements } from "@/engine/statements";
 import { computeValuation } from "@/engine/valuation";
 import { connectToDatabase } from "@/lib/db";
-import { Scenario } from "@/models";
+import { CapitalProgram, Scenario } from "@/models";
+import { buildGallantreeMonthlyView } from "./gallantreeStatements";
 import { buildOperationalKPIs } from "./overviewData";
 import { buildFYGroups } from "./PnlTable";
 
@@ -33,6 +34,7 @@ export interface ScenarioSnapshot {
   // Operations
   aum: number[];
   loans: number[];
+  capitalPrograms: number[];
   fte: number[];
   // Valuation: equity value at the explicit-horizon DCF and at last-year
   // multiples — collapses each method to a single number for the comparison.
@@ -50,6 +52,7 @@ export async function computeScenarioSnapshot(
     _id: { toString: () => string };
     name: string;
     status: string;
+    viewMode?: "all" | "gallantree";
     firstYearLabel?: number;
     dsoDays?: { toString: () => string };
     dpoDays?: { toString: () => string };
@@ -69,7 +72,12 @@ export async function computeScenarioSnapshot(
   }>();
   if (!scenario) return null;
 
-  const inputs = await loadEngineInputs(scenarioId);
+  const [inputs, programDocs] = await Promise.all([
+    loadEngineInputs(scenarioId),
+    CapitalProgram.find({ scenarioId })
+      .select({ startPeriodKey: 1, endPeriodKey: 1 })
+      .lean<Array<{ startPeriodKey: string; endPeriodKey?: string }>>(),
+  ]);
   const firstYear = scenario.firstYearLabel ?? 2026;
   const scenarioPeriods = buildScenarioPeriods(firstYear, FORECAST_HORIZON_MONTHS);
   const horizon = scenarioPeriods.map((p) => p.key);
@@ -113,15 +121,33 @@ export async function computeScenarioSnapshot(
     })),
   );
 
+  // When the scenario is in Gallantree view, strip NIM revenue + program-
+  // tranche interest from the cascade so the snapshot mirrors what the user
+  // sees on the Gallantree-filtered tabs. Otherwise use the raw engine output.
+  const view =
+    scenario.viewMode === "gallantree"
+      ? buildGallantreeMonthlyView(statements, {
+          openingCash: scenario.openingCash?.toString(),
+          openingEquity: scenario.openingEquity?.toString(),
+        })
+      : {
+          revenueTotals: statements.pnl.revenue.totals,
+          ebitda: statements.pnl.ebitda,
+          ebit: statements.pnl.ebit,
+          netIncome: statements.pnl.netIncome,
+          netCashMovement: statements.cf.netCashMovement,
+          equity: statements.bs.equity,
+        };
+
   const val = computeValuation(
     fyGroups,
     {
-      revenueTotals: statements.pnl.revenue.totals,
-      ebitda: statements.pnl.ebitda,
-      ebit: statements.pnl.ebit,
-      netIncome: statements.pnl.netIncome,
-      netCashMovement: statements.cf.netCashMovement,
-      equity: statements.bs.equity,
+      revenueTotals: view.revenueTotals,
+      ebitda: view.ebitda,
+      ebit: view.ebit,
+      netIncome: view.netIncome,
+      netCashMovement: view.netCashMovement,
+      equity: view.equity,
       aumByYear: ops.aumByYear,
     },
     {
@@ -153,13 +179,25 @@ export async function computeScenarioSnapshot(
     name: scenario.name,
     status: scenario.status,
     fys: fyGroups.map((g) => g.fy),
-    revenue: sumByFy(statements.pnl.revenue.totals),
-    ebitda: sumByFy(statements.pnl.ebitda),
-    ebit: sumByFy(statements.pnl.ebit),
-    netIncome: sumByFy(statements.pnl.netIncome),
-    fcf: sumByFy(statements.cf.netCashMovement),
+    revenue: sumByFy(view.revenueTotals),
+    ebitda: sumByFy(view.ebitda),
+    ebit: sumByFy(view.ebit),
+    netIncome: sumByFy(view.netIncome),
+    fcf: sumByFy(view.netCashMovement),
     aum: ops.aumByYear,
     loans: ops.loanCountByYear,
+    // A program is "active" in a CY if any of its months overlap the CY.
+    // Open-ended programs (no endPeriodKey) are treated as active forever
+    // once they've started.
+    capitalPrograms: fyGroups.map((g) => {
+      let count = 0;
+      for (const p of programDocs) {
+        const end = p.endPeriodKey ?? "9999-12";
+        const overlaps = g.months.some((m) => p.startPeriodKey <= m && m <= end);
+        if (overlaps) count += 1;
+      }
+      return count;
+    }),
     fte: ops.fteByYear,
     dcfEquity5y: lastDcf ? Number(lastDcf.equityValue.toFixed(2)) : 0,
     evEbitdaEquityLast: lastEvEbitda ? Number(lastEvEbitda.equityValue.toFixed(2)) : 0,
@@ -232,6 +270,13 @@ export function buildScenarioComparison(
           "peak",
         ),
         stockRow("Loans on book (avg)", "decimal", slice(base.loans), slice(current.loans), "peak"),
+        stockRow(
+          "Capital programs (active)",
+          "integer",
+          slice(base.capitalPrograms),
+          slice(current.capitalPrograms),
+          "peak",
+        ),
         stockRow("FTE (avg)", "decimal", slice(base.fte), slice(current.fte), "avg"),
       ],
     },

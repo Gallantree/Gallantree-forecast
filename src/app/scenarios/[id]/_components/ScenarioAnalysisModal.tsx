@@ -196,7 +196,14 @@ function MetricRows({
   baseName: string;
   currentName: string;
 }) {
-  const cols = row.scalarOnly ? 0 : fys.length;
+  // Scalar rows still emit a cell per CY (rendered as a dash) so the column
+  // grid stays aligned with the flow/stock rows above. The scalar value
+  // itself lives in the Total column.
+  const dash = (
+    <span key={"dash"} className="text-zinc-300">
+      —
+    </span>
+  );
   return (
     <>
       <tr className="border-t-2 border-zinc-300 bg-white">
@@ -212,9 +219,13 @@ function MetricRows({
         <td className="border-b border-zinc-100 px-3 py-1.5 text-xs text-zinc-500" title={baseName}>
           Base
         </td>
-        {row.scalarOnly ? null : (
-          <>
-            {row.base.map((v, i) => (
+        {row.scalarOnly
+          ? fys.map((fy) => (
+              <td key={fy} className="border-b border-zinc-100 px-3 py-1.5 text-right tabular-nums">
+                {dash}
+              </td>
+            ))
+          : row.base.map((v, i) => (
               <td
                 key={i}
                 className="border-b border-zinc-100 px-3 py-1.5 text-right tabular-nums text-zinc-600"
@@ -222,12 +233,7 @@ function MetricRows({
                 {formatValue(v, row.format)}
               </td>
             ))}
-          </>
-        )}
-        <td
-          colSpan={row.scalarOnly ? cols + 1 : 1}
-          className="border-b border-l border-zinc-200 bg-zinc-50 px-3 py-1.5 text-right font-semibold tabular-nums text-zinc-700"
-        >
+        <td className="border-b border-l border-zinc-200 bg-zinc-50 px-3 py-1.5 text-right font-semibold tabular-nums text-zinc-700">
           {formatValue(row.baseTotal, row.format)}
         </td>
       </tr>
@@ -238,9 +244,13 @@ function MetricRows({
         >
           Current
         </td>
-        {row.scalarOnly ? null : (
-          <>
-            {row.current.map((v, i) => (
+        {row.scalarOnly
+          ? fys.map((fy) => (
+              <td key={fy} className="border-b border-zinc-100 px-3 py-1.5 text-right tabular-nums">
+                {dash}
+              </td>
+            ))
+          : row.current.map((v, i) => (
               <td
                 key={i}
                 className="border-b border-zinc-100 px-3 py-1.5 text-right tabular-nums text-zinc-900"
@@ -248,28 +258,22 @@ function MetricRows({
                 {formatValue(v, row.format)}
               </td>
             ))}
-          </>
-        )}
-        <td
-          colSpan={row.scalarOnly ? cols + 1 : 1}
-          className="border-b border-l border-zinc-200 bg-zinc-50 px-3 py-1.5 text-right font-semibold tabular-nums text-zinc-900"
-        >
+        <td className="border-b border-l border-zinc-200 bg-zinc-50 px-3 py-1.5 text-right font-semibold tabular-nums text-zinc-900">
           {formatValue(row.currentTotal, row.format)}
         </td>
       </tr>
       <tr className="bg-zinc-50">
         <td className="border-b border-zinc-200 px-3 py-1.5 text-xs italic text-zinc-500">Δ</td>
-        {row.scalarOnly ? null : (
-          <>
-            {row.current.map((v, i) => (
+        {row.scalarOnly
+          ? fys.map((fy) => (
+              <td key={fy} className="border-b border-zinc-200 px-3 py-1.5 text-right tabular-nums">
+                {dash}
+              </td>
+            ))
+          : row.current.map((v, i) => (
               <DeltaCell key={i} base={row.base[i] ?? 0} current={v} format={row.format} />
             ))}
-          </>
-        )}
-        <td
-          colSpan={row.scalarOnly ? cols + 1 : 1}
-          className="border-b border-l border-zinc-200 bg-zinc-100 px-3 py-1.5 text-right font-semibold"
-        >
+        <td className="border-b border-l border-zinc-200 bg-zinc-100 px-3 py-1.5 text-right font-semibold">
           <DeltaCellContent base={row.baseTotal} current={row.currentTotal} format={row.format} />
         </td>
       </tr>
