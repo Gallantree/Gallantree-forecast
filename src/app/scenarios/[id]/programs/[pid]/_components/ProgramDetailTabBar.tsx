@@ -2,9 +2,15 @@
 
 import Link from "next/link";
 
-type ProgramTabKey = "overview" | "loan-book" | "liabilities" | "waterfall" | "bond-economics";
+type ProgramTabKey =
+  | "overview"
+  | "loan-book"
+  | "liabilities"
+  | "waterfall"
+  | "bond-economics"
+  | "return-profile";
 
-const PROGRAM_TABS: { key: ProgramTabKey; label: string }[] = [
+const BASE_TABS: { key: ProgramTabKey; label: string }[] = [
   { key: "overview", label: "Overview" },
   { key: "loan-book", label: "Loan Book" },
   { key: "liabilities", label: "Liabilities" },
@@ -16,14 +22,19 @@ export function ProgramDetailTabBar({
   scenarioId,
   programId,
   active,
+  showReturnProfile = false,
 }: {
   scenarioId: string;
   programId: string;
   active: ProgramTabKey;
+  showReturnProfile?: boolean;
 }) {
+  const tabs = showReturnProfile
+    ? [...BASE_TABS, { key: "return-profile" as ProgramTabKey, label: "Return Profile" }]
+    : BASE_TABS;
   return (
     <nav className="flex items-stretch gap-px overflow-x-auto border-b border-zinc-300 bg-zinc-100 px-2">
-      {PROGRAM_TABS.map((t) => {
+      {tabs.map((t) => {
         const isActive = t.key === active;
         return (
           <Link
