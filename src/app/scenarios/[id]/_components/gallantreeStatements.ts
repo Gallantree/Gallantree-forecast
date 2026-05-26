@@ -98,6 +98,7 @@ export function buildGallantreeMonthlyView(
   scenarioAssumptions: {
     openingCash?: string;
     openingEquity?: string;
+    taxRatePct?: string;
   },
 ): GallantreeMonthlyView {
   const horizon = statements.horizon;
@@ -115,8 +116,14 @@ export function buildGallantreeMonthlyView(
 
   const ebitdaMap = toMap(pnl.ebitda);
   const ebitMap = toMap(pnl.ebit);
-  const pretaxMap = toMap(pnl.pretaxIncome);
-  const taxMap = toMap(pnl.taxExpense);
+
+  // Tax rule mirrors the engine: max(0, pretax) × rate, applied directly to
+  // the Gallantree pretax. The earlier "preserve implied per-month rate"
+  // approach broke down when NIM revenue made the *original* pretax positive
+  // (rate kicks in) while the Gallantree pretax was deeply negative for the
+  // same month — that produced large negative tax (effectively a refund)
+  // and inflated net income. Recomputing from Gallantree pretax fixes it.
+  const taxRate = new Decimal(scenarioAssumptions.taxRatePct ?? "0").div(100);
 
   const gEbitda: MonthlyValue[] = [];
   const gEbit: MonthlyValue[] = [];
@@ -127,10 +134,7 @@ export function buildGallantreeMonthlyView(
     const ebitda = (ebitdaMap.get(pk) ?? ZERO).minus(drop);
     const ebit = (ebitMap.get(pk) ?? ZERO).minus(drop);
     const pretax = ebit;
-    const origPretax = pretaxMap.get(pk) ?? ZERO;
-    const origTax = taxMap.get(pk) ?? ZERO;
-    const rate = origPretax.isZero() ? ZERO : origTax.div(origPretax);
-    const tax = pretax.times(rate);
+    const tax = pretax.gt(0) ? pretax.times(taxRate) : ZERO;
     const net = pretax.minus(tax);
     gEbitda.push({ periodKey: pk, value: ebitda });
     gEbit.push({ periodKey: pk, value: ebit });
@@ -239,10 +243,15 @@ export function buildGallantreeStatements({
 
   const ebitdaMap = toMap(pnl.ebitda);
   const ebitMap = toMap(pnl.ebit);
-  const pretaxMap = toMap(pnl.pretaxIncome);
-  const taxMap = toMap(pnl.taxExpense);
 
-  // Recompute Gallantree cascade per month.
+  // Recompute Gallantree cascade per month. Tax mirrors the engine rule —
+  // max(0, pretax) × taxRatePct — applied directly to the Gallantree pretax
+  // rather than implied from the original cascade. The previous "preserve
+  // implied rate" approach broke down when NIM revenue made the original
+  // pretax positive (rate kicks in) but the Gallantree pretax was deeply
+  // negative for the same month, producing nonsense negative tax that
+  // inflated net income.
+  const taxRate = new Decimal(scenarioAssumptions.taxRatePct ?? "0").div(100);
   const gEbitda: MonthlyValue[] = [];
   const gEbit: MonthlyValue[] = [];
   const gPretax: MonthlyValue[] = [];
@@ -259,12 +268,7 @@ export function buildGallantreeStatements({
     const ebit = (ebitMap.get(pk) ?? ZERO).minus(drop);
     // No program-tranche interest in the Gallantree view.
     const pretax = ebit;
-    // Preserve the original implied effective tax rate so the cascade stays
-    // internally consistent with the standard P&L.
-    const origPretax = pretaxMap.get(pk) ?? ZERO;
-    const origTax = taxMap.get(pk) ?? ZERO;
-    const rate = origPretax.isZero() ? ZERO : origTax.div(origPretax);
-    const tax = pretax.times(rate);
+    const tax = pretax.gt(0) ? pretax.times(taxRate) : ZERO;
     const net = pretax.minus(tax);
     gEbitda.push({ periodKey: pk, value: ebitda });
     gEbit.push({ periodKey: pk, value: ebit });

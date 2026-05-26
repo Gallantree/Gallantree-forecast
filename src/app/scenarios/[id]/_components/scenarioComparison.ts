@@ -129,6 +129,7 @@ export async function computeScenarioSnapshot(
       ? buildGallantreeMonthlyView(statements, {
           openingCash: scenario.openingCash?.toString(),
           openingEquity: scenario.openingEquity?.toString(),
+          taxRatePct: scenario.taxRatePct?.toString(),
         })
       : {
           revenueTotals: statements.pnl.revenue.totals,
