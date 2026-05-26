@@ -84,6 +84,7 @@ export function buildGallantreeStatements({
   groups,
   scenarioAssumptions,
   valuationAssumptions,
+  aumByYear,
 }: {
   statements: Statements;
   groups: FYGroup[];
@@ -102,7 +103,9 @@ export function buildGallantreeStatements({
     peMultiple?: string;
     netDebt?: string;
     pbMultiple?: string;
+    aumOfMultiplePct?: string;
   };
+  aumByYear?: number[];
 }): GallantreeStatements {
   const horizon = statements.horizon;
   const pnl = statements.pnl;
@@ -325,6 +328,7 @@ export function buildGallantreeStatements({
       netIncome: gNetIncome,
       netCashMovement: gNetCashMovement,
       equity: gEquity,
+      aumByYear,
     },
     valuationAssumptions,
   );
@@ -376,6 +380,13 @@ export function buildGallantreeStatements({
       enterpriseValue: m.enterpriseValue.toFixed(2),
       equityValue: m.equityValue.toFixed(2),
     })),
+    evAum: v.evAum.map((m) => ({
+      fy: m.fy,
+      metric: m.metric.toFixed(2),
+      multiple: m.multiple.toFixed(2),
+      enterpriseValue: m.enterpriseValue.toFixed(2),
+      equityValue: m.equityValue.toFixed(2),
+    })),
     assumptions: {
       waccPct: v.assumptions.waccPct.toFixed(2),
       terminalGrowthPct: v.assumptions.terminalGrowthPct.toFixed(2),
@@ -384,6 +395,7 @@ export function buildGallantreeStatements({
       peMultiple: v.assumptions.peMultiple.toFixed(2),
       netDebt: v.assumptions.netDebt.toFixed(2),
       pbMultiple: v.assumptions.pbMultiple.toFixed(2),
+      aumOfMultiplePct: v.assumptions.aumOfMultiplePct.toFixed(2),
     },
   };
 

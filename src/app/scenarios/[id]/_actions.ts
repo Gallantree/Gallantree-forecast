@@ -703,6 +703,7 @@ export type ValuationAssumptionsPayload = {
   peMultiple?: string;
   netDebt?: string;
   pbMultiple?: string;
+  aumOfMultiplePct?: string;
 };
 
 export async function updateValuationAssumptions(
@@ -722,6 +723,7 @@ export async function updateValuationAssumptions(
     "peMultiple",
     "netDebt",
     "pbMultiple",
+    "aumOfMultiplePct",
   ];
   for (const f of fields) {
     const v = payload[f];

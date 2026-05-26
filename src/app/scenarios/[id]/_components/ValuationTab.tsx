@@ -42,6 +42,7 @@ export interface ValuationData {
   evRevenue: ValuationMultipleRow[];
   pe: ValuationMultipleRow[];
   pb: ValuationMultipleRow[];
+  evAum: ValuationMultipleRow[];
   assumptions: ValuationAssumptionsView;
 }
 
@@ -51,11 +52,12 @@ export function ValuationTab({ scenarioId, data }: { scenarioId: string; data: V
   const lastEvRevenue = data.evRevenue[data.evRevenue.length - 1];
   const lastPe = data.pe[data.pe.length - 1];
   const lastPb = data.pb[data.pb.length - 1];
+  const lastEvAum = data.evAum[data.evAum.length - 1];
 
   return (
     <div className="flex h-full flex-col bg-white">
       {/* Headline tiles */}
-      <div className="grid grid-cols-5 gap-px border-b border-zinc-200 bg-zinc-200">
+      <div className="grid grid-cols-6 gap-px border-b border-zinc-200 bg-zinc-200">
         <Tile
           label={`DCF · ${lastDcf.horizonYears}y horizon`}
           value={fmtMoney2(lastDcf.equityValue)}
@@ -82,6 +84,11 @@ export function ValuationTab({ scenarioId, data }: { scenarioId: string; data: V
           value={fmtMoney2(lastPb.equityValue)}
           sub={`${data.assumptions.pbMultiple}x · BV ${fmtMoney2(lastPb.metric)}`}
         />
+        <Tile
+          label={`% of AUM · CY${String(lastEvAum.fy).slice(-2)}`}
+          value={fmtMoney2(lastEvAum.equityValue)}
+          sub={`${data.assumptions.aumOfMultiplePct}% · AUM ${fmtMoney2(lastEvAum.metric)}`}
+        />
       </div>
 
       {/* Assumptions banner */}
@@ -92,6 +99,7 @@ export function ValuationTab({ scenarioId, data }: { scenarioId: string; data: V
         <Stat label="EV/Revenue" value={`${data.assumptions.evRevenueMultiple}x`} />
         <Stat label="P/E" value={`${data.assumptions.peMultiple}x`} />
         <Stat label="P/B" value={`${data.assumptions.pbMultiple}x`} />
+        <Stat label="% of AUM" value={`${data.assumptions.aumOfMultiplePct}%`} />
         <Stat label="Net debt" value={fmtMoney2(data.assumptions.netDebt)} />
         <div className="ml-auto">
           <EditValuationAssumptions
@@ -218,6 +226,13 @@ export function ValuationTab({ scenarioId, data }: { scenarioId: string; data: V
           rows={data.pb}
           equityOnly
         />
+        <MultiplesSection
+          title={`% OF AUM · ${data.assumptions.aumOfMultiplePct}% (HPS / BlackRock comp ≈ 6%)`}
+          color="bg-teal-50 text-teal-800"
+          metricLabel="AUM"
+          rows={data.evAum}
+          multipleFormatter={(v) => `${Number(v).toFixed(2)}%`}
+        />
       </div>
     </div>
   );
@@ -229,12 +244,14 @@ function MultiplesSection({
   metricLabel,
   rows,
   equityOnly = false,
+  multipleFormatter = (v) => `${Number(v).toFixed(1)}x`,
 }: {
   title: string;
   color: string;
   metricLabel: string;
   rows: ValuationMultipleRow[];
   equityOnly?: boolean;
+  multipleFormatter?: (raw: string) => string;
 }) {
   return (
     <section className="border-b border-zinc-200">
@@ -255,7 +272,7 @@ function MultiplesSection({
               <Td className="font-medium">CY{String(r.fy).slice(-2)}</Td>
               <Td className="text-right tabular-nums">{fmtMoney2(r.metric)}</Td>
               <Td className="text-right tabular-nums text-zinc-500">
-                {Number(r.multiple).toFixed(1)}x
+                {multipleFormatter(r.multiple)}
               </Td>
               {!equityOnly && (
                 <Td className="text-right font-semibold tabular-nums">
