@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import type { SeedResult } from "../_actions";
+import { SeedConfigModal, type SeedProgramConfig } from "./SeedConfigModal";
 
 type SeedAction = (scenarioId: string) => Promise<SeedResult>;
 
@@ -10,6 +11,8 @@ interface SeedOption {
   key: string;
   label: string;
   description: string;
+  // When true, clicking the item opens the config modal instead of running immediately.
+  modal?: boolean;
   // Optional — when present, used as a fallback if the streaming endpoint
   // is unreachable. The primary path is the streaming /seed route.
   action?: SeedAction;
@@ -18,11 +21,15 @@ interface SeedOption {
 // Runs the seed via the streaming route handler so Heroku's 30s router
 // timeout never fires on slow AI calls — bytes are flushed every 10s and the
 // final non-empty line is the SeedResult JSON.
-async function runStreamingSeed(scenarioId: string, kind: string): Promise<SeedResult> {
+async function runStreamingSeed(
+  scenarioId: string,
+  kind: string,
+  config?: SeedProgramConfig,
+): Promise<SeedResult> {
   const res = await fetch(`/api/scenarios/${scenarioId}/seed`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ kind }),
+    body: JSON.stringify({ kind, ...(config ? { config } : {}) }),
   });
   if (!res.ok || !res.body) {
     return { ok: false, error: `HTTP ${res.status}` };
@@ -63,13 +70,16 @@ export function SeedMenu({
   const [running, setRunning] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [toast, setToast] = useState<{ msg: string; tone: "ok" | "warn" } | null>(null);
+  // The key of the option whose config modal is currently open, or null.
+  const [activeModal, setActiveModal] = useState<string | null>(null);
 
-  function run(opt: SeedOption) {
+  function run(opt: SeedOption, config?: SeedProgramConfig) {
     setOpen(false);
+    setActiveModal(null);
     setRunning(opt.key);
     setToast({ msg: `Asking Claude to generate ${opt.label.toLowerCase()}…`, tone: "ok" });
     startTransition(async () => {
-      const res = await runStreamingSeed(scenarioId, opt.key);
+      const res = await runStreamingSeed(scenarioId, opt.key, config);
       setRunning(null);
       if (res.ok) {
         setToast({
@@ -87,6 +97,17 @@ export function SeedMenu({
       }
     });
   }
+
+  function handleOptionClick(opt: SeedOption) {
+    if (opt.modal) {
+      setOpen(false);
+      setActiveModal(opt.key);
+    } else {
+      run(opt);
+    }
+  }
+
+  const activeOpt = activeModal ? (options.find((o) => o.key === activeModal) ?? null) : null;
 
   if (!enabled) {
     return (
@@ -124,16 +145,32 @@ export function SeedMenu({
               <button
                 key={opt.key}
                 type="button"
-                onClick={() => run(opt)}
+                onClick={() => handleOptionClick(opt)}
                 className="block w-full border-b border-zinc-100 px-3 py-2 text-left last:border-b-0 hover:bg-zinc-50"
               >
-                <div className="text-xs font-semibold text-zinc-900">{opt.label}</div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-semibold text-zinc-900">{opt.label}</span>
+                  {opt.modal && (
+                    <span className="text-[10px] text-zinc-400 shrink-0">Configure ›</span>
+                  )}
+                </div>
                 <div className="text-[11px] text-zinc-500">{opt.description}</div>
               </button>
             ))}
           </div>
         </>
       )}
+
+      {/* Config modal — shown when a modal-type option is clicked */}
+      {activeOpt?.modal && (
+        <SeedConfigModal
+          typeKey={activeOpt.key as "cre-clo" | "cmbs" | "bsl" | "warehouses" | "enhanced-funds"}
+          onClose={() => setActiveModal(null)}
+          onSeed={(config) => run(activeOpt, config)}
+          running={pending && running === activeOpt.key}
+        />
+      )}
+
       {toast && (
         <div
           className={`fixed bottom-4 right-4 z-50 rounded-md px-4 py-2 text-xs font-medium shadow-lg ${

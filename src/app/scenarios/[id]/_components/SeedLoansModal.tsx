@@ -10,7 +10,7 @@ type Style = "CRE_CLO" | "CMBS";
 const STYLE_HINTS: Record<Style, string> = {
   CRE_CLO:
     "~85% Transitional · spread 270-370 bps · balance $5m-$55m · tenor 24-48 mo · LVR 55-75% · DSCR 1.05-1.40",
-  CMBS: "~90% Stabilised · spread 90-270 bps · balance $20m-$150m · tenor 60-120 mo · LVR 50-68% · DSCR 1.25-1.80",
+  CMBS: "~90% Stabilised · spread 190-300 bps · balance $5m-$75m · tenor 60-120 mo · LVR 50-68% · DSCR 1.25-1.80",
 };
 
 // Per-program defaults — a typical CRE CLO holds 35-40 loans; CMBS deals

@@ -1704,7 +1704,10 @@ async function mirrorLoansToAllBase(
   }
 }
 
-export async function seedCreCloPrograms(scenarioId: string): Promise<SeedResult> {
+export async function seedCreCloPrograms(
+  scenarioId: string,
+  userMessageOverride?: string,
+): Promise<SeedResult> {
   if (!Types.ObjectId.isValid(scenarioId)) return { ok: false, error: "invalid scenario" };
   if (!(await checkAccess(scenarioId))) return { ok: false, error: "not authorized" };
   if (!isAnthropicConfigured()) return { ok: false, error: "ANTHROPIC_API_KEY is not set" };
@@ -1712,7 +1715,7 @@ export async function seedCreCloPrograms(scenarioId: string): Promise<SeedResult
     const { programs } = await generateStructured({
       systemPrompt: CRE_CLO_SEED.systemPrompt,
       tool: CRE_CLO_SEED.tool,
-      userMessage: CRE_CLO_SEED.userMessage,
+      userMessage: userMessageOverride ?? CRE_CLO_SEED.userMessage,
       maxTokens: 16000,
     });
     await connectToDatabase();
@@ -1725,7 +1728,10 @@ export async function seedCreCloPrograms(scenarioId: string): Promise<SeedResult
   }
 }
 
-export async function seedCmbsPrograms(scenarioId: string): Promise<SeedResult> {
+export async function seedCmbsPrograms(
+  scenarioId: string,
+  userMessageOverride?: string,
+): Promise<SeedResult> {
   if (!Types.ObjectId.isValid(scenarioId)) return { ok: false, error: "invalid scenario" };
   if (!(await checkAccess(scenarioId))) return { ok: false, error: "not authorized" };
   if (!isAnthropicConfigured()) return { ok: false, error: "ANTHROPIC_API_KEY is not set" };
@@ -1733,7 +1739,7 @@ export async function seedCmbsPrograms(scenarioId: string): Promise<SeedResult> 
     const { programs } = await generateStructured({
       systemPrompt: CMBS_SEED.systemPrompt,
       tool: CMBS_SEED.tool,
-      userMessage: CMBS_SEED.userMessage,
+      userMessage: userMessageOverride ?? CMBS_SEED.userMessage,
       maxTokens: 24000,
     });
     await connectToDatabase();
@@ -1746,7 +1752,10 @@ export async function seedCmbsPrograms(scenarioId: string): Promise<SeedResult> 
   }
 }
 
-export async function seedBslPrograms(scenarioId: string): Promise<SeedResult> {
+export async function seedBslPrograms(
+  scenarioId: string,
+  userMessageOverride?: string,
+): Promise<SeedResult> {
   if (!Types.ObjectId.isValid(scenarioId)) return { ok: false, error: "invalid scenario" };
   if (!(await checkAccess(scenarioId))) return { ok: false, error: "not authorized" };
   if (!isAnthropicConfigured()) return { ok: false, error: "ANTHROPIC_API_KEY is not set" };
@@ -1754,7 +1763,7 @@ export async function seedBslPrograms(scenarioId: string): Promise<SeedResult> {
     const { programs } = await generateStructured({
       systemPrompt: BSL_SEED.systemPrompt,
       tool: BSL_SEED.tool,
-      userMessage: BSL_SEED.userMessage,
+      userMessage: userMessageOverride ?? BSL_SEED.userMessage,
       maxTokens: 16000,
     });
     await connectToDatabase();
@@ -1921,7 +1930,19 @@ export async function seedGallantreeOpex(scenarioId: string): Promise<SeedResult
  * user can adjust those selections via the holdings selector on the
  * program card.
  */
-export async function seedEnhancedIncomeFunds(scenarioId: string): Promise<SeedResult> {
+export async function seedEnhancedIncomeFunds(
+  scenarioId: string,
+  // userMessageOverride unused for this deterministic seed, but kept for
+  // consistency with the other seed functions so the route dispatch can call
+  // them all with the same signature.
+  _userMessageOverride?: string,
+  configRows?: Array<{
+    name: string;
+    dealSize: string;
+    startPeriodKey: string;
+    endPeriodKey: string;
+  }>,
+): Promise<SeedResult> {
   if (!Types.ObjectId.isValid(scenarioId)) return { ok: false, error: "invalid scenario" };
   if (!(await checkAccess(scenarioId))) return { ok: false, error: "not authorized" };
   try {
@@ -1955,41 +1976,56 @@ export async function seedEnhancedIncomeFunds(scenarioId: string): Promise<SeedR
       }
     }
 
-    const docs = GALLANTREE_ENHANCED_FUNDS.map((f) => {
-      const endYear = Number(f.startPeriodKey.slice(0, 4)) + f.termYears;
-      const endPeriodKey = `${endYear}-${f.startPeriodKey.slice(5)}`;
-      return {
-        scenarioId: scenarioOid,
-        name: f.name,
-        type: "MIT_FUND" as const,
-        dealSize: toDecimal128(String(f.dealSize)),
-        faceValuePerNote: toDecimal128("1000"),
-        startPeriodKey: f.startPeriodKey,
-        endPeriodKey,
-        notes: f.notes,
-        fees: [
-          {
-            name: "Senior management fee",
-            category: "senior_mgmt" as const,
-            basisAmount: toDecimal128(String(f.dealSize)),
-            feeBps: ENHANCED_FUND_MGMT_FEE_BPS,
-            accountCode: "4500",
-          },
-        ],
-        liabilities: [
-          {
-            name: "Units (BBSW + 700)",
-            numNotes: Math.round(f.dealSize / 1000),
-            returnProfileBps: ENHANCED_FUND_UNIT_RETURN_BPS,
-            calculationMethod: "monthly" as const,
-            rateType: "variable" as const,
-            accountCode: "6800",
-          },
-        ],
-        upfrontFees: [],
-        captiveEquityHoldings: equityHoldings,
-      };
-    });
+    // Build fund specs: use configRows when provided, otherwise fall back to
+    // the hard-coded GALLANTREE_ENHANCED_FUNDS defaults.
+    const fundSpecs =
+      configRows && configRows.length > 0
+        ? configRows.map((r) => ({
+            name: r.name,
+            dealSize: Number(r.dealSize),
+            startPeriodKey: r.startPeriodKey,
+            endPeriodKey: r.endPeriodKey,
+          }))
+        : GALLANTREE_ENHANCED_FUNDS.map((f) => ({
+            name: f.name,
+            dealSize: f.dealSize,
+            startPeriodKey: f.startPeriodKey,
+            endPeriodKey: `${Number(f.startPeriodKey.slice(0, 4)) + f.termYears}-${f.startPeriodKey.slice(5)}`,
+          }));
+
+    const docs = fundSpecs.map((f) => ({
+      scenarioId: scenarioOid,
+      name: f.name,
+      type: "MIT_FUND" as const,
+      dealSize: toDecimal128(String(f.dealSize)),
+      faceValuePerNote: toDecimal128("1000"),
+      startPeriodKey: f.startPeriodKey,
+      endPeriodKey: f.endPeriodKey,
+      notes:
+        GALLANTREE_ENHANCED_FUNDS.find((d) => d.name === f.name)?.notes ??
+        "MIS — captive vehicle holding equity tranches of Gallantree securitisations.",
+      fees: [
+        {
+          name: "Senior management fee",
+          category: "senior_mgmt" as const,
+          basisAmount: toDecimal128(String(f.dealSize)),
+          feeBps: ENHANCED_FUND_MGMT_FEE_BPS,
+          accountCode: "4500",
+        },
+      ],
+      liabilities: [
+        {
+          name: "Units (BBSW + 700)",
+          numNotes: Math.round(f.dealSize / 1000),
+          returnProfileBps: ENHANCED_FUND_UNIT_RETURN_BPS,
+          calculationMethod: "monthly" as const,
+          rateType: "variable" as const,
+          accountCode: "6800",
+        },
+      ],
+      upfrontFees: [],
+      captiveEquityHoldings: equityHoldings,
+    }));
 
     await CapitalProgram.insertMany(docs);
     revalidatePath(`/scenarios/${scenarioId}`);
@@ -1999,7 +2035,10 @@ export async function seedEnhancedIncomeFunds(scenarioId: string): Promise<SeedR
   }
 }
 
-export async function seedWarehousePrograms(scenarioId: string): Promise<SeedResult> {
+export async function seedWarehousePrograms(
+  scenarioId: string,
+  userMessageOverride?: string,
+): Promise<SeedResult> {
   if (!Types.ObjectId.isValid(scenarioId)) return { ok: false, error: "invalid scenario" };
   if (!(await checkAccess(scenarioId))) return { ok: false, error: "not authorized" };
   if (!isAnthropicConfigured()) return { ok: false, error: "ANTHROPIC_API_KEY is not set" };
@@ -2007,7 +2046,7 @@ export async function seedWarehousePrograms(scenarioId: string): Promise<SeedRes
     const { programs } = await generateStructured({
       systemPrompt: WAREHOUSE_SEED.systemPrompt,
       tool: WAREHOUSE_SEED.tool,
-      userMessage: WAREHOUSE_SEED.userMessage,
+      userMessage: userMessageOverride ?? WAREHOUSE_SEED.userMessage,
       maxTokens: 8000,
     });
     await connectToDatabase();

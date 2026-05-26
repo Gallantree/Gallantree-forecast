@@ -244,6 +244,7 @@ export function ProgramsTab({
                 description:
                   "6 CRE CLOs, fresh issuances every 5 months from Jan 2026 through Feb 2028. FL-1 matches Gallantree's anchor deal; the rest randomize dealSize and spreads within the documented bands. Includes upfront issuance costs ($500k underwriter, $900k legal, $300k ratings) per deal.",
                 action: seedCreCloPrograms,
+                modal: true,
               },
               {
                 key: "cmbs",
@@ -251,6 +252,7 @@ export function ProgramsTab({
                 description:
                   "8 CMBS deals, fresh issuances every 4 months. Programs 1-4 are CRE-backed (Jan/May/Sep 2026, Jan 2027); programs 5-8 are corporate-credit-backed with wider spreads (May/Sep 2027, Jan/May 2028).",
                 action: seedCmbsPrograms,
+                modal: true,
               },
               {
                 key: "bsl",
@@ -258,6 +260,7 @@ export function ProgramsTab({
                 description:
                   "5 BSL CLOs — broadly syndicated corporate loan securitisations, one per calendar year starting Jan 2026. Modelled with type=OTHER; 8-tranche AAA-through-B stack with Equity.",
                 action: seedBslPrograms,
+                modal: true,
               },
               {
                 key: "warehouses",
@@ -265,6 +268,7 @@ export function ProgramsTab({
                 description:
                   "3 revolving warehouse facilities: CRE Warehouse (Jan 2026, $500m), Corporate Credit Warehouse (Jan 2026, $400m), SRT Warehouse (Oct 2026, $300m). Single warehouse-line liability per facility.",
                 action: seedWarehousePrograms,
+                modal: true,
               },
               {
                 key: "enhanced-funds",
@@ -272,6 +276,7 @@ export function ProgramsTab({
                 description:
                   "Gallantree Enhanced Income Fund I ($200m, 6y) and II ($500m, 7y). MIS unit class targets BBSW + 700 bps; 50 bps mgmt fee on notes; captiveEquityHoldings auto-pre-populated with every Equity tranche currently on CRE CLO / CMBS / BSL programs in the scenario.",
                 action: seedEnhancedIncomeFunds,
+                modal: true,
               },
               {
                 key: "loan-book",

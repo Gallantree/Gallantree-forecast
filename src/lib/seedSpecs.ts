@@ -568,8 +568,8 @@ CRE CLO loans (transitional / value-add):
 
 CMBS loans (stabilised income-producing):
   - propertyStatus: "Stabilised" (~95%) or "Transitional" (~5%)
-  - creditSpreadBps: randomize 90-270 bps
-  - balance: randomize 20,000,000 to 150,000,000
+  - creditSpreadBps: randomize 190-300 bps
+  - balance: randomize 5,000,000 to 75,000,000
   - termMonths: 60-120
   - lvr: 0.50-0.68
   - dscr: 1.25-1.80
@@ -770,8 +770,8 @@ PER-LOAN PROFILE — STYLE: CRE_CLO (transitional / value-add deals)
 
 PER-LOAN PROFILE — STYLE: CMBS (stabilised income-producing)
   - propertyStatus: ~90% "Stabilised", ~10% "Transitional"
-  - creditSpreadBps: randomize integer 90-270
-  - balance: randomize 20,000,000 to 150,000,000
+  - creditSpreadBps: randomize integer 190-300
+  - balance: randomize 5,000,000 to 75,000,000
   - termMonths: 60-120
   - lvr: 0.50-0.68
   - dscr: 1.25-1.80
