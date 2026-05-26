@@ -1053,7 +1053,10 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
 
         {tab === "overview-gallantree" &&
           (overviewData ? (
-            <OverviewTab data={toGallantreeOverview(overviewData)} ops={operationalData ?? undefined} />
+            <OverviewTab
+              data={toGallantreeOverview(overviewData)}
+              ops={operationalData ?? undefined}
+            />
           ) : (
             <Stub
               title="Overview — Gallantree"

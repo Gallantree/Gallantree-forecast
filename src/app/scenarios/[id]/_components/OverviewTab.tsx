@@ -36,9 +36,10 @@ export function OverviewTab({ data, ops }: { data: OverviewData; ops?: Operation
   const peakAum = ops ? Math.max(0, ...ops.aumByYear) : 0;
   const peakLoans = ops ? Math.max(0, ...ops.peakLoanCountByYear) : 0;
   const totalNewLoans = ops ? ops.newLoanCountByYear.reduce((a, b) => a + b, 0) : 0;
-  const avgFte = ops && ops.fteByYear.length > 0
-    ? ops.fteByYear.reduce((a, b) => a + b, 0) / ops.fteByYear.length
-    : 0;
+  const avgFte =
+    ops && ops.fteByYear.length > 0
+      ? ops.fteByYear.reduce((a, b) => a + b, 0) / ops.fteByYear.length
+      : 0;
   const revPerEmp5y = avgFte > 0 ? fiveYear.revenue / (avgFte * (ops?.fys.length || 1)) : 0;
   const revPerEmpByYear = ops
     ? ops.fteByYear.map((fte, i) => (fte > 0 ? data.totals.revenue[i] / fte : 0))
