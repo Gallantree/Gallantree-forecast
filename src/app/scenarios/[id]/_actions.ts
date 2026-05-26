@@ -272,6 +272,10 @@ export async function updateStaff(
         superPct: toDecimal128(superPct),
         onCostPct: toDecimal128(onCostPct),
         salaryGrowthPctAnnual: toDecimal128(salaryGrowthPctAnnual),
+        // Mark any direct edit so Plan-growth's wipe-and-recreate spares this
+        // row. The flag is a no-op for non-growth rows (manuallyEdited only
+        // matters when isGrowth is also true) so it's cheap to always set.
+        manuallyEdited: true,
       },
       $unset: {
         ...(personName ? {} : { personName: "" }),
@@ -1446,8 +1450,33 @@ export async function setStaffGrowthTargets(scenarioId: string, targets: number[
   const cleanTargets = targets.map((n) => (Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0));
   await Scenario.updateOne({ _id: scenarioOid }, { $set: { staffTargetByYear: cleanTargets } });
 
-  // Wipe previously-generated growth placeholders so this is idempotent.
-  await Headcount.deleteMany({ scenarioId: scenarioOid, isGrowth: true });
+  // Wipe previously-generated growth placeholders so this is idempotent —
+  // but only the un-edited ones. Rows the user touched directly (via the
+  // staff table's Edit button, which sets manuallyEdited=true) are preserved
+  // and counted toward the per-CY target below.
+  await Headcount.deleteMany({
+    scenarioId: scenarioOid,
+    isGrowth: true,
+    manuallyEdited: { $ne: true },
+  });
+
+  // Surviving edited growth rows: count how many start in each forecast CY
+  // so we can credit them against that CY's target before generating fills.
+  type EditedGrowthLean = { startPeriodKey: string };
+  const editedGrowthRows = await Headcount.find({
+    scenarioId: scenarioOid,
+    isGrowth: true,
+    manuallyEdited: true,
+  })
+    .select("startPeriodKey")
+    .lean<EditedGrowthLean[]>();
+  const editedGrowthByCY = new Map<number, number>();
+  for (const r of editedGrowthRows) {
+    const cy = Number(r.startPeriodKey.slice(0, 4));
+    if (Number.isFinite(cy)) {
+      editedGrowthByCY.set(cy, (editedGrowthByCY.get(cy) ?? 0) + 1);
+    }
+  }
 
   // Reference point: today's actual headcount + the scenario's CPI/super/
   // average salary. We use the average over real staff (isGrowth != true)
@@ -1512,19 +1541,27 @@ export async function setStaffGrowthTargets(scenarioId: string, targets: number[
   const startKeyForYear = (i: number) => `${firstYearLabel + i}-01` as const;
 
   // Walk targets in order. Running total starts at today's real headcount.
-  // Each year's delta = max(0, targets[i] - running). We don't shrink staff.
+  // Each year's gap = max(0, target − running − editedGrowthThisYear) — the
+  // surviving edited growth rows fill part of the slot, fresh placeholders
+  // top up the rest. We don't shrink staff.
   const docsToCreate: Record<string, unknown>[] = [];
   let running = currentHeadcount;
   for (let yearIdx = 0; yearIdx < cleanTargets.length; yearIdx += 1) {
     const target = cleanTargets[yearIdx];
-    const delta = Math.max(0, target - running);
+    const cy = firstYearLabel + yearIdx;
+    const editedThisYear = editedGrowthByCY.get(cy) ?? 0;
+    const delta = Math.max(0, target - running - editedThisYear);
+    // End-of-year cumulative = prior running + edited rows that started this
+    // CY + any fresh placeholders we're about to add. We don't shrink staff,
+    // so this never goes below `running`.
+    running = running + editedThisYear + delta;
     if (delta === 0) continue;
     const startPeriodKey = startKeyForYear(yearIdx);
     for (let k = 1; k <= delta; k += 1) {
       docsToCreate.push({
         scenarioId: scenarioOid,
         personName: undefined,
-        role: `Growth hire #${k} — CY${String(firstYearLabel + yearIdx).slice(-2)}`,
+        role: `Growth hire #${k} — CY${String(cy).slice(-2)}`,
         accountCode: "6000",
         employmentType: "full_time",
         ftePct: toDecimal128("1"),
@@ -1536,7 +1573,6 @@ export async function setStaffGrowthTargets(scenarioId: string, targets: number[
         isGrowth: true,
       });
     }
-    running = target;
   }
 
   if (docsToCreate.length > 0) {
