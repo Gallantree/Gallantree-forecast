@@ -15,6 +15,10 @@ export interface ValuationAssumptions {
   peMultiple?: Decimal.Value;
   netDebt?: Decimal.Value;
   pbMultiple?: Decimal.Value;
+  // % of AUM applied as an enterprise-value multiple (e.g. HPS / BlackRock
+  // acquisition reportedly priced ≈6% of AUM). Stored as a percentage —
+  // i.e. 6 means EV = AUM × 0.06.
+  aumOfMultiplePct?: Decimal.Value;
 }
 
 export interface FyAggregate {
@@ -26,6 +30,10 @@ export interface FyAggregate {
   // Unlevered free cash flow = net cash movement (operating + investing) for the FY
   fcf: Money;
   closingEquity: Money;
+  // Average AUM during the FY (already aggregated upstream; loan-book level).
+  // Optional so consumers without a book — e.g. unit tests of just the P&L
+  // cascade — don't need to supply it.
+  aum?: Money;
 }
 
 export interface DcfHorizonValuation {
@@ -55,6 +63,7 @@ export interface ValuationResult {
   evRevenue: MultipleValuation[];
   pe: MultipleValuation[];
   pb: MultipleValuation[];
+  evAum: MultipleValuation[];
   assumptions: {
     waccPct: Money;
     terminalGrowthPct: Money;
@@ -63,6 +72,7 @@ export interface ValuationResult {
     peMultiple: Money;
     netDebt: Money;
     pbMultiple: Money;
+    aumOfMultiplePct: Money;
   };
 }
 
@@ -90,10 +100,13 @@ export interface StatementInputs {
   netIncome: MonthlyValue[];
   netCashMovement: MonthlyValue[];
   equity: MonthlyValue[];
+  // Optional per-FY average AUM (already aggregated). Index must align with
+  // `groups` passed to buildFyAggregates / computeValuation.
+  aumByYear?: Decimal.Value[];
 }
 
 export function buildFyAggregates(groups: FYGroup[], s: StatementInputs): FyAggregate[] {
-  return groups.map((g) => {
+  return groups.map((g, i) => {
     const months = new Set(g.months);
     return {
       fy: g.fy,
@@ -103,6 +116,7 @@ export function buildFyAggregates(groups: FYGroup[], s: StatementInputs): FyAggr
       netIncome: fySum(s.netIncome, months),
       fcf: fySum(s.netCashMovement, months),
       closingEquity: fyLast(s.equity, g.months),
+      aum: s.aumByYear?.[i] !== undefined ? money(s.aumByYear[i]) : undefined,
     };
   });
 }
@@ -169,6 +183,8 @@ export function computeValuation(
   const peMult = money(assumptions.peMultiple ?? 15);
   const netDebt = money(assumptions.netDebt ?? 0);
   const pbMult = money(assumptions.pbMultiple ?? 1.4);
+  // Default 6% — references the HPS / BlackRock acquisition headline price.
+  const aumPct = money(assumptions.aumOfMultiplePct ?? 6);
 
   const dcf: DcfHorizonValuation[] = aggregates.map((_, i) =>
     computeDcfForHorizon(aggregates, i + 1, wacc, terminalGrowth, netDebt),
@@ -217,6 +233,19 @@ export function computeValuation(
     };
   });
 
+  const aumFraction = aumPct.div(100);
+  const evAum: MultipleValuation[] = aggregates.map((a) => {
+    const aum = a.aum ?? (ZERO as Money);
+    const ev = aum.times(aumFraction);
+    return {
+      fy: a.fy,
+      metric: aum,
+      multiple: aumPct, // display as a percentage (6 → "6%")
+      enterpriseValue: ev,
+      equityValue: ev.minus(netDebt),
+    };
+  });
+
   return {
     fys: aggregates.map((a) => a.fy),
     aggregates,
@@ -225,6 +254,7 @@ export function computeValuation(
     evRevenue,
     pe,
     pb,
+    evAum,
     assumptions: {
       waccPct: wacc.times(100),
       terminalGrowthPct: terminalGrowth.times(100),
@@ -233,6 +263,7 @@ export function computeValuation(
       peMultiple: peMult,
       netDebt,
       pbMultiple: pbMult,
+      aumOfMultiplePct: aumPct,
     },
   };
 }

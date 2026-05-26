@@ -11,6 +11,7 @@ export interface ValuationAssumptionsView {
   peMultiple: string;
   netDebt: string;
   pbMultiple: string;
+  aumOfMultiplePct: string;
 }
 
 export function EditValuationAssumptions({
@@ -31,6 +32,7 @@ export function EditValuationAssumptions({
   const [peMultiple, setPeMultiple] = useState(initial.peMultiple);
   const [netDebt, setNetDebt] = useState(initial.netDebt);
   const [pbMultiple, setPbMultiple] = useState(initial.pbMultiple);
+  const [aumOfMultiplePct, setAumOfMultiplePct] = useState(initial.aumOfMultiplePct);
 
   function show() {
     setWaccPct(initial.waccPct);
@@ -40,6 +42,7 @@ export function EditValuationAssumptions({
     setPeMultiple(initial.peMultiple);
     setNetDebt(initial.netDebt);
     setPbMultiple(initial.pbMultiple);
+    setAumOfMultiplePct(initial.aumOfMultiplePct);
     setOpen(true);
     dialogRef.current?.showModal();
   }
@@ -57,6 +60,7 @@ export function EditValuationAssumptions({
         peMultiple,
         netDebt,
         pbMultiple,
+        aumOfMultiplePct,
       });
       hide();
     });
@@ -138,6 +142,14 @@ export function EditValuationAssumptions({
                 <input
                   value={pbMultiple}
                   onChange={(e) => setPbMultiple(e.target.value)}
+                  inputMode="decimal"
+                  className="rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
+                />
+              </Field>
+              <Field label="% of AUM" hint="HPS / BlackRock ≈ 6">
+                <input
+                  value={aumOfMultiplePct}
+                  onChange={(e) => setAumOfMultiplePct(e.target.value)}
                   inputMode="decimal"
                   className="rounded-md border border-zinc-300 px-2 py-1 text-right tabular-nums"
                 />

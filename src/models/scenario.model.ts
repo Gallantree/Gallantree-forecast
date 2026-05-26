@@ -54,6 +54,7 @@ export interface IScenario {
   peMultiple?: Types.Decimal128;
   netDebt?: Types.Decimal128;
   pbMultiple?: Types.Decimal128;
+  aumOfMultiplePct?: Types.Decimal128;
   // Control panel — global rate context + year-label config
   baseRateType?: "BBSW" | "BBSY" | "SOFR";
   baseRateBps?: number;
@@ -116,6 +117,7 @@ const scenarioSchema = new Schema<IScenario>(
     peMultiple: { type: Schema.Types.Decimal128 },
     netDebt: { type: Schema.Types.Decimal128 },
     pbMultiple: { type: Schema.Types.Decimal128 },
+    aumOfMultiplePct: { type: Schema.Types.Decimal128 },
     baseRateType: { type: String, enum: ["BBSW", "BBSY", "SOFR"] },
     baseRateBps: { type: Number, min: 0 },
     firstYearLabel: { type: Number, min: 2000, max: 2100 },

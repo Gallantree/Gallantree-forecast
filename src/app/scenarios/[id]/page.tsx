@@ -164,6 +164,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
     peMultiple?: { toString: () => string };
     netDebt?: { toString: () => string };
     pbMultiple?: { toString: () => string };
+    aumOfMultiplePct?: { toString: () => string };
   }>();
   if (!scenario) notFound();
 
@@ -723,6 +724,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
             netIncome: statements.pnl.netIncome,
             netCashMovement: statements.cf.netCashMovement,
             equity: statements.bs.equity,
+            aumByYear: operationalData?.aumByYear,
           },
           {
             waccPct: scenario.waccPct?.toString(),
@@ -732,6 +734,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
             peMultiple: scenario.peMultiple?.toString(),
             netDebt: scenario.netDebt?.toString(),
             pbMultiple: scenario.pbMultiple?.toString(),
+            aumOfMultiplePct: scenario.aumOfMultiplePct?.toString(),
           },
         );
         return {
@@ -782,6 +785,13 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
             enterpriseValue: m.enterpriseValue.toFixed(2),
             equityValue: m.equityValue.toFixed(2),
           })),
+          evAum: v.evAum.map((m) => ({
+            fy: m.fy,
+            metric: m.metric.toFixed(2),
+            multiple: m.multiple.toFixed(2),
+            enterpriseValue: m.enterpriseValue.toFixed(2),
+            equityValue: m.equityValue.toFixed(2),
+          })),
           assumptions: {
             waccPct: v.assumptions.waccPct.toFixed(2),
             terminalGrowthPct: v.assumptions.terminalGrowthPct.toFixed(2),
@@ -790,6 +800,7 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
             peMultiple: v.assumptions.peMultiple.toFixed(2),
             netDebt: v.assumptions.netDebt.toFixed(2),
             pbMultiple: v.assumptions.pbMultiple.toFixed(2),
+            aumOfMultiplePct: v.assumptions.aumOfMultiplePct.toFixed(2),
           },
         };
       })()
@@ -881,7 +892,9 @@ export default async function ScenarioPage({ params, searchParams }: Params) {
             peMultiple: scenario.peMultiple?.toString(),
             netDebt: scenario.netDebt?.toString(),
             pbMultiple: scenario.pbMultiple?.toString(),
+            aumOfMultiplePct: scenario.aumOfMultiplePct?.toString(),
           },
+          aumByYear: operationalData?.aumByYear,
         })
       : null;
   const effectiveBalanceSheetData = gallantreeStatements?.balanceSheet ?? balanceSheetData;
