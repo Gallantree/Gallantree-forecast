@@ -24,3 +24,24 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Windows + ClearType render text noticeably thinner than macOS, which makes
+   the lighter zinc text utilities (text-zinc-400 / text-zinc-500 / text-zinc-600)
+   wash out — especially in dense tables. Bump each shade one notch darker for
+   Windows clients only (tagged by the root layout from User-Agent). Mac users
+   see no change. Hex values match the Tailwind v4 zinc palette so the visual
+   hierarchy stays intact. */
+@layer utilities {
+  .is-windows .text-zinc-400 {
+    color: #71717a; /* was #a1a1aa (zinc-400 → zinc-500) */
+  }
+  .is-windows .text-zinc-500 {
+    color: #52525b; /* was #71717a (zinc-500 → zinc-600) */
+  }
+  .is-windows .text-zinc-600 {
+    color: #3f3f46; /* was #52525b (zinc-600 → zinc-700) */
+  }
+  .is-windows .hover\:text-zinc-900:hover {
+    color: #09090b; /* nudge hover even darker so the affordance still pops */
+  }
+}

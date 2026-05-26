@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { headers } from "next/headers";
 import { Toaster } from "sonner";
 import { SessionExpiryGuard } from "@/app/_components/SessionExpiryGuard";
 import { SessionProviderClient } from "@/app/_components/SessionProviderClient";
@@ -39,13 +40,23 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Windows + ClearType render text noticeably thinner than macOS, so the
+  // lighter zinc text utilities (zinc-400 / zinc-500) become hard to read.
+  // We detect Windows from the User-Agent on the server and tag <html> so
+  // CSS in globals.css can darken those utilities only for Windows clients.
+  const ua = (await headers()).get("user-agent") ?? "";
+  const isWindows = /Windows/i.test(ua);
+  const platformClass = isWindows ? "is-windows" : "";
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+    <html
+      lang="en"
+      className={`${geistSans.variable} ${geistMono.variable} ${platformClass} h-full antialiased`}
+    >
       <body className="min-h-full flex flex-col">
         <SessionProviderClient>
           {children}
